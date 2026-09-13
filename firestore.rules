@@ -1,0 +1,65 @@
+rules_version = '2';
+
+// PrepList Pro — Firestore security rules.
+//
+// These rules require every reader/writer to be signed in (via the app's
+// own accounts, which use Firebase Authentication under the hood) but do
+// NOT enforce role-based permissions (e.g. "only admins can approve a
+// question") at the database level — those checks happen in the app's UI
+// only. A technically sophisticated visitor could open the browser console
+// and write directly to Firestore, bypassing the review queue. Enforcing
+// roles server-side would need Cloud Functions or custom auth claims,
+// which needs a paid (Blaze) Firebase plan — out of scope for this free
+// setup. This is a reasonable trade-off for a small community tool; revisit
+// if the site grows or starts handling anything sensitive.
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() { return request.auth != null; }
+
+    // Each user's own account/profile document.
+    match /profiles/{uid} {
+      allow read: if signedIn();
+      allow write: if signedIn() && request.auth.uid == uid;
+
+      // Per-user grid-quiz attempts, synced across devices.
+      match /gridAttempts/{qid} {
+        allow read, write: if signedIn() && request.auth.uid == uid;
+      }
+    }
+
+    match /questions/{qid} {
+      allow read: if signedIn();
+      allow create: if signedIn() && request.resource.data.askerId == request.auth.uid;
+      allow update: if signedIn();
+      allow delete: if false;
+
+      match /answers/{aid} {
+        allow read: if signedIn();
+        allow create: if signedIn() && request.resource.data.authorId == request.auth.uid;
+        allow update: if signedIn();
+        allow delete: if false;
+      }
+    }
+
+    match /poorQuestions/{pid} {
+      allow read: if signedIn();
+      allow create: if signedIn();
+      allow update: if signedIn();
+      allow delete: if false;
+
+      match /solutions/{sid} {
+        allow read: if signedIn();
+        allow create: if signedIn() && request.resource.data.authorId == request.auth.uid;
+        allow update: if signedIn();
+        allow delete: if false;
+      }
+    }
+
+    match /notes/{id}         { allow read, write: if signedIn(); }
+    match /videos/{id}        { allow read, write: if signedIn(); }
+    match /gridQuestions/{id} { allow read, write: if signedIn(); }
+    match /events/{id}        { allow read, write: if signedIn(); }
+    match /announcements/{id} { allow read, write: if signedIn(); }
+    match /reviewQueue/{id}   { allow read, write: if signedIn(); }
+  }
+}
