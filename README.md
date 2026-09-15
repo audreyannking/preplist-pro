@@ -54,6 +54,16 @@ your behalf.
 
 ## How it's built
 
+- **Precompiled, not transpiled live.** `app.jsx` is the real source; `app.js`
+  is its compiled output, which is what `index.html` actually loads. This
+  makes the site noticeably faster (no multi-hundred-KB Babel library to
+  download, no JSX-to-JS work happening in every visitor's browser on every
+  visit) at the cost of one extra step when changing the app: after editing
+  `app.jsx`, recompile with
+  `npx --yes @babel/cli --presets @babel/preset-react app.jsx --compact true --no-comments -o app.js`
+  (a `babel.config.json` in this repo sets the classic JSX runtime it needs).
+  If you're asking for changes rather than editing it yourself, this step is
+  handled for you automatically.
 - **No accounts.** Visitors pick a role (Student / Teacher / Admin) on
   entry; Teacher and Admin need the access password set in `index.html`
   (`ACCESS_PASSWORD`). Nothing is verified server-side — see the security
