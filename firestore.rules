@@ -2,23 +2,24 @@ rules_version = '2';
 
 // PrepList Pro — Firestore security rules.
 //
-// This app has NO accounts and NO login (by design — anyone can just pick a
-// role and use the site). That means there is no `request.auth` to check,
-// so these rules are fully open: anyone who can reach this database can
-// read and write anything in it. The Teacher/Admin access password in
-// index.html is a light deterrent for casual visitors, not real security —
-// it lives in the page's own source code, and nothing here enforces it.
-//
-// In practice this means a technically sophisticated visitor could bypass
-// the app entirely and write spam or vandalize data directly. That's an
-// accepted trade-off for a simple, no-login community tool — revisit if
-// the site grows, gets targeted by bots, or starts holding anything you'd
-// be upset to lose (real accounts via Firebase Authentication would let
-// these rules actually check who's writing).
+// This app has no accounts and no visible login. Instead, every visitor is
+// silently signed in "anonymously" by Firebase the moment the page loads —
+// no fields, no prompt, nothing shown on screen — purely so these rules
+// have a real request.auth to check instead of being wide open to anyone
+// on the internet. It's a real improvement over "allow all", but it's not
+// a strong barrier: anyone who can load the page (i.e. anyone, since the
+// site is public) gets a valid anonymous session automatically, so a
+// technically determined visitor could still call Firestore directly and
+// write anything. The Teacher/Admin access password in index.html is a
+// separate, lighter deterrent — it lives in the page's own source code
+// and isn't enforced here at all. Real protection against a determined
+// bad actor would need actual accounts (Firebase Authentication with
+// real credentials) — worth it only if this ever needs to hold something
+// you'd be upset to lose.
 service cloud.firestore {
   match /databases/{database}/documents {
     match /{document=**} {
-      allow read, write: if true;
+      allow read, write: if request.auth != null;
     }
   }
 }

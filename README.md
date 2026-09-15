@@ -15,13 +15,19 @@ free "Spark" plan.
 Go to <https://console.firebase.google.com/>, sign in, click **Add project**,
 and finish the wizard (Google Analytics can be skipped).
 
-### 2. Turn on Firestore
+### 2. Turn on Authentication (for a silent, invisible session only)
+**Build → Authentication → Get started → Sign-in method → Anonymous →
+Enable → Save.** This app has no visible login — this just lets Firebase
+quietly give every visitor a session in the background, so the database
+rules below have something real to check.
+
+### 3. Turn on Firestore
 **Build → Firestore Database → Create database** → **Start in production
 mode** → pick a location → **Enable**. Then open the **Rules** tab and
 replace the contents with everything in [`firestore.rules`](firestore.rules)
 from this repo, and click **Publish**.
 
-### 3. Get your web app config
+### 4. Get your web app config
 **⚙️ → Project settings** → scroll to **Your apps** → click **`</>`** → give
 it any nickname → **Register app** (skip the Hosting checkbox — GitHub
 Pages is used instead). Copy the `firebaseConfig` block it shows you, open
@@ -32,12 +38,12 @@ keys. The `firestore.rules` you published are what actually govern access
 (see the comment at the top of that file for what that does and doesn't
 protect against, since this app has no accounts).
 
-### 4. Turn on GitHub Pages
+### 5. Turn on GitHub Pages
 Repo **Settings → Pages** → **Source: Deploy from a branch** → **Branch:
 main**, folder **/ (root)** → **Save**. GitHub gives you a URL within a
 minute or two.
 
-### 5. (Optional) Custom domain
+### 6. (Optional) Custom domain
 If you own a domain (bought from any registrar — Namecheap, Google
 Domains/Squarespace, GoDaddy, etc.), you can point it at this site instead
 of the `github.io` address: add a `CNAME` file to the repo containing just

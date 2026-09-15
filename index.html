@@ -13,9 +13,12 @@
 <body>
 <div id="root"></div>
 
-<!-- Firebase (compat SDK — plain globals, no bundler needed). Firestore only —
-     there are no accounts in this app, so Firebase Auth isn't used. -->
+<!-- Firebase (compat SDK — plain globals, no bundler needed). Auth is used only
+     for a silent, invisible "anonymous" session — no accounts, no fields,
+     nothing the visitor ever sees — just so the database rules have
+     something real to check instead of being wide open. -->
 <script src="https://www.gstatic.com/firebasejs/10.13.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.13.2/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.13.2/firebase-firestore-compat.js"></script>
 
 <!-- React, via CDN, compiled from JSX in the browser by Babel standalone -->
@@ -42,10 +45,28 @@ const firebaseConfig = {
 };
 
 const FIREBASE_READY = !!(firebaseConfig.apiKey && firebaseConfig.apiKey.indexOf("YOUR_") !== 0);
-let db = null;
+let auth = null, db = null;
 if (FIREBASE_READY) {
   firebase.initializeApp(firebaseConfig);
+  auth = firebase.auth();
   db = firebase.firestore();
+}
+
+// Silently sign every visitor in "anonymously" — no fields, no prompt,
+// nothing shown on screen. This exists purely so Firestore's rules can
+// require request.auth != null instead of being wide open to anyone on
+// the internet, while the app itself still has no login of any kind.
+function useAnonymousSession() {
+  const [ready, setReady] = useState(false);
+  useEffect(() => {
+    if (!FIREBASE_READY) { setReady(true); return; }
+    const unsub = auth.onAuthStateChanged((u) => {
+      if (u) { setReady(true); }
+      else { auth.signInAnonymously().catch((e) => { console.error("[preplist] anonymous sign-in failed", e); setReady(true); }); }
+    });
+    return unsub;
+  }, []);
+  return ready;
 }
 
 const DbContext = createContext(null);
@@ -1573,8 +1594,10 @@ function MainApp({ user, onSwitchRole }) {
 function PreplistProRoot() {
   const [theme] = useLocalState("preplist:theme", "light");
   const [role, setRole] = useLocalState("preplist:role", null);
+  const sessionReady = useAnonymousSession();
 
   if (!FIREBASE_READY) return <div className="pp-root" data-theme={theme} style={{ minHeight: "100dvh" }}><GlobalStyle /><SetupNeededScreen /></div>;
+  if (!sessionReady) return <div className="pp-root" data-theme={theme} style={{ minHeight: "100dvh" }}><GlobalStyle /><Loading label="Connecting…" /></div>;
   if (!role) return <div className="pp-root" data-theme={theme} style={{ minHeight: "100dvh" }}><GlobalStyle /><RoleGate onSelectRole={setRole} /></div>;
 
   return <MainApp user={{ role }} onSwitchRole={() => setRole(null)} />;
