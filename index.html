@@ -69,7 +69,30 @@ function useAnonymousSession() {
   return ready;
 }
 
-const DbContext = createContext(null);
+// Global toast for write failures — every db write surfaces a real,
+// visible error instead of silently doing nothing (the previous bug).
+const ToastContext = createContext(() => {});
+function useToast() { return useContext(ToastContext); }
+function friendlyDbError(e) {
+  if (e && e.code === "permission-denied") return "The database refused that — the site's Firebase setup may need a step finished (ask whoever set it up).";
+  if (e && e.code === "unavailable") return "Couldn't reach the database — check your connection and try again.";
+  return "Something went wrong saving that — try again.";
+}
+function Toast({ toast, onClose }) {
+  if (!toast) return null;
+  const isError = toast.kind === "error";
+  return (
+    <div className="pp-pop" style={{
+      position: "fixed", left: "50%", transform: "translateX(-50%)", bottom: 22, zIndex: 80,
+      maxWidth: 420, background: isError ? "#F6DEDE" : "#DCEFD9", color: isError ? "#6E2A2A" : "#254D22",
+      border: `1.5px solid ${isError ? "#8A3434" : "#33662F"}`, borderRadius: 10, padding: "12px 14px",
+      display: "flex", alignItems: "flex-start", gap: 10, fontSize: 13.5, lineHeight: 1.45, boxShadow: "0 6px 20px rgba(0,0,0,0.18)"
+    }}>
+      <span style={{ flex: 1 }}>{toast.text}</span>
+      <button onClick={onClose} aria-label="Dismiss" style={{ background: "none", border: "none", cursor: "pointer", color: "inherit", padding: 0, flexShrink: 0 }}><X size={14} /></button>
+    </div>
+  );
+}
 
 /* ---------------------------------------------------------------------- */
 /* Icons — small hand-drawn set (24x24, stroke-based)                     */
@@ -666,7 +689,17 @@ function AskQuestionModal({ onClose, onSubmit }) {
 function AnswerForm({ onSubmit, note }) {
   const [photo, setPhoto] = useState(null);
   const [explanation, setExplanation] = useState("");
-  const canSubmit = photo && explanation.trim();
+  const [busy, setBusy] = useState(false);
+  const canSubmit = photo && explanation.trim() && !busy;
+
+  async function submit() {
+    if (!photo || !explanation.trim() || busy) return;
+    setBusy(true);
+    const ok = await onSubmit({ photo, explanation: explanation.trim() });
+    setBusy(false);
+    if (ok) { setPhoto(null); setExplanation(""); }
+  }
+
   return (
     <div className="pp-card" style={{ borderRadius: 10, padding: 14, marginTop: 10 }}>
       <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 10 }} className="pp-serif">Post your answer</div>
@@ -674,9 +707,9 @@ function AnswerForm({ onSubmit, note }) {
       <Field label="Explain your reasoning">
         <textarea className="pp-input" style={{ width: "100%", padding: "9px 12px", fontSize: 14, minHeight: 70, resize: "vertical", fontFamily: "inherit" }} placeholder="Walk through how you got there…" value={explanation} onChange={(e) => setExplanation(e.target.value)} />
       </Field>
-      <button className="pp-btn pp-btn-primary" style={{ width: "100%", padding: "8px 0", fontSize: 13.5, opacity: canSubmit ? 1 : 0.5 }} disabled={!canSubmit}
-        onClick={() => { if (!canSubmit) return; onSubmit({ photo, explanation: explanation.trim() }); setPhoto(null); setExplanation(""); }}>
-        Submit answer
+      <button className="pp-btn pp-btn-primary" style={{ width: "100%", padding: "8px 0", fontSize: 13.5, opacity: canSubmit ? 1 : 0.5, display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }} disabled={!canSubmit} onClick={submit}>
+        {busy && <Loader2 size={14} style={{ animation: "pp-spin 0.9s linear infinite" }} />}
+        {busy ? "Submitting…" : "Submit answer"}
       </button>
       <div style={{ fontSize: 11.5, color: "var(--muted)", marginTop: 6 }}>{note}</div>
     </div>
@@ -689,23 +722,34 @@ function AnswerForm({ onSubmit, note }) {
 
 function QuestionCard({ q, user, onMarkAnswered, expanded, onToggleExpand, showStatus }) {
   const tilt = useMemo(() => cardTilt(q.id), [q.id]);
+  const notify = useToast();
   const [answers] = useCollection(`questions/${q.id}/answers`);
   const visibleAnswers = answers.filter((a) => a.modStatus === "approved");
 
   async function addAnswer(payload) {
     const answer = { ...payload, authorRole: user.role, createdAt: Date.now(), helpful: false, modStatus: hasElevatedAccess(user) ? "approved" : "pending" };
-    const ref = await db.collection(`questions/${q.id}/answers`).add(answer);
-    if (answer.modStatus === "pending") {
-      await db.collection("reviewQueue").doc(`answer_${ref.id}`).set({
-        kind: "answer", title: `Answering: ${q.title}`, authorRole: answer.authorRole, text: answer.explanation,
-        photo: answer.photo, createdAt: answer.createdAt, targetPath: `questions/${q.id}/answers/${ref.id}`
-      });
+    try {
+      const ref = await db.collection(`questions/${q.id}/answers`).add(answer);
+      if (answer.modStatus === "pending") {
+        await db.collection("reviewQueue").doc(`answer_${ref.id}`).set({
+          kind: "answer", title: `Answering: ${q.title}`, authorRole: answer.authorRole, text: answer.explanation,
+          photo: answer.photo, createdAt: answer.createdAt, targetPath: `questions/${q.id}/answers/${ref.id}`
+        });
+      }
+      return true;
+    } catch (e) {
+      notify({ kind: "error", text: friendlyDbError(e) });
+      return false;
     }
   }
   async function markHelpful(answerId) {
-    await Promise.all(answers.map((a) =>
-      db.doc(`questions/${q.id}/answers/${a.id}`).update({ helpful: a.id === answerId })
-    ));
+    try {
+      await Promise.all(answers.map((a) =>
+        db.doc(`questions/${q.id}/answers/${a.id}`).update({ helpful: a.id === answerId })
+      ));
+    } catch (e) {
+      notify({ kind: "error", text: friendlyDbError(e) });
+    }
   }
 
   return (
@@ -864,7 +908,7 @@ function NotesView({ notes, user, onAddNote }) {
           ))}
         </div>
       )}
-      {showForm && <AddNoteModal onClose={() => setShowForm(false)} onSubmit={(payload) => { onAddNote(payload); setShowForm(false); }} />}
+      {showForm && <AddNoteModal onClose={() => setShowForm(false)} onSubmit={async (payload) => { const ok = await onAddNote(payload); if (ok) setShowForm(false); }} />}
     </div>
   );
 }
@@ -942,7 +986,7 @@ function VideosView({ videos, user, onAddVideo }) {
           ))}
         </div>
       )}
-      {showForm && <AddVideoModal onClose={() => setShowForm(false)} onSubmit={(payload) => { onAddVideo(payload); setShowForm(false); }} />}
+      {showForm && <AddVideoModal onClose={() => setShowForm(false)} onSubmit={async (payload) => { const ok = await onAddVideo(payload); if (ok) setShowForm(false); }} />}
     </div>
   );
 }
@@ -981,17 +1025,24 @@ function AddVideoModal({ onClose, onSubmit }) {
 /* ---------------------------------------------------------------------- */
 
 function PoorQuestionItem({ pq, user, expanded, onToggle }) {
+  const notify = useToast();
   const [solutions] = useCollection(`poorQuestions/${pq.id}/solutions`);
   const visibleSolutions = solutions.filter((s) => s.modStatus === "approved");
 
   async function addSolution(payload) {
     const solution = { ...payload, authorRole: user.role, createdAt: Date.now(), modStatus: hasElevatedAccess(user) ? "approved" : "pending" };
-    const ref = await db.collection(`poorQuestions/${pq.id}/solutions`).add(solution);
-    if (solution.modStatus === "pending") {
-      await db.collection("reviewQueue").doc(`solution_${ref.id}`).set({
-        kind: "solution", title: `Solving: ${pq.title}`, authorRole: solution.authorRole, text: solution.explanation,
-        photo: solution.photo, createdAt: solution.createdAt, targetPath: `poorQuestions/${pq.id}/solutions/${ref.id}`
-      });
+    try {
+      const ref = await db.collection(`poorQuestions/${pq.id}/solutions`).add(solution);
+      if (solution.modStatus === "pending") {
+        await db.collection("reviewQueue").doc(`solution_${ref.id}`).set({
+          kind: "solution", title: `Solving: ${pq.title}`, authorRole: solution.authorRole, text: solution.explanation,
+          photo: solution.photo, createdAt: solution.createdAt, targetPath: `poorQuestions/${pq.id}/solutions/${ref.id}`
+        });
+      }
+      return true;
+    } catch (e) {
+      notify({ kind: "error", text: friendlyDbError(e) });
+      return false;
     }
   }
 
@@ -1056,7 +1107,7 @@ function PoorQuestionsView({ poorQuestions, user, onAdd, expandedId, setExpanded
       ) : (
         filtered.map((pq) => <PoorQuestionItem key={pq.id} pq={pq} user={user} expanded={expandedId === pq.id} onToggle={() => setExpandedId(expandedId === pq.id ? null : pq.id)} />)
       )}
-      {showForm && <AddPoorQuestionModal onClose={() => setShowForm(false)} onSubmit={(payload) => { onAdd(payload); setShowForm(false); }} />}
+      {showForm && <AddPoorQuestionModal onClose={() => setShowForm(false)} onSubmit={async (payload) => { const ok = await onAdd(payload); if (ok) setShowForm(false); }} />}
     </div>
   );
 }
@@ -1122,7 +1173,7 @@ function GridQuestionsView({ gridQuestions, user, attempts, onAdd, onAttempt }) 
           {filtered.map((gq) => <GridQuestionCard key={gq.id} gq={gq} attempt={attempts[gq.id]} open={openId === gq.id} onToggle={() => setOpenId(openId === gq.id ? null : gq.id)} onAttempt={(payload) => onAttempt(gq.id, payload)} />)}
         </div>
       )}
-      {showForm && <AddGridQuestionModal onClose={() => setShowForm(false)} onSubmit={(payload) => { onAdd(payload); setShowForm(false); }} />}
+      {showForm && <AddGridQuestionModal onClose={() => setShowForm(false)} onSubmit={async (payload) => { const ok = await onAdd(payload); if (ok) setShowForm(false); }} />}
     </div>
   );
 }
@@ -1260,9 +1311,14 @@ function ReviewRow({ item, onApprove, onReject }) {
 }
 
 function ReviewView({ reviewQueue }) {
+  const notify = useToast();
   async function decide(item, status) {
-    await db.doc(item.targetPath).update({ modStatus: status });
-    await db.collection("reviewQueue").doc(item.id).delete();
+    try {
+      await db.doc(item.targetPath).update({ modStatus: status });
+      await db.collection("reviewQueue").doc(item.id).delete();
+    } catch (e) {
+      notify({ kind: "error", text: friendlyDbError(e) });
+    }
   }
   const byKind = { question: [], answer: [], solution: [] };
   reviewQueue.forEach((it) => { if (byKind[it.kind]) byKind[it.kind].push(it); });
@@ -1341,7 +1397,7 @@ function EventsView({ events, user, myVolunteeredIds, onAdd, onToggleVolunteer }
           {sorted.map((ev) => <EventCard key={ev.id} ev={ev} joined={myVolunteeredIds.includes(ev.id)} onToggleVolunteer={onToggleVolunteer} />)}
         </div>
       )}
-      {showForm && <AddEventModal onClose={() => setShowForm(false)} onSubmit={(payload) => { onAdd(payload); setShowForm(false); }} />}
+      {showForm && <AddEventModal onClose={() => setShowForm(false)} onSubmit={async (payload) => { const ok = await onAdd(payload); if (ok) setShowForm(false); }} />}
     </div>
   );
 }
@@ -1446,7 +1502,7 @@ function AnnouncementsView({ announcements, user, onAdd }) {
           ))}
         </div>
       )}
-      {showForm && <AddAnnouncementModal onClose={() => setShowForm(false)} onSubmit={(payload) => { onAdd(payload); setShowForm(false); }} />}
+      {showForm && <AddAnnouncementModal onClose={() => setShowForm(false)} onSubmit={async (payload) => { const ok = await onAdd(payload); if (ok) setShowForm(false); }} />}
     </div>
   );
 }
@@ -1497,53 +1553,94 @@ function MainApp({ user, onSwitchRole }) {
   const [showAsk, setShowAsk] = useState(false);
   const [expandedId, setExpandedId] = useState(null);
   const [expandedPoorId, setExpandedPoorId] = useState(null);
+  const [toast, setToast] = useState(null);
+  const notify = useCallback((t) => setToast(t), []);
+  useEffect(() => {
+    if (!toast) return;
+    const t = setTimeout(() => setToast(null), 4500);
+    return () => clearTimeout(t);
+  }, [toast]);
 
   async function addQuestion(payload) {
     const q = { ...payload, askerRole: user.role, createdAt: Date.now(), solved: false, modStatus: hasElevatedAccess(user) ? "approved" : "pending" };
-    const ref = await db.collection("questions").add(q);
-    setMyQuestionIds((prev) => [ref.id, ...prev]);
-    if (q.modStatus === "pending") {
-      await db.collection("reviewQueue").doc(`question_${ref.id}`).set({ kind: "question", title: q.title, authorRole: q.askerRole, text: q.text, photo: q.photo, createdAt: q.createdAt, targetPath: `questions/${ref.id}` });
+    try {
+      const ref = await db.collection("questions").add(q);
+      setMyQuestionIds((prev) => [ref.id, ...prev]);
+      if (q.modStatus === "pending") {
+        await db.collection("reviewQueue").doc(`question_${ref.id}`).set({ kind: "question", title: q.title, authorRole: q.askerRole, text: q.text, photo: q.photo, createdAt: q.createdAt, targetPath: `questions/${ref.id}` });
+      }
+      setShowAsk(false);
+      setTab(hasElevatedAccess(user) ? "feed" : "mine");
+      return true;
+    } catch (e) {
+      notify({ kind: "error", text: friendlyDbError(e) });
+      return false;
     }
-    setShowAsk(false);
-    setTab(hasElevatedAccess(user) ? "feed" : "mine");
   }
-  async function markAnswered(q) { await db.collection("questions").doc(q.id).update({ solved: !q.solved }); }
+  async function markAnswered(q) {
+    try { await db.collection("questions").doc(q.id).update({ solved: !q.solved }); }
+    catch (e) { notify({ kind: "error", text: friendlyDbError(e) }); }
+  }
 
-  async function addNote(payload) { await db.collection("notes").add({ ...payload, authorRole: user.role, createdAt: Date.now() }); }
-  async function addVideo(payload) { await db.collection("videos").add({ ...payload, addedByRole: user.role, createdAt: Date.now() }); }
-  async function addPoorQuestion(payload) { await db.collection("poorQuestions").add({ ...payload, addedByRole: user.role, createdAt: Date.now() }); }
+  async function addNote(payload) {
+    try { await db.collection("notes").add({ ...payload, authorRole: user.role, createdAt: Date.now() }); return true; }
+    catch (e) { notify({ kind: "error", text: friendlyDbError(e) }); return false; }
+  }
+  async function addVideo(payload) {
+    try { await db.collection("videos").add({ ...payload, addedByRole: user.role, createdAt: Date.now() }); return true; }
+    catch (e) { notify({ kind: "error", text: friendlyDbError(e) }); return false; }
+  }
+  async function addPoorQuestion(payload) {
+    try { await db.collection("poorQuestions").add({ ...payload, addedByRole: user.role, createdAt: Date.now() }); return true; }
+    catch (e) { notify({ kind: "error", text: friendlyDbError(e) }); return false; }
+  }
   async function addGridQuestion(payloads) {
     const items = Array.isArray(payloads) ? payloads : [payloads];
-    const batch = db.batch();
-    items.forEach((p) => batch.set(db.collection("gridQuestions").doc(), { ...p, createdByRole: user.role, createdAt: Date.now() }));
-    await batch.commit();
+    try {
+      const batch = db.batch();
+      items.forEach((p) => batch.set(db.collection("gridQuestions").doc(), { ...p, createdByRole: user.role, createdAt: Date.now() }));
+      await batch.commit();
+      return true;
+    } catch (e) {
+      notify({ kind: "error", text: friendlyDbError(e) });
+      return false;
+    }
   }
   function attemptGrid(qid, payload) { setAttemptsLocal((prev) => ({ ...prev, [qid]: { ...payload, answeredAt: Date.now() } })); }
 
-  async function addEvent(payload) { await db.collection("events").add({ ...payload, createdByRole: user.role, createdAt: Date.now() }); }
+  async function addEvent(payload) {
+    try { await db.collection("events").add({ ...payload, createdByRole: user.role, createdAt: Date.now() }); return true; }
+    catch (e) { notify({ kind: "error", text: friendlyDbError(e) }); return false; }
+  }
   async function toggleVolunteer(eventId, joining) {
     const ev = events.find((e) => e.id === eventId);
     if (!ev) return;
     const already = myVolunteeredIds.includes(eventId);
-    if (joining) {
-      if (already || (ev.volunteerCount || 0) >= ev.volunteersNeeded) return;
-      await db.collection("events").doc(eventId).update({ volunteerCount: firebase.firestore.FieldValue.increment(1) });
-      setMyVolunteeredIds((prev) => [...prev, eventId]);
-    } else {
-      if (!already) return;
-      await db.collection("events").doc(eventId).update({ volunteerCount: firebase.firestore.FieldValue.increment(-1) });
-      setMyVolunteeredIds((prev) => prev.filter((id) => id !== eventId));
+    try {
+      if (joining) {
+        if (already || (ev.volunteerCount || 0) >= ev.volunteersNeeded) return;
+        await db.collection("events").doc(eventId).update({ volunteerCount: firebase.firestore.FieldValue.increment(1) });
+        setMyVolunteeredIds((prev) => [...prev, eventId]);
+      } else {
+        if (!already) return;
+        await db.collection("events").doc(eventId).update({ volunteerCount: firebase.firestore.FieldValue.increment(-1) });
+        setMyVolunteeredIds((prev) => prev.filter((id) => id !== eventId));
+      }
+    } catch (e) {
+      notify({ kind: "error", text: friendlyDbError(e) });
     }
   }
-  async function addAnnouncement(payload) { await db.collection("announcements").add({ ...payload, authorRole: user.role, createdAt: Date.now() }); }
+  async function addAnnouncement(payload) {
+    try { await db.collection("announcements").add({ ...payload, authorRole: user.role, createdAt: Date.now() }); return true; }
+    catch (e) { notify({ kind: "error", text: friendlyDbError(e) }); return false; }
+  }
 
   const dataReady = questionsReady && notesReady && videosReady && poorReady && gridReady && eventsReady && announcementsReady;
   const isAdmin = user.role === "admin";
   const visibleTabs = TABS.filter((t) => !t.adminOnly || isAdmin);
 
   return (
-    <DbContext.Provider value={db}>
+    <ToastContext.Provider value={notify}>
       <div className="pp-root" data-theme={theme} style={{ minHeight: "100dvh" }}>
         <GlobalStyle />
         <header style={{ borderBottom: "1px solid var(--border)", position: "sticky", top: 0, background: "var(--bg)", zIndex: 40 }}>
@@ -1586,8 +1683,9 @@ function MainApp({ user, onSwitchRole }) {
           <button className="pp-btn pp-btn-primary" style={{ position: "fixed", bottom: 22, right: 22, borderRadius: 999, width: 56, height: 56, display: "flex", alignItems: "center", justifyContent: "center", boxShadow: "0 4px 14px rgba(0,0,0,0.18)", zIndex: 30 }} onClick={() => setShowAsk(true)} aria-label="Ask a question"><Plus size={22} /></button>
         )}
         {showAsk && <AskQuestionModal onClose={() => setShowAsk(false)} onSubmit={addQuestion} />}
+        <Toast toast={toast} onClose={() => setToast(null)} />
       </div>
-    </DbContext.Provider>
+    </ToastContext.Provider>
   );
 }
 
