@@ -13,9 +13,9 @@
 <body>
 <div id="root"></div>
 
-<!-- Firebase (compat SDK — plain globals, no bundler needed) -->
+<!-- Firebase (compat SDK — plain globals, no bundler needed). Firestore only —
+     there are no accounts in this app, so Firebase Auth isn't used. -->
 <script src="https://www.gstatic.com/firebasejs/10.13.2/firebase-app-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/10.13.2/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.13.2/firebase-firestore-compat.js"></script>
 
 <!-- React, via CDN, compiled from JSX in the browser by Babel standalone -->
@@ -42,15 +42,13 @@ const firebaseConfig = {
 };
 
 const FIREBASE_READY = !!(firebaseConfig.apiKey && firebaseConfig.apiKey.indexOf("YOUR_") !== 0);
-let auth = null, db = null;
+let db = null;
 if (FIREBASE_READY) {
   firebase.initializeApp(firebaseConfig);
-  auth = firebase.auth();
   db = firebase.firestore();
 }
 
 const DbContext = createContext(null);
-const AuthCtx = createContext({ fbUser: null, user: null });
 
 /* ---------------------------------------------------------------------- */
 /* Icons — small hand-drawn set (24x24, stroke-based)                     */
@@ -120,11 +118,10 @@ const SUBJECTS = [
 ];
 const DEPARTMENTS = ["Academics", "Lower School", "Outreach", "Social Responsibility", "Management", "Activities", "Discipline", "Wellness", "Sports"];
 const GRADES = ["6th Grade", "7th Grade", "8th Grade", "9th Grade", "10th Grade", "11th Grade", "12th Grade"];
-const SLO_POSITIONS = ["Head of Department", "Sub-Head of Department"];
-const ACCESS_PASSWORD = "3069"; // gate for teacher/admin/SLO signup — client-side only, not real security
+const ACCESS_PASSWORD = "3147"; // gate for Teacher/Admin role — client-side only, not real security
 
 /* ---------------------------------------------------------------------- */
-/* Firestore helpers                                                      */
+/* Firestore + local-storage helpers                                      */
 /* ---------------------------------------------------------------------- */
 
 function useCollection(path, opts) {
@@ -158,31 +155,14 @@ function useLocalState(key, fallback) {
   const update = useCallback((updater) => {
     setValue((prev) => {
       const next = typeof updater === "function" ? updater(prev) : updater;
-      try { localStorage.setItem(key, JSON.stringify(next)); } catch { /* best-effort */ }
+      try {
+        if (next === null || next === undefined) localStorage.removeItem(key);
+        else localStorage.setItem(key, JSON.stringify(next));
+      } catch { /* best-effort */ }
       return next;
     });
   }, [key]);
   return [value, update];
-}
-
-// Every username maps to a synthetic email for Firebase Auth (it needs an
-// email-shaped identifier; nothing is ever sent to it).
-function usernameToEmail(username) {
-  const slug = username.trim().toLowerCase().replace(/[^a-z0-9._-]/g, "-").replace(/^-+/, "user-");
-  return (slug || "user") + "@preplistpro.local";
-}
-
-function authErrorMessage(code, fallback) {
-  const MAP = {
-    "auth/wrong-password": "Incorrect password.",
-    "auth/user-not-found": "No account with that username yet.",
-    "auth/invalid-credential": "That username already exists — check your password.",
-    "auth/weak-password": "Password needs to be at least 6 characters.",
-    "auth/invalid-email": "That username has characters we can't use — try letters and numbers.",
-    "auth/too-many-requests": "Too many attempts — wait a moment and try again.",
-    "auth/network-request-failed": "Couldn't reach the server — check your connection."
-  };
-  return MAP[code] || fallback || "Something went wrong — try again.";
 }
 
 function resizeImageToDataUrl(file, maxW = 900, quality = 0.68) {
@@ -252,9 +232,9 @@ function extractYouTubeId(url) {
   return null;
 }
 function isStaffRole(role) { return role === "admin" || role === "teacher"; }
-function isSLOMember(user) { return !!(user && user.role === "student" && user.isSLO && user.slPosition); }
-function hasElevatedAccess(user) { return isStaffRole(user?.role) || isSLOMember(user); }
-function canLeadDepartment(user) { return user?.role === "admin" || isSLOMember(user); }
+function hasElevatedAccess(user) { return isStaffRole(user?.role); }
+function canLeadDepartment(user) { return user?.role === "admin"; }
+function roleLabel(role) { return role === "teacher" ? "Teacher" : role === "admin" ? "Admin" : "Student"; }
 
 /* ---------------------------------------------------------------------- */
 /* Global styles                                                          */
@@ -351,10 +331,15 @@ function StatusBadge({ status }) {
   if (status === "pending") return <span style={{ display: "inline-flex", alignItems: "center", gap: 4, fontSize: 11.5, fontWeight: 700, color: "#8A611A", background: "#F5EBC2", padding: "2px 8px", borderRadius: 999 }}><Clock size={11} /> Pending review</span>;
   return <span style={{ display: "inline-flex", alignItems: "center", gap: 4, fontSize: 11.5, fontWeight: 700, color: "#8A3434", background: "#F6DEDE", padding: "2px 8px", borderRadius: 999 }}><X size={11} /> Changes requested</span>;
 }
-function Avatar({ name, size = 30 }) {
-  const initials = (name || "?").split(" ").map((p) => p[0]).slice(0, 2).join("").toUpperCase();
-  const c = subjectColor(name || "x");
-  return <div style={{ width: size, height: size, borderRadius: "50%", background: c.bg, color: c.fg, display: "flex", alignItems: "center", justifyContent: "center", fontSize: size * 0.4, fontWeight: 700, flexShrink: 0 }} className="pp-serif">{initials}</div>;
+const ROLE_ICON = { student: GraduationCap, teacher: Briefcase, admin: ShieldCheck };
+function RoleBadge({ role, size = 28 }) {
+  const RIcon = ROLE_ICON[role] || User;
+  const c = subjectColor(role || "x");
+  return (
+    <div style={{ width: size, height: size, borderRadius: "50%", background: c.bg, color: c.fg, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+      <RIcon size={size * 0.56} />
+    </div>
+  );
 }
 function EmptyState({ icon: Icon, title, body }) {
   return (
@@ -389,16 +374,6 @@ function GradeSelect({ value, onChange, includeAll, label }) {
     </select>
   );
 }
-function SubjectMultiSelect({ value, onChange }) {
-  function toggle(s) { onChange(value.includes(s) ? value.filter((v) => v !== s) : [...value, s]); }
-  return (
-    <div style={{ display: "flex", flexWrap: "wrap", gap: 7 }}>
-      {SUBJECTS.map((s) => (
-        <button key={s} type="button" className={`pp-chip ${value.includes(s) ? "selected" : ""}`} style={{ fontSize: 12.5, padding: "5px 12px" }} onClick={() => toggle(s)}>{s}</button>
-      ))}
-    </div>
-  );
-}
 function FilterBar({ query, setQuery, subject, setSubject, grade, setGrade, placeholder, extra }) {
   return (
     <div style={{ display: "flex", gap: 10, marginBottom: 16, flexWrap: "wrap", alignItems: "flex-start" }}>
@@ -414,7 +389,7 @@ function FilterBar({ query, setQuery, subject, setSubject, grade, setGrade, plac
 }
 
 /* ---------------------------------------------------------------------- */
-/* Auth                                                                   */
+/* Role gate — no accounts: pick a role, Teacher/Admin need a password    */
 /* ---------------------------------------------------------------------- */
 
 const ROLE_INFO = {
@@ -430,7 +405,7 @@ function SetupNeededScreen() {
         <div className="pp-tape" />
         <div className="pp-serif" style={{ fontSize: 20, fontWeight: 700, marginBottom: 10, textAlign: "center" }}>One setup step left</div>
         <p style={{ fontSize: 13.5, lineHeight: 1.6, color: "var(--muted)" }}>
-          This site needs a free Firebase project to store accounts, questions and notes. Open{" "}
+          This site needs a free Firebase project to store questions and notes. Open{" "}
           <code>index.html</code>, find the <code>firebaseConfig</code> object near the top of the
           script, and paste in your own project's values — see <code>README.md</code> for the exact steps.
         </p>
@@ -439,69 +414,21 @@ function SetupNeededScreen() {
   );
 }
 
-function AuthGate({ onLogin }) {
-  const [role, setRole] = useState(null);
-  const [gateChecked, setGateChecked] = useState(false);
-  const [gateInput, setGateInput] = useState("");
-  const [gateError, setGateError] = useState("");
-
-  const [username, setUsername] = useState("");
-  const [password, setPassword] = useState("");
-  const [grade, setGrade] = useState("");
-  const [subjectsTaught, setSubjectsTaught] = useState([]);
-  const [isSLO, setIsSLO] = useState(false);
-  const [sloPassword, setSloPassword] = useState("");
-  const [sloPasswordOk, setSloPasswordOk] = useState(false);
-  const [sloError, setSloError] = useState("");
-  const [slPosition, setSlPosition] = useState("");
+function RoleGate({ onSelectRole }) {
+  const [pendingRole, setPendingRole] = useState(null);
+  const [passInput, setPassInput] = useState("");
   const [error, setError] = useState("");
-  const [busy, setBusy] = useState(false);
 
-  const needsGate = role === "teacher" || role === "admin";
-  const extraOk =
-    role === "student" ? !!grade && (!isSLO || (sloPasswordOk && !!slPosition)) :
-    role === "teacher" ? subjectsTaught.length > 0 :
-    true;
-  const canSubmit = username.trim() && password.trim() && extraOk && !busy;
-
-  function checkGate() {
-    if (gateInput === ACCESS_PASSWORD) { setGateChecked(true); setGateError(""); }
-    else setGateError("That's not the right access password.");
-  }
-  function checkSloPassword() {
-    if (sloPassword === ACCESS_PASSWORD) { setSloPasswordOk(true); setSloError(""); }
-    else setSloError("That's not the right access password.");
-  }
-
-  async function submit() {
+  function pick(role) {
+    if (role === "student") { onSelectRole(role); return; }
+    setPendingRole(role);
+    setPassInput("");
     setError("");
-    setBusy(true);
-    const uname = username.trim();
-    const email = usernameToEmail(uname);
-    try {
-      // Try signing in first — if that fails, this must be a new account.
-      await auth.signInWithEmailAndPassword(email, password);
-      // onAuthStateChanged (in the app root) picks up the session from here.
-    } catch (signInErr) {
-      try {
-        const cred = await auth.createUserWithEmailAndPassword(email, password);
-        const profile = {
-          username: uname, role, createdAt: Date.now(),
-          ...(role === "student" ? { grade, isSLO, ...(isSLO ? { slPosition } : {}) } : {}),
-          ...(role === "teacher" ? { subjectsTaught } : {})
-        };
-        await db.collection("profiles").doc(cred.user.uid).set(profile);
-        onLogin({ id: cred.user.uid, ...profile });
-      } catch (signUpErr) {
-        setError(authErrorMessage(signUpErr.code, signUpErr.message));
-        setBusy(false);
-        return;
-      }
-    }
-    setBusy(false);
   }
-
-  function resetRole() { setRole(null); setGateChecked(false); setGateInput(""); setGateError(""); setError(""); }
+  function submitPassword() {
+    if (passInput === ACCESS_PASSWORD) onSelectRole(pendingRole);
+    else setError("That's not the right access password.");
+  }
 
   return (
     <div style={{ minHeight: "100dvh", display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}>
@@ -512,12 +439,12 @@ function AuthGate({ onLogin }) {
           <div style={{ fontSize: 13.5, color: "var(--muted)", marginTop: 4 }}>Post a problem. Solve one together.</div>
         </div>
 
-        {!role ? (
+        {!pendingRole ? (
           <>
             <div style={{ fontSize: 13, color: "var(--muted)", marginBottom: 10, fontWeight: 600 }}>I am a…</div>
             <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
               {Object.entries(ROLE_INFO).map(([key, info]) => (
-                <button key={key} className="pp-role-card" onClick={() => setRole(key)} style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                <button key={key} className="pp-role-card" onClick={() => pick(key)} style={{ display: "flex", alignItems: "center", gap: 12 }}>
                   <info.icon size={20} style={{ color: "var(--accent-ink)", flexShrink: 0 }} />
                   <div style={{ flex: 1 }}>
                     <div style={{ fontWeight: 700, fontSize: 14.5 }}>{info.label}</div>
@@ -527,87 +454,22 @@ function AuthGate({ onLogin }) {
                 </button>
               ))}
             </div>
-            <div style={{ fontSize: 12, color: "var(--muted)", marginTop: 16, textAlign: "center" }}>
-              Already have an account? Pick your role above, then sign in with the same username.
-            </div>
-          </>
-        ) : needsGate && !gateChecked ? (
-          <>
-            <button className="pp-btn pp-btn-ghost" style={{ padding: "5px 10px", fontSize: 12.5, marginBottom: 16 }} onClick={resetRole}>← Back</button>
-            <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
-              {React.createElement(ROLE_INFO[role].icon, { size: 17, style: { color: "var(--accent-ink)" } })}
-              <span style={{ fontWeight: 700, fontSize: 15 }}>{ROLE_INFO[role].label} access</span>
-            </div>
-            <div style={{ fontSize: 13, color: "var(--muted)", marginBottom: 14, lineHeight: 1.5 }}>
-              This account type needs an access password from your school before you can sign up.
-            </div>
-            <Field label="Access password">
-              <input type="password" autoFocus className="pp-input" style={{ width: "100%", padding: "9px 12px", fontSize: 14.5 }} value={gateInput} onChange={(e) => setGateInput(e.target.value)} onKeyDown={(e) => e.key === "Enter" && checkGate()} placeholder="••••" />
-            </Field>
-            {gateError && <div style={{ fontSize: 12.5, color: "#8A3434", marginBottom: 10 }}>{gateError}</div>}
-            <button className="pp-btn pp-btn-primary" style={{ width: "100%", padding: "10px 0" }} onClick={checkGate}>Continue</button>
           </>
         ) : (
           <>
-            <button className="pp-btn pp-btn-ghost" style={{ padding: "5px 10px", fontSize: 12.5, marginBottom: 16 }} onClick={resetRole}>← Back</button>
-            <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 16 }}>
-              {React.createElement(ROLE_INFO[role].icon, { size: 17, style: { color: "var(--accent-ink)" } })}
-              <span style={{ fontWeight: 700, fontSize: 15 }}>Continue as {ROLE_INFO[role].label.toLowerCase()}</span>
+            <button className="pp-btn pp-btn-ghost" style={{ padding: "5px 10px", fontSize: 12.5, marginBottom: 16 }} onClick={() => setPendingRole(null)}>← Back</button>
+            <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
+              {React.createElement(ROLE_INFO[pendingRole].icon, { size: 17, style: { color: "var(--accent-ink)" } })}
+              <span style={{ fontWeight: 700, fontSize: 15 }}>{ROLE_INFO[pendingRole].label} access</span>
             </div>
-
-            <Field label="Username">
-              <input className="pp-input" style={{ width: "100%", padding: "9px 12px", fontSize: 14.5 }} autoFocus value={username} onChange={(e) => setUsername(e.target.value)} placeholder="e.g. priya.nair" />
+            <div style={{ fontSize: 13, color: "var(--muted)", marginBottom: 14, lineHeight: 1.5 }}>
+              Enter the access password to continue as {ROLE_INFO[pendingRole].label.toLowerCase()}.
+            </div>
+            <Field label="Access password">
+              <input type="password" autoFocus className="pp-input" style={{ width: "100%", padding: "9px 12px", fontSize: 14.5 }} value={passInput} onChange={(e) => setPassInput(e.target.value)} onKeyDown={(e) => e.key === "Enter" && submitPassword()} placeholder="••••" />
             </Field>
-            <Field label="Password">
-              <input type="password" className="pp-input" style={{ width: "100%", padding: "9px 12px", fontSize: 14.5 }} value={password} onChange={(e) => setPassword(e.target.value)} placeholder="At least 6 characters" />
-            </Field>
-
-            {role === "student" && (
-              <>
-                <Field label="Grade"><GradeSelect value={grade} onChange={setGrade} /></Field>
-                <Field label="">
-                  <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13.5, cursor: "pointer" }}>
-                    <input type="checkbox" checked={isSLO} onChange={(e) => { setIsSLO(e.target.checked); setSloPasswordOk(false); setSloPassword(""); setSlPosition(""); setSloError(""); }} style={{ accentColor: "var(--accent)", width: 15, height: 15 }} />
-                    I'm part of the SLO
-                  </label>
-                </Field>
-                {isSLO && !sloPasswordOk && (
-                  <Field label="SLO access password">
-                    <div style={{ display: "flex", gap: 8 }}>
-                      <input type="password" className="pp-input" style={{ flex: 1, padding: "9px 12px", fontSize: 14.5 }} value={sloPassword} onChange={(e) => setSloPassword(e.target.value)} onKeyDown={(e) => e.key === "Enter" && checkSloPassword()} placeholder="••••" />
-                      <button type="button" className="pp-btn pp-btn-ghost" style={{ padding: "0 14px", fontSize: 13 }} onClick={checkSloPassword}>Verify</button>
-                    </div>
-                    {sloError && <div style={{ fontSize: 12, color: "#8A3434", marginTop: 6 }}>{sloError}</div>}
-                  </Field>
-                )}
-                {isSLO && sloPasswordOk && (
-                  <Field label="Position">
-                    <div style={{ display: "flex", gap: 8 }}>
-                      {SLO_POSITIONS.map((p) => (
-                        <button key={p} type="button" className="pp-btn pp-btn-ghost" style={{ flex: 1, padding: "9px 6px", fontSize: 12.5, background: slPosition === p ? "var(--surface)" : "transparent", borderColor: slPosition === p ? "var(--accent)" : "var(--border)" }} onClick={() => setSlPosition(p)}>{p}</button>
-                      ))}
-                    </div>
-                  </Field>
-                )}
-              </>
-            )}
-            {role === "teacher" && (
-              <Field label="Subjects you teach (select all that apply)"><SubjectMultiSelect value={subjectsTaught} onChange={setSubjectsTaught} /></Field>
-            )}
-
             {error && <div style={{ fontSize: 12.5, color: "#8A3434", marginBottom: 10 }}>{error}</div>}
-
-            <button className="pp-btn pp-btn-primary" style={{ width: "100%", padding: "10px 0", opacity: canSubmit ? 1 : 0.5, marginTop: 4, display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }} disabled={!canSubmit} onClick={submit}>
-              {busy && <Loader2 size={14} style={{ animation: "pp-spin 0.9s linear infinite" }} />}
-              Continue
-            </button>
-
-            {role === "admin" && (
-              <div style={{ fontSize: 11.5, color: "var(--muted)", marginTop: 12, lineHeight: 1.5 }}>
-                This preview lets anyone with the access password create an admin account — a real
-                deployment should assign admin access manually instead.
-              </div>
-            )}
+            <button className="pp-btn pp-btn-primary" style={{ width: "100%", padding: "10px 0" }} onClick={submitPassword}>Continue</button>
           </>
         )}
       </div>
@@ -806,16 +668,15 @@ function AnswerForm({ onSubmit, note }) {
 
 function QuestionCard({ q, user, onMarkAnswered, expanded, onToggleExpand, showStatus }) {
   const tilt = useMemo(() => cardTilt(q.id), [q.id]);
-  const isAsker = user && user.id === q.askerId;
   const [answers] = useCollection(`questions/${q.id}/answers`);
   const visibleAnswers = answers.filter((a) => a.modStatus === "approved");
 
   async function addAnswer(payload) {
-    const answer = { ...payload, authorId: user.id, authorName: user.username, authorRole: user.role, createdAt: Date.now(), helpful: false, modStatus: hasElevatedAccess(user) ? "approved" : "pending" };
+    const answer = { ...payload, authorRole: user.role, createdAt: Date.now(), helpful: false, modStatus: hasElevatedAccess(user) ? "approved" : "pending" };
     const ref = await db.collection(`questions/${q.id}/answers`).add(answer);
     if (answer.modStatus === "pending") {
       await db.collection("reviewQueue").doc(`answer_${ref.id}`).set({
-        kind: "answer", title: `Answering: ${q.title}`, authorName: answer.authorName, text: answer.explanation,
+        kind: "answer", title: `Answering: ${q.title}`, authorRole: answer.authorRole, text: answer.explanation,
         photo: answer.photo, createdAt: answer.createdAt, targetPath: `questions/${q.id}/answers/${ref.id}`
       });
     }
@@ -840,7 +701,7 @@ function QuestionCard({ q, user, onMarkAnswered, expanded, onToggleExpand, showS
           )}
         </div>
         <div className="pp-serif" style={{ fontSize: 17, fontWeight: 600, lineHeight: 1.3, cursor: "pointer" }} onClick={onToggleExpand}>{q.title}</div>
-        <div style={{ fontSize: 12.5, color: "var(--muted)", marginTop: 4 }}>{q.askerName} · {timeAgo(q.createdAt)}</div>
+        <div style={{ fontSize: 12.5, color: "var(--muted)", marginTop: 4 }}>{roleLabel(q.askerRole)} · {timeAgo(q.createdAt)}</div>
       </div>
 
       <p style={{ marginLeft: 10, marginTop: 10, fontSize: 14.5, lineHeight: 1.55, color: "var(--text)" }}>{q.text}</p>
@@ -868,7 +729,7 @@ function QuestionCard({ q, user, onMarkAnswered, expanded, onToggleExpand, showS
         <button className="pp-btn pp-btn-ghost" style={{ padding: "6px 12px", fontSize: 13, display: "flex", alignItems: "center", gap: 6 }} onClick={onToggleExpand}>
           <MessageSquare size={14} /> {visibleAnswers.length} {visibleAnswers.length === 1 ? "answer" : "answers"}
         </button>
-        {isAsker && visibleAnswers.length > 0 && (
+        {visibleAnswers.length > 0 && (
           <button className="pp-btn pp-btn-ghost" style={{ padding: "6px 12px", fontSize: 13, display: "flex", alignItems: "center", gap: 6 }} onClick={onMarkAnswered}>
             <Check size={14} /> {q.solved ? "Reopen" : "Mark as answered"}
           </button>
@@ -884,15 +745,14 @@ function QuestionCard({ q, user, onMarkAnswered, expanded, onToggleExpand, showS
               {visibleAnswers.map((a) => (
                 <div key={a.id} style={{ background: "var(--bg)", border: "1px solid var(--border)", borderRadius: 8, padding: 12 }}>
                   <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
-                    <Avatar name={a.authorName} size={24} />
-                    <span style={{ fontSize: 13, fontWeight: 600 }}>{a.authorName}</span>
-                    {a.authorRole === "teacher" && <span style={{ fontSize: 10.5, color: "var(--muted)" }}>(teacher)</span>}
+                    <RoleBadge role={a.authorRole} size={24} />
+                    <span style={{ fontSize: 13, fontWeight: 600 }}>{roleLabel(a.authorRole)}</span>
                     <span style={{ fontSize: 12, color: "var(--muted)" }}>· {timeAgo(a.createdAt)}</span>
                     {a.helpful && <span style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 3, fontSize: 11.5, fontWeight: 700, color: "var(--accent-ink)" }}><Star size={12} fill="var(--accent)" stroke="var(--accent-ink)" /> Most helpful</span>}
                   </div>
                   <img src={a.photo} alt="" style={{ maxHeight: 200, borderRadius: 6, border: "1px solid var(--border)", marginBottom: 8 }} />
                   <p style={{ fontSize: 14, lineHeight: 1.55 }}>{a.explanation}</p>
-                  {isAsker && !a.helpful && (
+                  {!a.helpful && (
                     <button className="pp-btn pp-btn-ghost" style={{ marginTop: 8, padding: "5px 10px", fontSize: 12, display: "flex", alignItems: "center", gap: 5 }} onClick={() => markHelpful(a.id)}><Star size={12} /> Mark most helpful</button>
                   )}
                 </div>
@@ -912,13 +772,13 @@ function QuestionCard({ q, user, onMarkAnswered, expanded, onToggleExpand, showS
 /* Feed                                                                    */
 /* ---------------------------------------------------------------------- */
 
-function FeedView({ questions, user, mineOnly, onMarkAnswered, expandedId, setExpandedId }) {
+function FeedView({ questions, user, mineOnly, myQuestionIds, onMarkAnswered, expandedId, setExpandedId }) {
   const [query, setQuery] = useState("");
   const [subject, setSubject] = useState("");
   const [grade, setGrade] = useState("");
 
   const filtered = useMemo(() => {
-    let list = mineOnly ? questions.filter((q) => q.askerId === user?.id) : questions.filter((q) => q.modStatus === "approved");
+    let list = mineOnly ? questions.filter((q) => myQuestionIds.includes(q.id)) : questions.filter((q) => q.modStatus === "approved");
     if (subject) list = list.filter((q) => q.subject === subject);
     if (grade) list = list.filter((q) => q.grade === grade);
     if (query.trim()) {
@@ -926,15 +786,15 @@ function FeedView({ questions, user, mineOnly, onMarkAnswered, expandedId, setEx
       list = list.filter((x) => x.title.toLowerCase().includes(s) || x.subject.toLowerCase().includes(s) || x.text.toLowerCase().includes(s));
     }
     return [...list].sort((a, b) => b.createdAt - a.createdAt);
-  }, [questions, query, subject, grade, mineOnly, user]);
+  }, [questions, query, subject, grade, mineOnly, myQuestionIds]);
 
   return (
     <div>
       <FilterBar query={query} setQuery={setQuery} subject={subject} setSubject={setSubject} grade={grade} setGrade={setGrade} placeholder="Search questions by title or subject…" />
       {filtered.length === 0 ? (
         <EmptyState icon={mineOnly ? Pencil : MessageSquare}
-          title={mineOnly ? "You haven't posted anything yet" : "No questions match"}
-          body={mineOnly ? "Post a question and it'll show up here right away — once an admin approves it, it'll also appear in the shared feed." : "Try a different search, subject or grade, or check back later."} />
+          title={mineOnly ? "Nothing here from this browser yet" : "No questions match"}
+          body={mineOnly ? "Post a question and it'll show up here right away — once an admin approves it, it'll also appear in the shared feed. (This list only remembers what you posted from this browser.)" : "Try a different search, subject or grade, or check back later."} />
       ) : (
         filtered.map((q) => (
           <QuestionCard key={q.id} q={q} user={user} showStatus={mineOnly}
@@ -978,7 +838,7 @@ function NotesView({ notes, user, onAddNote }) {
               <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}><Tag text={n.subject} /><GradeTag text={n.grade} /></div>
               <div className="pp-serif" style={{ fontSize: 15.5, fontWeight: 600, marginTop: 8 }}>{n.title}</div>
               {n.type === "image" ? <img src={n.content} alt="" style={{ width: "100%", marginTop: 8, borderRadius: 6, border: "1px solid var(--border)" }} /> : <p style={{ fontSize: 13.5, marginTop: 8, lineHeight: 1.5, color: "var(--text)", whiteSpace: "pre-wrap" }}>{n.content}</p>}
-              <div style={{ fontSize: 11.5, color: "var(--muted)", marginTop: 10 }}>{n.authorName} · {timeAgo(n.createdAt)}</div>
+              <div style={{ fontSize: 11.5, color: "var(--muted)", marginTop: 10 }}>{roleLabel(n.authorRole)} · {timeAgo(n.createdAt)}</div>
             </div>
           ))}
         </div>
@@ -1055,7 +915,7 @@ function VideosView({ videos, user, onAddVideo }) {
               <div style={{ padding: 12 }}>
                 <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}><Tag text={v.subject} /><GradeTag text={v.grade} /></div>
                 <div className="pp-serif" style={{ fontSize: 14.5, fontWeight: 600, marginTop: 8 }}>{v.title}</div>
-                <div style={{ fontSize: 11.5, color: "var(--muted)", marginTop: 6 }}>Added by {v.addedBy} · {timeAgo(v.createdAt)}</div>
+                <div style={{ fontSize: 11.5, color: "var(--muted)", marginTop: 6 }}>Added by {roleLabel(v.addedByRole)} · {timeAgo(v.createdAt)}</div>
               </div>
             </div>
           ))}
@@ -1104,11 +964,11 @@ function PoorQuestionItem({ pq, user, expanded, onToggle }) {
   const visibleSolutions = solutions.filter((s) => s.modStatus === "approved");
 
   async function addSolution(payload) {
-    const solution = { ...payload, authorId: user.id, authorName: user.username, authorRole: user.role, createdAt: Date.now(), modStatus: hasElevatedAccess(user) ? "approved" : "pending" };
+    const solution = { ...payload, authorRole: user.role, createdAt: Date.now(), modStatus: hasElevatedAccess(user) ? "approved" : "pending" };
     const ref = await db.collection(`poorQuestions/${pq.id}/solutions`).add(solution);
     if (solution.modStatus === "pending") {
       await db.collection("reviewQueue").doc(`solution_${ref.id}`).set({
-        kind: "solution", title: `Solving: ${pq.title}`, authorName: solution.authorName, text: solution.explanation,
+        kind: "solution", title: `Solving: ${pq.title}`, authorRole: solution.authorRole, text: solution.explanation,
         photo: solution.photo, createdAt: solution.createdAt, targetPath: `poorQuestions/${pq.id}/solutions/${ref.id}`
       });
     }
@@ -1132,9 +992,8 @@ function PoorQuestionItem({ pq, user, expanded, onToggle }) {
                 {visibleSolutions.map((s) => (
                   <div key={s.id} style={{ background: "var(--bg)", border: "1px solid var(--border)", borderRadius: 8, padding: 12 }}>
                     <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
-                      <Avatar name={s.authorName} size={24} />
-                      <span style={{ fontSize: 13, fontWeight: 600 }}>{s.authorName}</span>
-                      {s.authorRole === "teacher" && <span style={{ fontSize: 10.5, color: "var(--muted)" }}>(teacher)</span>}
+                      <RoleBadge role={s.authorRole} size={24} />
+                      <span style={{ fontSize: 13, fontWeight: 600 }}>{roleLabel(s.authorRole)}</span>
                       <span style={{ fontSize: 12, color: "var(--muted)" }}>· {timeAgo(s.createdAt)}</span>
                     </div>
                     <img src={s.photo} alt="" style={{ maxHeight: 200, borderRadius: 6, border: "1px solid var(--border)", marginBottom: 8 }} />
@@ -1327,11 +1186,15 @@ function AddGridQuestionModal({ onClose, onSubmit }) {
               <div key={i} style={{ display: "flex", alignItems: "center", gap: 8 }}>
                 <input type="radio" name="correct" checked={correctIndex === i} onChange={() => setCorrectIndex(i)} style={{ accentColor: "var(--accent)", width: 16, height: 16, flexShrink: 0 }} aria-label={`Mark option ${i + 1} correct`} />
                 <input className="pp-input" style={{ flex: 1, padding: "8px 10px", fontSize: 13.5 }} value={opt} onChange={(e) => setOption(i, e.target.value)} placeholder={`Option ${i + 1}`} />
-                {options.length > 2 && <button className="pp-btn pp-btn-ghost" style={{ padding: 6, borderRadius: 999 }} onClick={() => removeOption(i)} aria-label="Remove option"><X size={13} /></button>}
+                {options.length > 2 && (
+                  <button className="pp-btn pp-btn-ghost" style={{ padding: 6, borderRadius: 999 }} onClick={() => removeOption(i)} aria-label="Remove option"><X size={13} /></button>
+                )}
               </div>
             ))}
           </div>
-          {options.length < 6 && <button className="pp-btn pp-btn-ghost" style={{ marginTop: 8, padding: "6px 12px", fontSize: 12.5, display: "flex", alignItems: "center", gap: 5 }} onClick={addOption}><Plus size={13} /> Add option</button>}
+          {options.length < 6 && (
+            <button className="pp-btn pp-btn-ghost" style={{ marginTop: 8, padding: "6px 12px", fontSize: 12.5, display: "flex", alignItems: "center", gap: 5 }} onClick={addOption}><Plus size={13} /> Add option</button>
+          )}
         </Field>
       )}
       {qType === "tf" && (
@@ -1361,8 +1224,8 @@ function ReviewRow({ item, onApprove, onReject }) {
     <div className="pp-card" style={{ borderRadius: 8, padding: 12, marginBottom: 10 }}>
       <div style={{ fontSize: 12, color: "var(--muted)", marginBottom: 6 }}>{item.title}</div>
       <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
-        <Avatar name={item.authorName} size={22} />
-        <span style={{ fontSize: 13, fontWeight: 600 }}>{item.authorName}</span>
+        <RoleBadge role={item.authorRole} size={22} />
+        <span style={{ fontSize: 13, fontWeight: 600 }}>{roleLabel(item.authorRole)}</span>
         <span style={{ fontSize: 12, color: "var(--muted)" }}>· {timeAgo(item.createdAt)}</span>
       </div>
       {item.photo && <img src={item.photo} alt="" style={{ maxHeight: 140, borderRadius: 6, border: "1px solid var(--border)", marginBottom: 6 }} />}
@@ -1400,128 +1263,9 @@ function ReviewView({ reviewQueue }) {
 }
 
 /* ---------------------------------------------------------------------- */
-/* Profile                                                                 */
-/* ---------------------------------------------------------------------- */
-
-function ProfileView({ user, onUpdateField }) {
-  const [myQuestions] = useCollection("questions");
-  const mine = myQuestions.filter((q) => q.askerId === user.id);
-
-  const [editing, setEditing] = useState(false);
-  const [gradeDraft, setGradeDraft] = useState(user.grade || GRADES[0]);
-  const [subjectsDraft, setSubjectsDraft] = useState(user.subjectsTaught || []);
-  const [sloEditing, setSloEditing] = useState(false);
-  const [sloPasswordDraft, setSloPasswordDraft] = useState("");
-  const [sloPasswordOkDraft, setSloPasswordOkDraft] = useState(false);
-  const [sloErrorDraft, setSloErrorDraft] = useState("");
-  const [slPositionDraft, setSlPositionDraft] = useState(user.slPosition || SLO_POSITIONS[0]);
-
-  return (
-    <div>
-      <div className="pp-card pp-index-card" style={{ borderRadius: 10, padding: 20, marginBottom: 22, display: "flex", alignItems: "flex-start", gap: 14, flexWrap: "wrap" }}>
-        <Avatar name={user.username} size={50} />
-        <div style={{ flex: "1 1 220px" }}>
-          <div className="pp-serif" style={{ fontSize: 19, fontWeight: 700 }}>{user.username}</div>
-          <div style={{ fontSize: 13, color: "var(--muted)", marginTop: 2, textTransform: "capitalize" }}>{user.role}</div>
-
-          {user.role === "student" && (
-            editing ? (
-              <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 8 }}>
-                <select className="pp-select" style={{ padding: "6px 8px", fontSize: 13 }} value={gradeDraft} onChange={(e) => setGradeDraft(e.target.value)}>{GRADES.map((g) => <option key={g} value={g}>{g}</option>)}</select>
-                <button className="pp-btn pp-btn-primary" style={{ padding: "5px 10px", fontSize: 12 }} onClick={() => { onUpdateField({ grade: gradeDraft }); setEditing(false); }}>Save</button>
-                <button className="pp-btn pp-btn-ghost" style={{ padding: "5px 10px", fontSize: 12 }} onClick={() => setEditing(false)}>Cancel</button>
-              </div>
-            ) : (
-              <button className="pp-btn pp-btn-ghost" style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 8, padding: "4px 10px", fontSize: 12.5 }} onClick={() => { setGradeDraft(user.grade || GRADES[0]); setEditing(true); }}><GraduationCap size={13} /> {user.grade || "Set grade"} <Pencil size={11} /></button>
-            )
-          )}
-
-          {user.role === "student" && (
-            <div style={{ marginTop: 10 }}>
-              {isSLOMember(user) ? (
-                sloEditing ? (
-                  <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-                    <select className="pp-select" style={{ padding: "6px 8px", fontSize: 13 }} value={slPositionDraft} onChange={(e) => setSlPositionDraft(e.target.value)}>{SLO_POSITIONS.map((p) => <option key={p} value={p}>{p}</option>)}</select>
-                    <button className="pp-btn pp-btn-primary" style={{ padding: "5px 10px", fontSize: 12 }} onClick={() => { onUpdateField({ slPosition: slPositionDraft }); setSloEditing(false); }}>Save</button>
-                    <button className="pp-btn pp-btn-ghost" style={{ padding: "5px 10px", fontSize: 12 }} onClick={() => setSloEditing(false)}>Cancel</button>
-                    <button className="pp-btn pp-btn-ghost" style={{ padding: "5px 10px", fontSize: 12, color: "#8A3434" }} onClick={() => { onUpdateField({ isSLO: false, slPosition: null }); setSloEditing(false); }}>Leave SLO</button>
-                  </div>
-                ) : (
-                  <button className="pp-btn pp-btn-ghost" style={{ display: "flex", alignItems: "center", gap: 6, padding: "4px 10px", fontSize: 12.5 }} onClick={() => { setSlPositionDraft(user.slPosition || SLO_POSITIONS[0]); setSloEditing(true); }}><ShieldCheck size={13} /> SLO — {user.slPosition} <Pencil size={11} /></button>
-                )
-              ) : sloEditing ? (
-                <div style={{ maxWidth: 300 }}>
-                  {!sloPasswordOkDraft ? (
-                    <>
-                      <div style={{ fontSize: 12.5, color: "var(--muted)", marginBottom: 6 }}>Enter the SLO access password</div>
-                      <div style={{ display: "flex", gap: 8 }}>
-                        <input type="password" className="pp-input" style={{ flex: 1, padding: "7px 10px", fontSize: 13 }} value={sloPasswordDraft} onChange={(e) => setSloPasswordDraft(e.target.value)} />
-                        <button className="pp-btn pp-btn-ghost" style={{ padding: "0 12px", fontSize: 12.5 }} onClick={() => { if (sloPasswordDraft === ACCESS_PASSWORD) { setSloPasswordOkDraft(true); setSloErrorDraft(""); } else setSloErrorDraft("Incorrect password."); }}>Verify</button>
-                      </div>
-                      {sloErrorDraft && <div style={{ fontSize: 11.5, color: "#8A3434", marginTop: 6 }}>{sloErrorDraft}</div>}
-                      <button className="pp-btn pp-btn-ghost" style={{ padding: "4px 10px", fontSize: 12, marginTop: 8 }} onClick={() => { setSloEditing(false); setSloPasswordDraft(""); setSloErrorDraft(""); }}>Cancel</button>
-                    </>
-                  ) : (
-                    <>
-                      <div style={{ display: "flex", gap: 8, marginBottom: 8 }}>
-                        {SLO_POSITIONS.map((p) => <button key={p} className="pp-btn pp-btn-ghost" style={{ flex: 1, padding: "7px 6px", fontSize: 12, background: slPositionDraft === p ? "var(--surface)" : "transparent", borderColor: slPositionDraft === p ? "var(--accent)" : "var(--border)" }} onClick={() => setSlPositionDraft(p)}>{p}</button>)}
-                      </div>
-                      <div style={{ display: "flex", gap: 8 }}>
-                        <button className="pp-btn pp-btn-primary" style={{ padding: "5px 10px", fontSize: 12 }} onClick={() => { onUpdateField({ isSLO: true, slPosition: slPositionDraft }); setSloEditing(false); setSloPasswordOkDraft(false); setSloPasswordDraft(""); }}>Join SLO</button>
-                        <button className="pp-btn pp-btn-ghost" style={{ padding: "5px 10px", fontSize: 12 }} onClick={() => { setSloEditing(false); setSloPasswordOkDraft(false); setSloPasswordDraft(""); }}>Cancel</button>
-                      </div>
-                    </>
-                  )}
-                </div>
-              ) : (
-                <button className="pp-btn pp-btn-ghost" style={{ display: "flex", alignItems: "center", gap: 6, padding: "4px 10px", fontSize: 12.5 }} onClick={() => setSloEditing(true)}><ShieldCheck size={13} /> Part of the SLO? Join here</button>
-              )}
-            </div>
-          )}
-
-          {user.role === "teacher" && (
-            editing ? (
-              <div style={{ marginTop: 8, maxWidth: 320 }}>
-                <SubjectMultiSelect value={subjectsDraft} onChange={setSubjectsDraft} />
-                <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
-                  <button className="pp-btn pp-btn-primary" style={{ padding: "5px 10px", fontSize: 12 }} disabled={subjectsDraft.length === 0} onClick={() => { onUpdateField({ subjectsTaught: subjectsDraft }); setEditing(false); }}>Save</button>
-                  <button className="pp-btn pp-btn-ghost" style={{ padding: "5px 10px", fontSize: 12 }} onClick={() => setEditing(false)}>Cancel</button>
-                </div>
-              </div>
-            ) : (
-              <div style={{ marginTop: 8 }}>
-                <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 6 }}>{(user.subjectsTaught || []).length === 0 ? <span style={{ fontSize: 12.5, color: "var(--muted)" }}>No subjects set</span> : user.subjectsTaught.map((s) => <Tag key={s} text={s} />)}</div>
-                <button className="pp-btn pp-btn-ghost" style={{ display: "flex", alignItems: "center", gap: 6, padding: "4px 10px", fontSize: 12.5 }} onClick={() => { setSubjectsDraft(user.subjectsTaught || []); setEditing(true); }}><Briefcase size={13} /> Edit subjects <Pencil size={11} /></button>
-              </div>
-            )
-          )}
-        </div>
-        <div style={{ marginLeft: "auto", display: "flex", gap: 20, fontSize: 13 }}>
-          <div style={{ textAlign: "center" }}><div className="pp-serif" style={{ fontSize: 20, fontWeight: 700 }}>{mine.length}</div><div style={{ color: "var(--muted)" }}>questions</div></div>
-        </div>
-      </div>
-
-      <div className="pp-serif" style={{ fontSize: 15, fontWeight: 700, marginBottom: 10 }}>Your questions</div>
-      {mine.length === 0 ? <div style={{ fontSize: 13.5, color: "var(--muted)" }}>Nothing posted yet.</div> : (
-        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-          {mine.map((q) => (
-            <div key={q.id} className="pp-card" style={{ borderRadius: 8, padding: 12, display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
-              <Tag text={q.subject} /><GradeTag text={q.grade} />
-              <span style={{ fontSize: 13.5, flex: 1 }}>{q.title}</span>
-              <StatusBadge status={q.modStatus} />
-            </div>
-          ))}
-        </div>
-      )}
-    </div>
-  );
-}
-
-/* ---------------------------------------------------------------------- */
 /* Events & Announcements                                                 */
 /* ---------------------------------------------------------------------- */
 
-function isEventAdmin(user) { return canLeadDepartment(user); }
 function formatDateStr(dateStr) {
   if (!dateStr) return "";
   const d = new Date(dateStr + "T00:00:00");
@@ -1533,7 +1277,7 @@ function formatEventRange(ev) {
   return `${formatDateStr(ev.startDate)} – ${formatDateStr(ev.endDate)}`;
 }
 
-function EventsAnnouncementsView({ events, announcements, user, onAddEvent, onToggleVolunteer, onAddAnnouncement }) {
+function EventsAnnouncementsView({ events, announcements, user, myVolunteeredIds, onAddEvent, onToggleVolunteer, onAddAnnouncement }) {
   const [sub, setSub] = useState("events");
   return (
     <div>
@@ -1541,15 +1285,17 @@ function EventsAnnouncementsView({ events, announcements, user, onAddEvent, onTo
         <button className={`pp-chip ${sub === "events" ? "selected" : ""}`} onClick={() => setSub("events")}><Calendar size={13} style={{ marginRight: 5, display: "inline", verticalAlign: -2 }} /> Events</button>
         <button className={`pp-chip ${sub === "announcements" ? "selected" : ""}`} onClick={() => setSub("announcements")}><Megaphone size={13} style={{ marginRight: 5, display: "inline", verticalAlign: -2 }} /> Announcements</button>
       </div>
-      {sub === "events" ? <EventsView events={events} user={user} onAdd={onAddEvent} onToggleVolunteer={onToggleVolunteer} /> : <AnnouncementsView announcements={announcements} user={user} onAdd={onAddAnnouncement} />}
+      {sub === "events"
+        ? <EventsView events={events} user={user} myVolunteeredIds={myVolunteeredIds} onAdd={onAddEvent} onToggleVolunteer={onToggleVolunteer} />
+        : <AnnouncementsView announcements={announcements} user={user} onAdd={onAddAnnouncement} />}
     </div>
   );
 }
 
-function EventsView({ events, user, onAdd, onToggleVolunteer }) {
+function EventsView({ events, user, myVolunteeredIds, onAdd, onToggleVolunteer }) {
   const [showForm, setShowForm] = useState(false);
   const [department, setDepartment] = useState("");
-  const canAdd = isEventAdmin(user);
+  const canAdd = canLeadDepartment(user);
   const sorted = useMemo(() => {
     let list = department ? events.filter((ev) => ev.department === department) : events;
     return [...list].sort((a, b) => (a.startDate || "").localeCompare(b.startDate || ""));
@@ -1570,18 +1316,19 @@ function EventsView({ events, user, onAdd, onToggleVolunteer }) {
       {sorted.length === 0 ? (
         <EmptyState icon={Calendar} title="No events yet" body={canAdd ? "Add an upcoming event, and let students know if you need volunteers." : "Nothing scheduled yet — check back soon."} />
       ) : (
-        <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>{sorted.map((ev) => <EventCard key={ev.id} ev={ev} user={user} onToggleVolunteer={onToggleVolunteer} />)}</div>
+        <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+          {sorted.map((ev) => <EventCard key={ev.id} ev={ev} joined={myVolunteeredIds.includes(ev.id)} onToggleVolunteer={onToggleVolunteer} />)}
+        </div>
       )}
       {showForm && <AddEventModal onClose={() => setShowForm(false)} onSubmit={(payload) => { onAdd(payload); setShowForm(false); }} />}
     </div>
   );
 }
 
-function EventCard({ ev, user, onToggleVolunteer }) {
+function EventCard({ ev, joined, onToggleVolunteer }) {
   const needsVolunteers = ev.volunteersNeeded > 0;
-  const mine = ev.volunteers.find((v) => v.userId === user.id);
-  const isFull = ev.volunteers.length >= ev.volunteersNeeded;
-  const [showForm, setShowForm] = useState(false);
+  const count = ev.volunteerCount || 0;
+  const isFull = count >= ev.volunteersNeeded && !joined;
 
   return (
     <div className="pp-card pp-index-card" style={{ borderRadius: 8, padding: 16 }}>
@@ -1591,55 +1338,19 @@ function EventCard({ ev, user, onToggleVolunteer }) {
           <GradeTag text={ev.department} />
         </div>
         <div className="pp-serif" style={{ fontSize: 17, fontWeight: 600 }}>{ev.title}</div>
-        <div style={{ fontSize: 12.5, color: "var(--muted)", marginTop: 4 }}>Posted by {ev.createdBy} · {timeAgo(ev.createdAt)}</div>
+        <div style={{ fontSize: 12.5, color: "var(--muted)", marginTop: 4 }}>Posted by {roleLabel(ev.createdByRole)} · {timeAgo(ev.createdAt)}</div>
         <p style={{ fontSize: 14.5, marginTop: 10, lineHeight: 1.55 }}>{ev.description}</p>
         {needsVolunteers && (
-          <div style={{ marginTop: 14, borderTop: "1px dashed var(--border)", paddingTop: 12 }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8, flexWrap: "wrap" }}>
-              <Users size={14} style={{ color: "var(--muted)" }} />
-              <span style={{ fontSize: 13, fontWeight: 600 }}>{ev.volunteers.length} of {ev.volunteersNeeded} volunteers signed up</span>
-              {!mine && !showForm && <button className="pp-btn pp-btn-ghost" style={{ marginLeft: "auto", padding: "6px 12px", fontSize: 12.5 }} onClick={() => setShowForm(true)} disabled={isFull}>{isFull ? "Event is full" : "I want to volunteer"}</button>}
-              {mine && <button className="pp-btn pp-btn-ghost" style={{ marginLeft: "auto", padding: "6px 12px", fontSize: 12.5, display: "flex", alignItems: "center", gap: 5, background: "var(--surface)", borderColor: "var(--accent)" }} onClick={() => onToggleVolunteer(ev.id, null)}><Check size={13} /> You're signed up — cancel</button>}
-            </div>
-            {showForm && !mine && <VolunteerForm onCancel={() => setShowForm(false)} onSubmit={(details) => { onToggleVolunteer(ev.id, details); setShowForm(false); }} defaultName={user.username} />}
-            {ev.volunteers.length > 0 && (
-              <div style={{ display: "flex", flexDirection: "column", gap: 6, marginTop: showForm ? 10 : 0 }}>
-                {ev.volunteers.map((v) => (
-                  <div key={v.userId} style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12.5, background: "var(--bg)", border: "1px solid var(--border)", borderRadius: 8, padding: "6px 10px" }}>
-                    <Avatar name={v.fullName} size={20} />
-                    <span style={{ fontWeight: 600 }}>{v.fullName}</span>
-                    <span style={{ color: "var(--muted)" }}>#{v.computerNumber} · Class {v.class}{v.section ? `-${v.section}` : ""}</span>
-                  </div>
-                ))}
-              </div>
+          <div style={{ marginTop: 14, borderTop: "1px dashed var(--border)", paddingTop: 12, display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+            <Users size={14} style={{ color: "var(--muted)" }} />
+            <span style={{ fontSize: 13, fontWeight: 600 }}>{count} of {ev.volunteersNeeded} spots filled</span>
+            {!joined ? (
+              <button className="pp-btn pp-btn-ghost" style={{ marginLeft: "auto", padding: "6px 12px", fontSize: 12.5 }} onClick={() => onToggleVolunteer(ev.id, true)} disabled={isFull}>{isFull ? "Full" : "I'll help"}</button>
+            ) : (
+              <button className="pp-btn pp-btn-ghost" style={{ marginLeft: "auto", padding: "6px 12px", fontSize: 12.5, display: "flex", alignItems: "center", gap: 5, background: "var(--surface)", borderColor: "var(--accent)" }} onClick={() => onToggleVolunteer(ev.id, false)}><Check size={13} /> You're signed up — cancel</button>
             )}
           </div>
         )}
-      </div>
-    </div>
-  );
-}
-
-function VolunteerForm({ onSubmit, onCancel, defaultName }) {
-  const [fullName, setFullName] = useState(defaultName || "");
-  const [computerNumber, setComputerNumber] = useState("");
-  const [studentClass, setStudentClass] = useState("");
-  const [section, setSection] = useState("");
-  const canSubmit = fullName.trim() && computerNumber.trim() && studentClass.trim();
-  return (
-    <div className="pp-card" style={{ borderRadius: 8, padding: 12, marginTop: 4 }}>
-      <div style={{ fontSize: 12.5, fontWeight: 700, marginBottom: 8 }}>Sign up to volunteer</div>
-      <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-        <input className="pp-input" style={{ padding: "7px 10px", fontSize: 13 }} placeholder="Full name" value={fullName} onChange={(e) => setFullName(e.target.value)} />
-        <div style={{ display: "flex", gap: 8 }}>
-          <input className="pp-input" style={{ flex: 1, padding: "7px 10px", fontSize: 13 }} placeholder="Computer number" value={computerNumber} onChange={(e) => setComputerNumber(e.target.value)} />
-          <input className="pp-input" style={{ flex: 1, padding: "7px 10px", fontSize: 13 }} placeholder="Class" value={studentClass} onChange={(e) => setStudentClass(e.target.value)} />
-          <input className="pp-input" style={{ flex: 1, padding: "7px 10px", fontSize: 13 }} placeholder="Section" value={section} onChange={(e) => setSection(e.target.value)} />
-        </div>
-      </div>
-      <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
-        <button className="pp-btn pp-btn-primary" style={{ padding: "6px 14px", fontSize: 12.5, opacity: canSubmit ? 1 : 0.5 }} disabled={!canSubmit} onClick={() => onSubmit({ fullName: fullName.trim(), computerNumber: computerNumber.trim(), class: studentClass.trim(), section: section.trim() })}>Confirm</button>
-        <button className="pp-btn pp-btn-ghost" style={{ padding: "6px 14px", fontSize: 12.5 }} onClick={onCancel}>Cancel</button>
       </div>
     </div>
   );
@@ -1682,7 +1393,7 @@ function AddEventModal({ onClose, onSubmit }) {
         )}
       </Field>
       <button className="pp-btn pp-btn-primary" style={{ width: "100%", padding: "10px 0", opacity: canSubmit ? 1 : 0.5 }} disabled={!canSubmit}
-        onClick={() => onSubmit({ title: title.trim(), department, startDate, endDate: endDate || startDate, description: description.trim(), volunteersNeeded: needsVolunteers ? volunteersNeeded : 0, volunteers: [] })}>
+        onClick={() => onSubmit({ title: title.trim(), department, startDate, endDate: endDate || startDate, description: description.trim(), volunteersNeeded: needsVolunteers ? volunteersNeeded : 0, volunteerCount: 0 })}>
         Add event
       </button>
     </Modal>
@@ -1708,7 +1419,7 @@ function AnnouncementsView({ announcements, user, onAdd }) {
             <div key={a.id} className="pp-card" style={{ borderRadius: 8, padding: 16 }}>
               <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6, flexWrap: "wrap" }}><span style={{ fontSize: 12, color: "var(--muted)" }}>{new Date(a.createdAt).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" })}</span></div>
               <div className="pp-serif" style={{ fontSize: 16.5, fontWeight: 600 }}>{a.title}</div>
-              <div style={{ fontSize: 12.5, color: "var(--muted)", marginTop: 4 }}>{a.authorName} · {a.authorRole === "admin" ? "Admin" : "Teacher"}</div>
+              <div style={{ fontSize: 12.5, color: "var(--muted)", marginTop: 4 }}>{roleLabel(a.authorRole)}</div>
               <p style={{ fontSize: 14.5, marginTop: 10, lineHeight: 1.55, whiteSpace: "pre-wrap" }}>{a.body}</p>
             </div>
           ))}
@@ -1744,11 +1455,10 @@ const TABS = [
   { id: "poor", label: "Poorly Answered Questions", icon: Flag },
   { id: "grid", label: "Grid Questions", icon: LayoutGrid },
   { id: "events", label: "Events & Announcements", icon: Calendar },
-  { id: "review", label: "Review Queue", icon: ListChecks, adminOnly: true },
-  { id: "profile", label: "Profile", icon: User }
+  { id: "review", label: "Review Queue", icon: ListChecks, adminOnly: true }
 ];
 
-function MainApp({ user, onLogout, onUpdateField }) {
+function MainApp({ user, onSwitchRole }) {
   const [theme, setTheme] = useLocalState("preplist:theme", "light");
   const [questions, questionsReady] = useCollection("questions");
   const [notes, notesReady] = useCollection("notes");
@@ -1758,7 +1468,9 @@ function MainApp({ user, onLogout, onUpdateField }) {
   const [events, eventsReady] = useCollection("events");
   const [announcements, announcementsReady] = useCollection("announcements");
   const [reviewQueue] = useCollection(user.role === "admin" ? "reviewQueue" : null);
-  const [attempts, setAttemptsLocal] = useLocalState(`preplist:gridAttempts:${user.id}`, {});
+  const [attempts, setAttemptsLocal] = useLocalState("preplist:gridAttempts", {});
+  const [myQuestionIds, setMyQuestionIds] = useLocalState("preplist:myQuestions", []);
+  const [myVolunteeredIds, setMyVolunteeredIds] = useLocalState("preplist:myVolunteered", []);
 
   const [tab, setTab] = useState("feed");
   const [showAsk, setShowAsk] = useState(false);
@@ -1766,39 +1478,44 @@ function MainApp({ user, onLogout, onUpdateField }) {
   const [expandedPoorId, setExpandedPoorId] = useState(null);
 
   async function addQuestion(payload) {
-    const q = { ...payload, askerId: user.id, askerName: user.username, createdAt: Date.now(), solved: false, modStatus: hasElevatedAccess(user) ? "approved" : "pending" };
+    const q = { ...payload, askerRole: user.role, createdAt: Date.now(), solved: false, modStatus: hasElevatedAccess(user) ? "approved" : "pending" };
     const ref = await db.collection("questions").add(q);
+    setMyQuestionIds((prev) => [ref.id, ...prev]);
     if (q.modStatus === "pending") {
-      await db.collection("reviewQueue").doc(`question_${ref.id}`).set({ kind: "question", title: q.title, authorName: q.askerName, text: q.text, photo: q.photo, createdAt: q.createdAt, targetPath: `questions/${ref.id}` });
+      await db.collection("reviewQueue").doc(`question_${ref.id}`).set({ kind: "question", title: q.title, authorRole: q.askerRole, text: q.text, photo: q.photo, createdAt: q.createdAt, targetPath: `questions/${ref.id}` });
     }
     setShowAsk(false);
     setTab(hasElevatedAccess(user) ? "feed" : "mine");
   }
   async function markAnswered(q) { await db.collection("questions").doc(q.id).update({ solved: !q.solved }); }
 
-  async function addNote(payload) { await db.collection("notes").add({ ...payload, authorName: user.username, createdAt: Date.now() }); }
-  async function addVideo(payload) { await db.collection("videos").add({ ...payload, addedBy: user.username, createdAt: Date.now() }); }
-  async function addPoorQuestion(payload) { await db.collection("poorQuestions").add({ ...payload, addedBy: user.username, createdAt: Date.now() }); }
+  async function addNote(payload) { await db.collection("notes").add({ ...payload, authorRole: user.role, createdAt: Date.now() }); }
+  async function addVideo(payload) { await db.collection("videos").add({ ...payload, addedByRole: user.role, createdAt: Date.now() }); }
+  async function addPoorQuestion(payload) { await db.collection("poorQuestions").add({ ...payload, addedByRole: user.role, createdAt: Date.now() }); }
   async function addGridQuestion(payloads) {
     const items = Array.isArray(payloads) ? payloads : [payloads];
     const batch = db.batch();
-    items.forEach((p) => batch.set(db.collection("gridQuestions").doc(), { ...p, createdBy: user.username, createdAt: Date.now() }));
+    items.forEach((p) => batch.set(db.collection("gridQuestions").doc(), { ...p, createdByRole: user.role, createdAt: Date.now() }));
     await batch.commit();
   }
   function attemptGrid(qid, payload) { setAttemptsLocal((prev) => ({ ...prev, [qid]: { ...payload, answeredAt: Date.now() } })); }
 
-  async function addEvent(payload) { await db.collection("events").add({ ...payload, createdBy: user.username, createdAt: Date.now() }); }
-  async function toggleVolunteer(eventId, details) {
+  async function addEvent(payload) { await db.collection("events").add({ ...payload, createdByRole: user.role, createdAt: Date.now() }); }
+  async function toggleVolunteer(eventId, joining) {
     const ev = events.find((e) => e.id === eventId);
     if (!ev) return;
-    const already = ev.volunteers.some((v) => v.userId === user.id);
-    let volunteers;
-    if (details === null) volunteers = ev.volunteers.filter((v) => v.userId !== user.id);
-    else if (already || ev.volunteers.length >= ev.volunteersNeeded) return;
-    else volunteers = [...ev.volunteers, { userId: user.id, ...details, signedUpAt: Date.now() }];
-    await db.collection("events").doc(eventId).update({ volunteers });
+    const already = myVolunteeredIds.includes(eventId);
+    if (joining) {
+      if (already || (ev.volunteerCount || 0) >= ev.volunteersNeeded) return;
+      await db.collection("events").doc(eventId).update({ volunteerCount: firebase.firestore.FieldValue.increment(1) });
+      setMyVolunteeredIds((prev) => [...prev, eventId]);
+    } else {
+      if (!already) return;
+      await db.collection("events").doc(eventId).update({ volunteerCount: firebase.firestore.FieldValue.increment(-1) });
+      setMyVolunteeredIds((prev) => prev.filter((id) => id !== eventId));
+    }
   }
-  async function addAnnouncement(payload) { await db.collection("announcements").add({ ...payload, authorName: user.username, authorRole: user.role, createdAt: Date.now() }); }
+  async function addAnnouncement(payload) { await db.collection("announcements").add({ ...payload, authorRole: user.role, createdAt: Date.now() }); }
 
   const dataReady = questionsReady && notesReady && videosReady && poorReady && gridReady && eventsReady && announcementsReady;
   const isAdmin = user.role === "admin";
@@ -1813,9 +1530,9 @@ function MainApp({ user, onLogout, onUpdateField }) {
             <div className="pp-serif" style={{ fontSize: 19, fontWeight: 700, display: "flex", alignItems: "center", gap: 6 }}><Sparkles size={17} style={{ color: "var(--accent)" }} /> PrepList Pro</div>
             <div style={{ flex: 1 }} />
             <button className="pp-btn pp-btn-ghost" style={{ padding: 8, borderRadius: 999 }} onClick={() => setTheme(theme === "light" ? "dark" : "light")} aria-label="Toggle dark mode">{theme === "light" ? <Moon size={16} /> : <Sun size={16} />}</button>
-            <button className="pp-btn pp-btn-ghost" style={{ display: "flex", alignItems: "center", gap: 8, padding: "5px 10px 5px 5px" }} onClick={onLogout} title="Sign out">
-              <Avatar name={user.username} size={26} />
-              <span style={{ fontSize: 13, fontWeight: 600 }}>{user.username}</span>
+            <button className="pp-btn pp-btn-ghost" style={{ display: "flex", alignItems: "center", gap: 8, padding: "5px 10px 5px 5px" }} onClick={onSwitchRole} title="Switch role">
+              <RoleBadge role={user.role} size={26} />
+              <span style={{ fontSize: 13, fontWeight: 600 }}>{roleLabel(user.role)}</span>
               <LogOut size={13} style={{ color: "var(--muted)" }} />
             </button>
           </div>
@@ -1832,15 +1549,14 @@ function MainApp({ user, onLogout, onUpdateField }) {
         <main style={{ maxWidth: 960, margin: "0 auto", padding: "22px 18px 90px" }}>
           {!dataReady ? <Loading label="Loading the feed…" /> : (
             <>
-              {tab === "feed" && <FeedView questions={questions} user={user} mineOnly={false} onMarkAnswered={markAnswered} expandedId={expandedId} setExpandedId={setExpandedId} />}
-              {tab === "mine" && <FeedView questions={questions} user={user} mineOnly={true} onMarkAnswered={markAnswered} expandedId={expandedId} setExpandedId={setExpandedId} />}
+              {tab === "feed" && <FeedView questions={questions} user={user} mineOnly={false} myQuestionIds={myQuestionIds} onMarkAnswered={markAnswered} expandedId={expandedId} setExpandedId={setExpandedId} />}
+              {tab === "mine" && <FeedView questions={questions} user={user} mineOnly={true} myQuestionIds={myQuestionIds} onMarkAnswered={markAnswered} expandedId={expandedId} setExpandedId={setExpandedId} />}
               {tab === "notes" && <NotesView notes={notes} user={user} onAddNote={addNote} />}
               {tab === "videos" && <VideosView videos={videos} user={user} onAddVideo={addVideo} />}
               {tab === "poor" && <PoorQuestionsView poorQuestions={poorQuestions} user={user} onAdd={addPoorQuestion} expandedId={expandedPoorId} setExpandedId={setExpandedPoorId} />}
               {tab === "grid" && <GridQuestionsView gridQuestions={gridQuestions} user={user} attempts={attempts} onAdd={addGridQuestion} onAttempt={attemptGrid} />}
-              {tab === "events" && <EventsAnnouncementsView events={events} announcements={announcements} user={user} onAddEvent={addEvent} onToggleVolunteer={toggleVolunteer} onAddAnnouncement={addAnnouncement} />}
+              {tab === "events" && <EventsAnnouncementsView events={events} announcements={announcements} user={user} myVolunteeredIds={myVolunteeredIds} onAddEvent={addEvent} onToggleVolunteer={toggleVolunteer} onAddAnnouncement={addAnnouncement} />}
               {tab === "review" && isAdmin && <ReviewView reviewQueue={reviewQueue} />}
-              {tab === "profile" && <ProfileView user={user} onUpdateField={onUpdateField} />}
             </>
           )}
         </main>
@@ -1856,39 +1572,12 @@ function MainApp({ user, onLogout, onUpdateField }) {
 
 function PreplistProRoot() {
   const [theme] = useLocalState("preplist:theme", "light");
-  const [fbUser, setFbUser] = useState(undefined); // undefined = not checked yet, null = signed out
-  const [profile, setProfile] = useState(null);
-
-  useEffect(() => {
-    if (!FIREBASE_READY) return;
-    const unsub = auth.onAuthStateChanged(async (u) => {
-      setFbUser(u || null);
-      if (u) {
-        try {
-          const snap = await db.collection("profiles").doc(u.uid).get();
-          setProfile(snap.exists ? { id: u.uid, ...snap.data() } : null);
-        } catch {
-          setProfile(null);
-        }
-      } else {
-        setProfile(null);
-      }
-    });
-    return unsub;
-  }, []);
-
-  function onLogin(p) { setProfile(p); }
-  function logout() { auth.signOut(); }
-  function updateField(patch) {
-    setProfile((prev) => ({ ...prev, ...patch }));
-    db.collection("profiles").doc(fbUser.uid).update(patch).catch((e) => console.error(e));
-  }
+  const [role, setRole] = useLocalState("preplist:role", null);
 
   if (!FIREBASE_READY) return <div className="pp-root" data-theme={theme} style={{ minHeight: "100dvh" }}><GlobalStyle /><SetupNeededScreen /></div>;
-  if (fbUser === undefined) return <div className="pp-root" data-theme={theme} style={{ minHeight: "100dvh" }}><GlobalStyle /><Loading label="Loading PrepList Pro…" /></div>;
-  if (!fbUser || !profile) return <div className="pp-root" data-theme={theme} style={{ minHeight: "100dvh" }}><GlobalStyle /><AuthGate onLogin={onLogin} /></div>;
+  if (!role) return <div className="pp-root" data-theme={theme} style={{ minHeight: "100dvh" }}><GlobalStyle /><RoleGate onSelectRole={setRole} /></div>;
 
-  return <MainApp user={profile} onLogout={logout} onUpdateField={updateField} />;
+  return <MainApp user={{ role }} onSwitchRole={() => setRole(null)} />;
 }
 
 ReactDOM.createRoot(document.getElementById("root")).render(<PreplistProRoot />);
