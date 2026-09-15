@@ -27,18 +27,18 @@
 const { useState, useEffect, useCallback, useMemo, useContext, createContext } = React;
 
 /* ---------------------------------------------------------------------- */
-/* Firebase setup — fill in YOUR project's values (see README.md).        */
+/* Firebase setup                                                         */
 /* These are public client config values, not secrets — Firebase's real   */
 /* protection is the security rules deployed alongside this site.         */
 /* ---------------------------------------------------------------------- */
 
 const firebaseConfig = {
-  apiKey: "YOUR_API_KEY",
-  authDomain: "YOUR_PROJECT_ID.firebaseapp.com",
-  projectId: "YOUR_PROJECT_ID",
-  storageBucket: "YOUR_PROJECT_ID.appspot.com",
-  messagingSenderId: "YOUR_SENDER_ID",
-  appId: "YOUR_APP_ID"
+  apiKey: "AIzaSyBgIB9MNG-bW2OvtcAmoa2odagXzjQjMkk",
+  authDomain: "preplist-pro-6c98d.firebaseapp.com",
+  projectId: "preplist-pro-6c98d",
+  storageBucket: "preplist-pro-6c98d.firebasestorage.app",
+  messagingSenderId: "498768019855",
+  appId: "1:498768019855:web:553e96725098d77497cbfa"
 };
 
 const FIREBASE_READY = !!(firebaseConfig.apiKey && firebaseConfig.apiKey.indexOf("YOUR_") !== 0);
@@ -804,7 +804,7 @@ function AnswerForm({ onSubmit, note }) {
 /* Question Card — answers live in a subcollection, subscribed here       */
 /* ---------------------------------------------------------------------- */
 
-function QuestionCard({ q, user, onMarkAnswered, onMarkHelpful, expanded, onToggleExpand, showStatus }) {
+function QuestionCard({ q, user, onMarkAnswered, expanded, onToggleExpand, showStatus }) {
   const tilt = useMemo(() => cardTilt(q.id), [q.id]);
   const isAsker = user && user.id === q.askerId;
   const [answers] = useCollection(`questions/${q.id}/answers`);
@@ -912,7 +912,7 @@ function QuestionCard({ q, user, onMarkAnswered, onMarkHelpful, expanded, onTogg
 /* Feed                                                                    */
 /* ---------------------------------------------------------------------- */
 
-function FeedView({ questions, user, mineOnly, onMarkAnswered, onMarkHelpful, expandedId, setExpandedId }) {
+function FeedView({ questions, user, mineOnly, onMarkAnswered, expandedId, setExpandedId }) {
   const [query, setQuery] = useState("");
   const [subject, setSubject] = useState("");
   const [grade, setGrade] = useState("");
@@ -939,7 +939,7 @@ function FeedView({ questions, user, mineOnly, onMarkAnswered, onMarkHelpful, ex
         filtered.map((q) => (
           <QuestionCard key={q.id} q={q} user={user} showStatus={mineOnly}
             expanded={expandedId === q.id} onToggleExpand={() => setExpandedId(expandedId === q.id ? null : q.id)}
-            onMarkAnswered={() => onMarkAnswered(q)} onMarkHelpful={onMarkHelpful} />
+            onMarkAnswered={() => onMarkAnswered(q)} />
         ))
       )}
     </div>
@@ -1404,7 +1404,7 @@ function ReviewView({ reviewQueue }) {
 /* ---------------------------------------------------------------------- */
 
 function ProfileView({ user, onUpdateField }) {
-  const [myQuestions] = useCollection("questions"); // filtered below by askerId
+  const [myQuestions] = useCollection("questions");
   const mine = myQuestions.filter((q) => q.askerId === user.id);
 
   const [editing, setEditing] = useState(false);
