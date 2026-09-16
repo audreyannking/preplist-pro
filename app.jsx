@@ -260,10 +260,10 @@ function GlobalStyle() {
     <style>{`
       @import url('https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=Karla:wght@400;500;600;700&display=swap');
       .pp-root {
-        --bg-light: #F6FAF7; --surface-light: #E8F3EB; --accent-light: #C3D2F7;
-        --text-light: #1E2624; --muted-light: #64766C; --border-light: #CCE2D3;
-        --bg-dark: #101512; --surface-dark: #19241E; --accent-dark: #92A9F2;
-        --text-dark: #F1F6F2; --muted-dark: #8FA79A; --border-dark: #2A3A31;
+        --bg-light: #FFFFFF; --surface-light: #FFF6EE; --accent-light: #C3D2F7;
+        --text-light: #1F1F1F; --muted-light: #7A7368; --border-light: #EAD9C4;
+        --bg-dark: #1A1A1A; --surface-dark: #262320; --accent-dark: #92A9F2;
+        --text-dark: #F5F5F5; --muted-dark: #A99E90; --border-dark: #3A342C;
       }
       .pp-root[data-theme='light'] {
         --bg: var(--bg-light); --surface: var(--surface-light); --accent: var(--accent-light);
