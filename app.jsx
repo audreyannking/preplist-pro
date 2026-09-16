@@ -315,7 +315,7 @@ function GlobalStyle() {
         transition: background 0.15s ease;
       }
       .pp-file-input::file-selector-button:hover { background: var(--surface); }
-      .pp-role-card { border: 1.5px solid var(--border); border-radius: 10px; padding: 14px; cursor: pointer; text-align: left; background: var(--bg); transition: border-color 0.12s ease, background 0.12s ease; }
+      .pp-role-card { border: 1.5px solid var(--border); border-radius: 10px; padding: 14px; cursor: pointer; text-align: left; background: var(--bg); color: var(--text); font: inherit; appearance: none; -webkit-appearance: none; transition: border-color 0.12s ease, background 0.12s ease; }
       .pp-role-card:hover { border-color: var(--accent); }
       .pp-chip { border: 1.5px solid var(--border); border-radius: 999px; padding: 6px 13px; font-size: 13px; cursor: pointer; background: var(--bg); color: var(--text); font-family: 'Karla', sans-serif; font-weight: 600; }
       .pp-chip.selected { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 30%, var(--bg)); }
@@ -462,7 +462,7 @@ function RoleGate({ onSelectRole }) {
                 <button key={key} className="pp-role-card" onClick={() => pick(key)} style={{ display: "flex", alignItems: "center", gap: 12 }}>
                   <info.icon size={20} style={{ color: "var(--accent-ink)", flexShrink: 0 }} />
                   <div style={{ flex: 1 }}>
-                    <div style={{ fontWeight: 700, fontSize: 14.5 }}>{info.label}</div>
+                    <div style={{ fontWeight: 700, fontSize: 14.5, color: "var(--text)" }}>{info.label}</div>
                     <div style={{ fontSize: 12.5, color: "var(--muted)" }}>{info.desc}</div>
                   </div>
                   <ChevronRight size={16} style={{ color: "var(--muted)" }} />
