@@ -260,20 +260,20 @@ function GlobalStyle() {
     <style>{`
       @import url('https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=Karla:wght@400;500;600;700&display=swap');
       .pp-root {
-        --bg-light: #FFFFFF; --surface-light: #FFF6EE; --accent-light: #FDBA88;
-        --text-light: #1F1F1F; --muted-light: #7A7368; --border-light: #EAD9C4;
-        --bg-dark: #1A1A1A; --surface-dark: #262320; --accent-dark: #F0A868;
-        --text-dark: #F5F5F5; --muted-dark: #A99E90; --border-dark: #3A342C;
+        --bg-light: #F6FAF7; --surface-light: #E8F3EB; --accent-light: #C3D2F7;
+        --text-light: #1E2624; --muted-light: #64766C; --border-light: #CCE2D3;
+        --bg-dark: #101512; --surface-dark: #19241E; --accent-dark: #92A9F2;
+        --text-dark: #F1F6F2; --muted-dark: #8FA79A; --border-dark: #2A3A31;
       }
       .pp-root[data-theme='light'] {
         --bg: var(--bg-light); --surface: var(--surface-light); --accent: var(--accent-light);
         --text: var(--text-light); --muted: var(--muted-light); --border: var(--border-light);
-        --accent-ink: #7A3E10;
+        --accent-ink: #253E8F;
       }
       .pp-root[data-theme='dark'] {
         --bg: var(--bg-dark); --surface: var(--surface-dark); --accent: var(--accent-dark);
         --text: var(--text-dark); --muted: var(--muted-dark); --border: var(--border-dark);
-        --accent-ink: #2A1808;
+        --accent-ink: #121B3D;
       }
       .pp-root {
         background: var(--bg); color: var(--text); font-family: 'Karla', sans-serif;
@@ -429,7 +429,7 @@ function SetupNeededScreen() {
   );
 }
 
-function RoleGate({ onSelectRole }) {
+function RoleGate({ onSelectRole, theme, setTheme }) {
   const [pendingRole, setPendingRole] = useState(null);
   const [passInput, setPassInput] = useState("");
   const [error, setError] = useState("");
@@ -446,7 +446,10 @@ function RoleGate({ onSelectRole }) {
   }
 
   return (
-    <div style={{ minHeight: "100dvh", display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}>
+    <div style={{ minHeight: "100dvh", display: "flex", alignItems: "center", justifyContent: "center", padding: 20, position: "relative" }}>
+      <button className="pp-btn pp-btn-ghost" style={{ position: "absolute", top: 20, right: 20, padding: 8, borderRadius: 999 }} onClick={() => setTheme(theme === "light" ? "dark" : "light")} aria-label="Toggle dark mode">
+        {theme === "light" ? <Moon size={16} /> : <Sun size={16} />}
+      </button>
       <div className="pp-card pp-index-card" style={{ width: "100%", maxWidth: 420, padding: "34px 28px", borderRadius: 10 }}>
         <div className="pp-tape" />
         <div style={{ textAlign: "center", marginBottom: 22 }}>
@@ -1506,8 +1509,7 @@ const TABS = [
   { id: "review", label: "Review Queue", icon: ListChecks, adminOnly: true }
 ];
 
-function MainApp({ user, onSwitchRole }) {
-  const [theme, setTheme] = useLocalState("preplist:theme", "light");
+function MainApp({ user, onSwitchRole, theme, setTheme }) {
   const [questions, questionsReady] = useCollection("questions");
   const [notes, notesReady] = useCollection("notes");
   const [videos, videosReady] = useCollection("videos");
@@ -1661,15 +1663,15 @@ function MainApp({ user, onSwitchRole }) {
 }
 
 function PreplistProRoot() {
-  const [theme] = useLocalState("preplist:theme", "light");
+  const [theme, setTheme] = useLocalState("preplist:theme", "light");
   const [role, setRole] = useLocalState("preplist:role", null);
   const sessionReady = useAnonymousSession();
 
   if (!FIREBASE_READY) return <div className="pp-root" data-theme={theme} style={{ minHeight: "100dvh" }}><GlobalStyle /><SetupNeededScreen /></div>;
   if (!sessionReady) return <div className="pp-root" data-theme={theme} style={{ minHeight: "100dvh" }}><GlobalStyle /><Loading label="Connecting…" /></div>;
-  if (!role) return <div className="pp-root" data-theme={theme} style={{ minHeight: "100dvh" }}><GlobalStyle /><RoleGate onSelectRole={setRole} /></div>;
+  if (!role) return <div className="pp-root" data-theme={theme} style={{ minHeight: "100dvh" }}><GlobalStyle /><RoleGate onSelectRole={setRole} theme={theme} setTheme={setTheme} /></div>;
 
-  return <MainApp user={{ role }} onSwitchRole={() => setRole(null)} />;
+  return <MainApp user={{ role }} onSwitchRole={() => setRole(null)} theme={theme} setTheme={setTheme} />;
 }
 
 ReactDOM.createRoot(document.getElementById("root")).render(<PreplistProRoot />);
