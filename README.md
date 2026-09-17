@@ -1,9 +1,9 @@
 # PrepList Pro
 
-A shared study-help website: post questions, get answers, upload notes, add
-videos, flag tricky questions for extra practice, and post events and
-announcements. No accounts, no sign-up — pick a role (Student / Teacher /
-Admin) and go. Public to anyone worldwide.
+A shared study website: notes, videos, and past exam papers, organized by
+subject (and exam type for past papers — A Level, AS Level, IGCSE, AP). No
+accounts, no sign-up — pick a role (Student / Teacher / Admin) and go.
+Public to anyone worldwide.
 
 It's a single static page (`index.html`) — no build step, no server to run.
 Data is stored in [Firebase](https://firebase.google.com/) Firestore on the
@@ -69,16 +69,18 @@ your behalf.
   (`ACCESS_PASSWORD`). Nothing is verified server-side — see the security
   note in `firestore.rules`.
 - **No names collected anywhere** — posts show only a role ("Posted by a
-  teacher"), and event volunteering is a simple headcount, not a signup
-  form.
-- **No build step.** React and Babel load from a CDN; JSX compiles in the
-  browser.
-- **Photos** are resized and stored as compressed JPEG data directly in
-  Firestore documents (no paid storage plan needed) — every answer/solution
-  gets its own document to stay under Firestore's 1&nbsp;MiB-per-document
-  limit.
-- **Moderation**: student-submitted questions/answers needing admin
-  approval are tracked in a `reviewQueue` collection.
-- **"My Prep List"** and grid-quiz answers are remembered per browser
-  (localStorage), not tied to any account — clearing browser data resets
-  them.
+  teacher").
+- **Math notation.** Question/note text fields have a small toolbar
+  (π, √, fractions, integrals, etc.) that inserts real LaTeX, rendered via
+  KaTeX wherever that text is shown.
+- **Photos** (note scans) are resized and stored as compressed JPEG data
+  directly in Firestore documents — no paid storage plan needed.
+- **Past-paper PDFs** are stored the same way, capped at ~700KB per file to
+  stay under Firestore's 1&nbsp;MiB-per-document limit (see `MAX_PDF_BYTES`
+  in `app.jsx`). Heavily scanned, image-heavy papers may not fit — ask if
+  you want to switch to Firebase Storage for larger files (needs the paid
+  "Blaze" plan, which needs a card on file, though actual cost should stay
+  $0 at this scale).
+- **No AI PDF-to-quiz conversion (yet).** That would need a real AI model
+  reading the PDF, which needs an API key kept secret on a small backend —
+  ask if you want that built.

@@ -447,9 +447,9 @@ function FilterBar({ query, setQuery, subject, setSubject, grade, setGrade, plac
 /* ---------------------------------------------------------------------- */
 
 const ROLE_INFO = {
-  student: { label: "Student", icon: GraduationCap, desc: "Post questions, browse the feed, help others out." },
-  teacher: { label: "Teacher", icon: Briefcase, desc: "Answer questions and upload notes for your subjects." },
-  admin: { label: "Admin", icon: ShieldCheck, desc: "Full access — manage notes, videos, grid questions and review." }
+  student: { label: "Student", icon: GraduationCap, desc: "Browse notes, videos, and past papers." },
+  teacher: { label: "Teacher", icon: Briefcase, desc: "Upload notes for your subjects, browse videos and past papers." },
+  admin: { label: "Admin", icon: ShieldCheck, desc: "Full access — manage notes, videos, and past papers." }
 };
 
 function SetupNeededScreen() {
@@ -493,7 +493,7 @@ function RoleGate({ onSelectRole, theme, setTheme }) {
         <div className="pp-tape" />
         <div style={{ textAlign: "center", marginBottom: 22 }}>
           <div className="pp-serif" style={{ fontSize: 26, fontWeight: 700 }}>PrepList Pro</div>
-          <div style={{ fontSize: 13.5, color: "var(--muted)", marginTop: 4 }}>Post a problem. Solve one together.</div>
+          <div style={{ fontSize: 13.5, color: "var(--muted)", marginTop: 4 }}>Notes, videos and past papers, all in one place.</div>
         </div>
 
         {!pendingRole ? (
