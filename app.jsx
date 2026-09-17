@@ -133,6 +133,7 @@ const SUBJECTS = [
 ];
 const DEPARTMENTS = ["Academics", "Lower School", "Outreach", "Social Responsibility", "Management", "Activities", "Discipline", "Wellness", "Sports"];
 const GRADES = ["6th Grade", "7th Grade", "8th Grade", "9th Grade", "10th Grade", "11th Grade", "12th Grade"];
+const EXAM_TYPES = ["A Level", "AS Level", "IGCSE", "AP"];
 const ACCESS_PASSWORD = "3147"; // gate for Teacher/Admin role — client-side only, not real security
 
 /* ---------------------------------------------------------------------- */
@@ -199,6 +200,23 @@ function resizeImageToDataUrl(file, maxW = 900, quality = 0.68) {
       img.onerror = reject;
       img.src = reader.result;
     };
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+}
+
+// Past-paper PDFs are stored as base64 directly in Firestore (no paid
+// storage plan needed), so they're capped well under the 1 MiB per-document
+// limit — fine for text-based papers, tight for heavily scanned ones.
+const MAX_PDF_BYTES = 700 * 1024;
+function readPdfAsDataUrl(file) {
+  return new Promise((resolve, reject) => {
+    if (file.size > MAX_PDF_BYTES) {
+      reject(new Error(`That PDF is too large (${Math.round(file.size / 1024)}KB) — the free plan this site uses caps past papers at about ${Math.round(MAX_PDF_BYTES / 1024)}KB. Try a smaller/lower-resolution scan.`));
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result);
     reader.onerror = reject;
     reader.readAsDataURL(file);
   });
@@ -399,6 +417,14 @@ function GradeSelect({ value, onChange, includeAll, label }) {
     <select className="pp-select" aria-label={label || "Grade"} style={{ padding: "9px 10px", fontSize: 14, width: "100%" }} value={value} onChange={(e) => onChange(e.target.value)}>
       {includeAll ? <option value="">All grades</option> : <option value="" disabled>Grade…</option>}
       {GRADES.map((g) => <option key={g} value={g}>{g}</option>)}
+    </select>
+  );
+}
+function ExamTypeSelect({ value, onChange, includeAll, label }) {
+  return (
+    <select className="pp-select" aria-label={label || "Exam type"} style={{ padding: "9px 10px", fontSize: 14, width: "100%" }} value={value} onChange={(e) => onChange(e.target.value)}>
+      {includeAll ? <option value="">All exam types</option> : <option value="" disabled>Exam type…</option>}
+      {EXAM_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
     </select>
   );
 }
@@ -646,279 +672,6 @@ function PhotoPicker({ value, onChange, required }) {
 /* Ask question / answer forms                                            */
 /* ---------------------------------------------------------------------- */
 
-function AskQuestionModal({ onClose, onSubmit }) {
-  const [title, setTitle] = useState("");
-  const [subject, setSubject] = useState("");
-  const [grade, setGrade] = useState("");
-  const [text, setText] = useState("");
-  const textRef = useRef(null);
-  const [photo, setPhoto] = useState(null);
-  const [format, setFormat] = useState("text");
-  const [options, setOptions] = useState(["", ""]);
-  const [pairs, setPairs] = useState([{ left: "", right: "" }, { left: "", right: "" }]);
-
-  const formatOk =
-    format === "text" ? true :
-    format === "mc" ? options.every((o) => o.trim()) :
-    pairs.every((p) => p.left.trim() && p.right.trim());
-  const canSubmit = title.trim() && subject && grade && text.trim() && formatOk;
-
-  function setOption(i, val) { setOptions((prev) => prev.map((o, idx) => (idx === i ? val : o))); }
-  function addOption() { if (options.length < 6) setOptions((prev) => [...prev, ""]); }
-  function removeOption(i) { if (options.length > 2) setOptions((prev) => prev.filter((_, idx) => idx !== i)); }
-  function setPair(i, side, val) { setPairs((prev) => prev.map((p, idx) => (idx === i ? { ...p, [side]: val } : p))); }
-  function addPair() { if (pairs.length < 8) setPairs((prev) => [...prev, { left: "", right: "" }]); }
-  function removePair(i) { if (pairs.length > 2) setPairs((prev) => prev.filter((_, idx) => idx !== i)); }
-
-  function submit() {
-    const base = { title: title.trim(), subject, grade, text: text.trim(), photo, format };
-    if (format === "mc") onSubmit({ ...base, options: options.map((o) => o.trim()) });
-    else if (format === "matching") onSubmit({ ...base, pairs: pairs.map((p) => ({ left: p.left.trim(), right: p.right.trim() })) });
-    else onSubmit(base);
-  }
-
-  return (
-    <Modal title="Post a question" onClose={onClose}>
-      <Field label="Title">
-        <input className="pp-input" style={{ width: "100%", padding: "9px 12px", fontSize: 14.5 }} placeholder="e.g. Stuck on this related-rates problem" value={title} onChange={(e) => setTitle(e.target.value)} />
-      </Field>
-      <TwoUp>
-        <Field label="Subject"><SubjectSelect value={subject} onChange={setSubject} /></Field>
-        <Field label="Grade"><GradeSelect value={grade} onChange={setGrade} /></Field>
-      </TwoUp>
-      <Field label="Question">
-        <MathToolbar textareaRef={textRef} value={text} setValue={setText} />
-        <textarea ref={textRef} className="pp-input" style={{ width: "100%", padding: "9px 12px", fontSize: 14.5, minHeight: 90, resize: "vertical", fontFamily: "inherit" }} placeholder="Type out the question, or describe what's in the photo…" value={text} onChange={(e) => setText(e.target.value)} />
-      </Field>
-      <Field label="Format (optional)">
-        <div style={{ display: "flex", gap: 8 }}>
-          <button type="button" className="pp-btn pp-btn-ghost" style={{ flex: 1, padding: "7px 0", fontSize: 12.5, background: format === "text" ? "var(--surface)" : "transparent", borderColor: format === "text" ? "var(--accent)" : "var(--border)" }} onClick={() => setFormat("text")}>Plain text</button>
-          <button type="button" className="pp-btn pp-btn-ghost" style={{ flex: 1, padding: "7px 0", fontSize: 12.5, background: format === "mc" ? "var(--surface)" : "transparent", borderColor: format === "mc" ? "var(--accent)" : "var(--border)" }} onClick={() => setFormat("mc")}>Multiple choice</button>
-          <button type="button" className="pp-btn pp-btn-ghost" style={{ flex: 1, padding: "7px 0", fontSize: 12.5, background: format === "matching" ? "var(--surface)" : "transparent", borderColor: format === "matching" ? "var(--accent)" : "var(--border)" }} onClick={() => setFormat("matching")}>Matching</button>
-        </div>
-      </Field>
-      {format === "mc" && (
-        <Field label="Answer choices">
-          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-            {options.map((opt, i) => (
-              <div key={i} style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                <span style={{ fontSize: 12.5, color: "var(--muted)", width: 16 }}>{String.fromCharCode(97 + i)})</span>
-                <input className="pp-input" style={{ flex: 1, padding: "7px 10px", fontSize: 13.5 }} value={opt} onChange={(e) => setOption(i, e.target.value)} placeholder={`Choice ${i + 1}`} />
-                {options.length > 2 && <button className="pp-btn pp-btn-ghost" style={{ padding: 6, borderRadius: 999 }} onClick={() => removeOption(i)} aria-label="Remove choice"><X size={13} /></button>}
-              </div>
-            ))}
-          </div>
-          {options.length < 6 && <button className="pp-btn pp-btn-ghost" style={{ marginTop: 8, padding: "6px 12px", fontSize: 12.5, display: "flex", alignItems: "center", gap: 5 }} onClick={addOption}><Plus size={13} /> Add choice</button>}
-        </Field>
-      )}
-      {format === "matching" && (
-        <Field label="Pairs to match">
-          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-            {pairs.map((p, i) => (
-              <div key={i} style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                <input className="pp-input" style={{ flex: 1, padding: "7px 10px", fontSize: 13.5 }} value={p.left} onChange={(e) => setPair(i, "left", e.target.value)} placeholder={`Column A, item ${i + 1}`} />
-                <input className="pp-input" style={{ flex: 1, padding: "7px 10px", fontSize: 13.5 }} value={p.right} onChange={(e) => setPair(i, "right", e.target.value)} placeholder={`Column B, item ${i + 1}`} />
-                {pairs.length > 2 && <button className="pp-btn pp-btn-ghost" style={{ padding: 6, borderRadius: 999 }} onClick={() => removePair(i)} aria-label="Remove pair"><X size={13} /></button>}
-              </div>
-            ))}
-          </div>
-          {pairs.length < 8 && <button className="pp-btn pp-btn-ghost" style={{ marginTop: 8, padding: "6px 12px", fontSize: 12.5, display: "flex", alignItems: "center", gap: 5 }} onClick={addPair}><Plus size={13} /> Add pair</button>}
-        </Field>
-      )}
-      <Field label="Photo of the problem"><PhotoPicker value={photo} onChange={setPhoto} /></Field>
-      <div style={{ fontSize: 12, color: "var(--muted)", marginBottom: 10 }}>Student-submitted questions are reviewed by an admin before they appear in the shared feed.</div>
-      <button className="pp-btn pp-btn-primary" style={{ width: "100%", padding: "10px 0", opacity: canSubmit ? 1 : 0.5 }} disabled={!canSubmit} onClick={submit}>Submit question</button>
-    </Modal>
-  );
-}
-
-function AnswerForm({ onSubmit, note }) {
-  const [photo, setPhoto] = useState(null);
-  const [explanation, setExplanation] = useState("");
-  const explanationRef = useRef(null);
-  const [busy, setBusy] = useState(false);
-  const canSubmit = photo && explanation.trim() && !busy;
-
-  async function submit() {
-    if (!photo || !explanation.trim() || busy) return;
-    setBusy(true);
-    const ok = await onSubmit({ photo, explanation: explanation.trim() });
-    setBusy(false);
-    if (ok) { setPhoto(null); setExplanation(""); }
-  }
-
-  return (
-    <div className="pp-card" style={{ borderRadius: 10, padding: 14, marginTop: 10 }}>
-      <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 10 }} className="pp-serif">Post your answer</div>
-      <Field label="Photo of your worked solution"><PhotoPicker value={photo} onChange={setPhoto} required /></Field>
-      <Field label="Explain your reasoning">
-        <MathToolbar textareaRef={explanationRef} value={explanation} setValue={setExplanation} />
-        <textarea ref={explanationRef} className="pp-input" style={{ width: "100%", padding: "9px 12px", fontSize: 14, minHeight: 70, resize: "vertical", fontFamily: "inherit" }} placeholder="Walk through how you got there…" value={explanation} onChange={(e) => setExplanation(e.target.value)} />
-      </Field>
-      <button className="pp-btn pp-btn-primary" style={{ width: "100%", padding: "8px 0", fontSize: 13.5, opacity: canSubmit ? 1 : 0.5, display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }} disabled={!canSubmit} onClick={submit}>
-        {busy && <Loader2 size={14} style={{ animation: "pp-spin 0.9s linear infinite" }} />}
-        {busy ? "Submitting…" : "Submit answer"}
-      </button>
-      <div style={{ fontSize: 11.5, color: "var(--muted)", marginTop: 6 }}>{note}</div>
-    </div>
-  );
-}
-
-/* ---------------------------------------------------------------------- */
-/* Question Card — answers live in a subcollection, subscribed here       */
-/* ---------------------------------------------------------------------- */
-
-function QuestionCard({ q, user, onMarkAnswered, expanded, onToggleExpand, showStatus }) {
-  const tilt = useMemo(() => cardTilt(q.id), [q.id]);
-  const notify = useToast();
-  const [answers] = useCollection(`questions/${q.id}/answers`);
-  const visibleAnswers = answers.filter((a) => a.modStatus === "approved");
-
-  async function addAnswer(payload) {
-    const answer = { ...payload, authorRole: user.role, createdAt: Date.now(), helpful: false, modStatus: hasElevatedAccess(user) ? "approved" : "pending" };
-    try {
-      const ref = await db.collection(`questions/${q.id}/answers`).add(answer);
-      if (answer.modStatus === "pending") {
-        await db.collection("reviewQueue").doc(`answer_${ref.id}`).set({
-          kind: "answer", title: `Answering: ${q.title}`, authorRole: answer.authorRole, text: answer.explanation,
-          photo: answer.photo, createdAt: answer.createdAt, targetPath: `questions/${q.id}/answers/${ref.id}`
-        });
-      }
-      return true;
-    } catch (e) {
-      notify({ kind: "error", text: friendlyDbError(e) });
-      return false;
-    }
-  }
-  async function markHelpful(answerId) {
-    try {
-      await Promise.all(answers.map((a) =>
-        db.doc(`questions/${q.id}/answers/${a.id}`).update({ helpful: a.id === answerId })
-      ));
-    } catch (e) {
-      notify({ kind: "error", text: friendlyDbError(e) });
-    }
-  }
-
-  return (
-    <div className="pp-card pp-index-card" style={{ borderRadius: 8, padding: 16, transform: expanded ? "none" : `rotate(${tilt}deg)`, transition: "transform 0.15s ease", marginBottom: 16 }}>
-      <div style={{ marginLeft: 10 }}>
-        <div style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 6, flexWrap: "wrap" }}>
-          <Tag text={q.subject} />
-          <GradeTag text={q.grade} />
-          {showStatus && <StatusBadge status={q.modStatus} />}
-          {q.solved && (
-            <span key="solved" className="pp-stamp" style={{ display: "inline-flex", alignItems: "center", gap: 4, fontSize: 11.5, fontWeight: 700, color: "#33662F", border: "1.5px solid #33662F", borderRadius: 6, padding: "1px 7px", transform: "rotate(-8deg)" }}>
-              <Check size={12} /> SOLVED
-            </span>
-          )}
-        </div>
-        <div className="pp-serif" style={{ fontSize: 17, fontWeight: 600, lineHeight: 1.3, cursor: "pointer" }} onClick={onToggleExpand}>{q.title}</div>
-        <div style={{ fontSize: 12.5, color: "var(--muted)", marginTop: 4 }}>{roleLabel(q.askerRole)} · {timeAgo(q.createdAt)}</div>
-      </div>
-
-      <p style={{ marginLeft: 10, marginTop: 10, fontSize: 14.5, lineHeight: 1.55, color: "var(--text)" }}><MathText text={q.text} /></p>
-
-      {q.format === "mc" && q.options && (
-        <div style={{ marginLeft: 10, marginTop: 8, display: "flex", flexDirection: "column", gap: 4 }}>
-          {q.options.map((opt, i) => <div key={i} style={{ fontSize: 14, display: "flex", gap: 8 }}><span style={{ color: "var(--muted)" }}>{String.fromCharCode(97 + i)})</span> {opt}</div>)}
-        </div>
-      )}
-      {q.format === "matching" && q.pairs && (
-        <div style={{ marginLeft: 10, marginTop: 8, display: "flex", gap: 20 }}>
-          <div style={{ flex: 1 }}>
-            <div style={{ fontSize: 11.5, fontWeight: 700, color: "var(--muted)", marginBottom: 4 }}>Column A</div>
-            {q.pairs.map((p, i) => <div key={i} style={{ fontSize: 14, marginBottom: 3 }}>{i + 1}. {p.left}</div>)}
-          </div>
-          <div style={{ flex: 1 }}>
-            <div style={{ fontSize: 11.5, fontWeight: 700, color: "var(--muted)", marginBottom: 4 }}>Column B</div>
-            {q.pairs.map((p, i) => <div key={i} style={{ fontSize: 14, marginBottom: 3 }}>{String.fromCharCode(65 + i)}. {p.right}</div>)}
-          </div>
-        </div>
-      )}
-      {q.photo && <img src={q.photo} alt="" style={{ marginLeft: 10, marginTop: 10, maxHeight: expanded ? 320 : 160, borderRadius: 6, border: "1px solid var(--border)", cursor: "pointer" }} onClick={onToggleExpand} />}
-
-      <div style={{ marginLeft: 10, marginTop: 12, display: "flex", alignItems: "center", gap: 14, flexWrap: "wrap" }}>
-        <button className="pp-btn pp-btn-ghost" style={{ padding: "6px 12px", fontSize: 13, display: "flex", alignItems: "center", gap: 6 }} onClick={onToggleExpand}>
-          <MessageSquare size={14} /> {visibleAnswers.length} {visibleAnswers.length === 1 ? "answer" : "answers"}
-        </button>
-        {visibleAnswers.length > 0 && (
-          <button className="pp-btn pp-btn-ghost" style={{ padding: "6px 12px", fontSize: 13, display: "flex", alignItems: "center", gap: 6 }} onClick={onMarkAnswered}>
-            <Check size={14} /> {q.solved ? "Reopen" : "Mark as answered"}
-          </button>
-        )}
-      </div>
-
-      {expanded && (
-        <div style={{ marginLeft: 10, marginTop: 14, borderTop: "1px dashed var(--border)", paddingTop: 14 }}>
-          {visibleAnswers.length === 0 ? (
-            <div style={{ fontSize: 13.5, color: "var(--muted)" }}>No answers yet — be the first to help.</div>
-          ) : (
-            <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-              {visibleAnswers.map((a) => (
-                <div key={a.id} style={{ background: "var(--bg)", border: "1px solid var(--border)", borderRadius: 8, padding: 12 }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
-                    <RoleBadge role={a.authorRole} size={24} />
-                    <span style={{ fontSize: 13, fontWeight: 600 }}>{roleLabel(a.authorRole)}</span>
-                    <span style={{ fontSize: 12, color: "var(--muted)" }}>· {timeAgo(a.createdAt)}</span>
-                    {a.helpful && <span style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 3, fontSize: 11.5, fontWeight: 700, color: "var(--accent-ink)" }}><Star size={12} fill="var(--accent)" stroke="var(--accent-ink)" /> Most helpful</span>}
-                  </div>
-                  <img src={a.photo} alt="" style={{ maxHeight: 200, borderRadius: 6, border: "1px solid var(--border)", marginBottom: 8 }} />
-                  <p style={{ fontSize: 14, lineHeight: 1.55 }}><MathText text={a.explanation} /></p>
-                  {!a.helpful && (
-                    <button className="pp-btn pp-btn-ghost" style={{ marginTop: 8, padding: "5px 10px", fontSize: 12, display: "flex", alignItems: "center", gap: 5 }} onClick={() => markHelpful(a.id)}><Star size={12} /> Mark most helpful</button>
-                  )}
-                </div>
-              ))}
-            </div>
-          )}
-          {user && q.modStatus === "approved" && (
-            <AnswerForm onSubmit={addAnswer} note={hasElevatedAccess(user) ? "Your answer will be posted right away." : "Your answer is sent to an admin for a quick review before it appears here."} />
-          )}
-        </div>
-      )}
-    </div>
-  );
-}
-
-/* ---------------------------------------------------------------------- */
-/* Feed                                                                    */
-/* ---------------------------------------------------------------------- */
-
-function FeedView({ questions, user, mineOnly, myQuestionIds, onMarkAnswered, expandedId, setExpandedId }) {
-  const [query, setQuery] = useState("");
-  const [subject, setSubject] = useState("");
-  const [grade, setGrade] = useState("");
-
-  const filtered = useMemo(() => {
-    let list = mineOnly ? questions.filter((q) => myQuestionIds.includes(q.id)) : questions.filter((q) => q.modStatus === "approved");
-    if (subject) list = list.filter((q) => q.subject === subject);
-    if (grade) list = list.filter((q) => q.grade === grade);
-    if (query.trim()) {
-      const s = query.trim().toLowerCase();
-      list = list.filter((x) => x.title.toLowerCase().includes(s) || x.subject.toLowerCase().includes(s) || x.text.toLowerCase().includes(s));
-    }
-    return [...list].sort((a, b) => b.createdAt - a.createdAt);
-  }, [questions, query, subject, grade, mineOnly, myQuestionIds]);
-
-  return (
-    <div>
-      <FilterBar query={query} setQuery={setQuery} subject={subject} setSubject={setSubject} grade={grade} setGrade={setGrade} placeholder="Search questions by title or subject…" />
-      {filtered.length === 0 ? (
-        <EmptyState icon={mineOnly ? Pencil : MessageSquare}
-          title={mineOnly ? "Nothing here from this browser yet" : "No questions match"}
-          body={mineOnly ? "Post a question and it'll show up here right away — once an admin approves it, it'll also appear in the shared feed. (This list only remembers what you posted from this browser.)" : "Try a different search, subject or grade, or check back later."} />
-      ) : (
-        filtered.map((q) => (
-          <QuestionCard key={q.id} q={q} user={user} showStatus={mineOnly}
-            expanded={expandedId === q.id} onToggleExpand={() => setExpandedId(expandedId === q.id ? null : q.id)}
-            onMarkAnswered={() => onMarkAnswered(q)} />
-        ))
-      )}
-    </div>
-  );
-}
-
 /* ---------------------------------------------------------------------- */
 /* Notes                                                                   */
 /* ---------------------------------------------------------------------- */
@@ -950,7 +703,7 @@ function NotesView({ notes, user, onAddNote }) {
             <div key={n.id} className="pp-card" style={{ borderRadius: 10, padding: 14, transform: `rotate(${cardTilt(n.id) * 0.6}deg)` }}>
               <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}><Tag text={n.subject} /><GradeTag text={n.grade} /></div>
               <div className="pp-serif" style={{ fontSize: 15.5, fontWeight: 600, marginTop: 8 }}>{n.title}</div>
-              {n.type === "image" ? <img src={n.content} alt="" style={{ width: "100%", marginTop: 8, borderRadius: 6, border: "1px solid var(--border)" }} /> : <p style={{ fontSize: 13.5, marginTop: 8, lineHeight: 1.5, color: "var(--text)", whiteSpace: "pre-wrap" }}>{n.content}</p>}
+              {n.type === "image" ? <img src={n.content} alt="" style={{ width: "100%", marginTop: 8, borderRadius: 6, border: "1px solid var(--border)" }} /> : <p style={{ fontSize: 13.5, marginTop: 8, lineHeight: 1.5, color: "var(--text)", whiteSpace: "pre-wrap" }}><MathText text={n.content} /></p>}
               <div style={{ fontSize: 11.5, color: "var(--muted)", marginTop: 10 }}>{roleLabel(n.authorRole)} · {timeAgo(n.createdAt)}</div>
             </div>
           ))}
@@ -967,6 +720,7 @@ function AddNoteModal({ onClose, onSubmit }) {
   const [grade, setGrade] = useState("");
   const [type, setType] = useState("text");
   const [text, setText] = useState("");
+  const textRef = useRef(null);
   const [image, setImage] = useState(null);
   const canSubmit = title.trim() && subject && grade && (type === "text" ? text.trim() : image);
 
@@ -983,7 +737,7 @@ function AddNoteModal({ onClose, onSubmit }) {
           <button className="pp-btn pp-btn-ghost" style={{ padding: "7px 14px", fontSize: 13, background: type === "image" ? "var(--surface)" : "transparent", borderColor: type === "image" ? "var(--accent)" : "var(--border)" }} onClick={() => setType("image")}><ImageIcon size={13} style={{ marginRight: 5, display: "inline" }} /> Image / scan</button>
         </div>
       </Field>
-      {type === "text" ? <Field label="Notes"><textarea className="pp-input" style={{ width: "100%", padding: "9px 12px", fontSize: 14, minHeight: 110, resize: "vertical", fontFamily: "inherit" }} value={text} onChange={(e) => setText(e.target.value)} placeholder="Paste or write the notes…" /></Field>
+      {type === "text" ? <Field label="Notes"><MathToolbar textareaRef={textRef} value={text} setValue={setText} /><textarea ref={textRef} className="pp-input" style={{ width: "100%", padding: "9px 12px", fontSize: 14, minHeight: 110, resize: "vertical", fontFamily: "inherit" }} value={text} onChange={(e) => setText(e.target.value)} placeholder="Paste or write the notes…" /></Field>
         : <Field label="Image or scanned document"><PhotoPicker value={image} onChange={setImage} required /></Field>}
       <button className="pp-btn pp-btn-primary" style={{ width: "100%", padding: "10px 0", opacity: canSubmit ? 1 : 0.5 }} disabled={!canSubmit}
         onClick={() => onSubmit({ title: title.trim(), subject, grade, type, content: type === "text" ? text.trim() : image })}>
@@ -1069,503 +823,113 @@ function AddVideoModal({ onClose, onSubmit }) {
 }
 
 /* ---------------------------------------------------------------------- */
-/* Poorly Answered Questions — solutions live in a subcollection          */
+/* Past Papers                                                            */
 /* ---------------------------------------------------------------------- */
 
-function PoorQuestionItem({ pq, user, expanded, onToggle }) {
-  const notify = useToast();
-  const [solutions] = useCollection(`poorQuestions/${pq.id}/solutions`);
-  const visibleSolutions = solutions.filter((s) => s.modStatus === "approved");
-
-  async function addSolution(payload) {
-    const solution = { ...payload, authorRole: user.role, createdAt: Date.now(), modStatus: hasElevatedAccess(user) ? "approved" : "pending" };
-    try {
-      const ref = await db.collection(`poorQuestions/${pq.id}/solutions`).add(solution);
-      if (solution.modStatus === "pending") {
-        await db.collection("reviewQueue").doc(`solution_${ref.id}`).set({
-          kind: "solution", title: `Solving: ${pq.title}`, authorRole: solution.authorRole, text: solution.explanation,
-          photo: solution.photo, createdAt: solution.createdAt, targetPath: `poorQuestions/${pq.id}/solutions/${ref.id}`
-        });
-      }
-      return true;
-    } catch (e) {
-      notify({ kind: "error", text: friendlyDbError(e) });
-      return false;
-    }
-  }
-
-  return (
-    <div className="pp-card pp-index-card" style={{ borderRadius: 8, padding: 16, marginBottom: 16, borderLeft: "3px solid #C97A7A" }}>
-      <div style={{ marginLeft: 10 }}>
-        <div style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 6, flexWrap: "wrap" }}><Tag text={pq.subject} /><GradeTag text={pq.grade} /></div>
-        <div className="pp-serif" style={{ fontSize: 17, fontWeight: 600, cursor: "pointer" }} onClick={onToggle}>{pq.title}</div>
-        <p style={{ fontSize: 14.5, marginTop: 8, lineHeight: 1.55 }}><MathText text={pq.text} /></p>
-        {pq.note && <div style={{ fontSize: 13, marginTop: 8, color: "var(--muted)", fontStyle: "italic" }}>Why it's tricky: {pq.note}</div>}
-        {pq.photo && <img src={pq.photo} alt="" style={{ marginTop: 10, maxHeight: expanded ? 300 : 150, borderRadius: 6, border: "1px solid var(--border)" }} />}
-        <button className="pp-btn pp-btn-ghost" style={{ marginTop: 12, padding: "6px 12px", fontSize: 13, display: "flex", alignItems: "center", gap: 6 }} onClick={onToggle}>
-          <MessageSquare size={14} /> {visibleSolutions.length} {visibleSolutions.length === 1 ? "solution" : "solutions"}
-        </button>
-        {expanded && (
-          <div style={{ marginTop: 14, borderTop: "1px dashed var(--border)", paddingTop: 14 }}>
-            {visibleSolutions.length === 0 ? <div style={{ fontSize: 13.5, color: "var(--muted)" }}>No approved solutions yet.</div> : (
-              <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-                {visibleSolutions.map((s) => (
-                  <div key={s.id} style={{ background: "var(--bg)", border: "1px solid var(--border)", borderRadius: 8, padding: 12 }}>
-                    <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
-                      <RoleBadge role={s.authorRole} size={24} />
-                      <span style={{ fontSize: 13, fontWeight: 600 }}>{roleLabel(s.authorRole)}</span>
-                      <span style={{ fontSize: 12, color: "var(--muted)" }}>· {timeAgo(s.createdAt)}</span>
-                    </div>
-                    <img src={s.photo} alt="" style={{ maxHeight: 200, borderRadius: 6, border: "1px solid var(--border)", marginBottom: 8 }} />
-                    <p style={{ fontSize: 14, lineHeight: 1.55 }}><MathText text={s.explanation} /></p>
-                  </div>
-                ))}
-              </div>
-            )}
-            {user && <AnswerForm onSubmit={addSolution} note={hasElevatedAccess(user) ? "Your solution will be posted right away." : "Solutions from students are reviewed by an admin before they're posted."} />}
-          </div>
-        )}
-      </div>
-    </div>
-  );
-}
-
-function PoorQuestionsView({ poorQuestions, user, onAdd, expandedId, setExpandedId }) {
+function PapersView({ papers, user, onAddPaper }) {
   const [showForm, setShowForm] = useState(false);
   const [query, setQuery] = useState("");
   const [subject, setSubject] = useState("");
-  const [grade, setGrade] = useState("");
-  const isAdmin = user?.role === "admin";
+  const [examType, setExamType] = useState("");
+  const canUpload = hasElevatedAccess(user);
 
   const filtered = useMemo(() => {
-    let list = poorQuestions;
+    let list = papers;
     if (subject) list = list.filter((p) => p.subject === subject);
-    if (grade) list = list.filter((p) => p.grade === grade);
+    if (examType) list = list.filter((p) => p.examType === examType);
     if (query.trim()) { const s = query.trim().toLowerCase(); list = list.filter((p) => p.title.toLowerCase().includes(s) || p.subject.toLowerCase().includes(s)); }
     return [...list].sort((a, b) => b.createdAt - a.createdAt);
-  }, [poorQuestions, query, subject, grade]);
+  }, [papers, query, subject, examType]);
 
   return (
     <div>
-      <div style={{ fontSize: 13.5, color: "var(--muted)", marginBottom: 16, lineHeight: 1.5 }}>Questions admins have flagged as commonly answered poorly — a good place to focus extra practice.</div>
-      <FilterBar query={query} setQuery={setQuery} subject={subject} setSubject={setSubject} grade={grade} setGrade={setGrade} placeholder="Search…"
-        extra={isAdmin && <button className="pp-btn pp-btn-primary" style={{ padding: "9px 14px", fontSize: 13.5, display: "flex", alignItems: "center", gap: 6 }} onClick={() => setShowForm(true)}><Plus size={15} /> Add question</button>} />
+      <div style={{ display: "flex", gap: 10, marginBottom: 16, flexWrap: "wrap", alignItems: "flex-start" }}>
+        <div style={{ position: "relative", flex: 2, minWidth: 180 }}>
+          <Search size={15} style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)", color: "var(--muted)" }} />
+          <input className="pp-input" style={{ width: "100%", padding: "9px 12px 9px 34px", fontSize: 14 }} placeholder="Search past papers…" value={query} onChange={(e) => setQuery(e.target.value)} />
+        </div>
+        <div style={{ width: 168 }}><SubjectSelect value={subject} onChange={setSubject} includeAll /></div>
+        <div style={{ width: 150 }}><ExamTypeSelect value={examType} onChange={setExamType} includeAll /></div>
+        {canUpload && <button className="pp-btn pp-btn-primary" style={{ padding: "9px 14px", fontSize: 13.5, display: "flex", alignItems: "center", gap: 6 }} onClick={() => setShowForm(true)}><Plus size={15} /> Upload paper</button>}
+      </div>
       {filtered.length === 0 ? (
-        <EmptyState icon={Flag} title="Nothing here yet" body={isAdmin ? "Add a question here to spotlight it for extra practice." : "Admins haven't flagged any questions yet — check back soon."} />
+        <EmptyState icon={FileText} title="No past papers yet" body={canUpload ? "Upload the first past paper as a PDF." : "Only admins and teachers can upload past papers — check back soon."} />
       ) : (
-        filtered.map((pq) => <PoorQuestionItem key={pq.id} pq={pq} user={user} expanded={expandedId === pq.id} onToggle={() => setExpandedId(expandedId === pq.id ? null : pq.id)} />)
-      )}
-      {showForm && <AddPoorQuestionModal onClose={() => setShowForm(false)} onSubmit={async (payload) => { const ok = await onAdd(payload); if (ok) setShowForm(false); }} />}
-    </div>
-  );
-}
-
-function AddPoorQuestionModal({ onClose, onSubmit }) {
-  const [title, setTitle] = useState("");
-  const [subject, setSubject] = useState("");
-  const [grade, setGrade] = useState("");
-  const [text, setText] = useState("");
-  const textRef = useRef(null);
-  const [note, setNote] = useState("");
-  const [photo, setPhoto] = useState(null);
-  const canSubmit = title.trim() && subject && grade && text.trim();
-
-  return (
-    <Modal title="Add a poorly answered question" onClose={onClose}>
-      <Field label="Title"><input className="pp-input" style={{ width: "100%", padding: "9px 12px", fontSize: 14.5 }} value={title} onChange={(e) => setTitle(e.target.value)} placeholder="e.g. Free-body diagrams on an incline" /></Field>
-      <TwoUp>
-        <Field label="Subject"><SubjectSelect value={subject} onChange={setSubject} /></Field>
-        <Field label="Grade"><GradeSelect value={grade} onChange={setGrade} /></Field>
-      </TwoUp>
-      <Field label="Question"><MathToolbar textareaRef={textRef} value={text} setValue={setText} /><textarea ref={textRef} className="pp-input" style={{ width: "100%", padding: "9px 12px", fontSize: 14.5, minHeight: 90, resize: "vertical", fontFamily: "inherit" }} value={text} onChange={(e) => setText(e.target.value)} placeholder="Type out the question…" /></Field>
-      <Field label="Why it's tricky (optional)"><input className="pp-input" style={{ width: "100%", padding: "9px 12px", fontSize: 14 }} value={note} onChange={(e) => setNote(e.target.value)} placeholder="e.g. Students forget to resolve gravity into components" /></Field>
-      <Field label="Photo (optional)"><PhotoPicker value={photo} onChange={setPhoto} /></Field>
-      <button className="pp-btn pp-btn-primary" style={{ width: "100%", padding: "10px 0", opacity: canSubmit ? 1 : 0.5 }} disabled={!canSubmit}
-        onClick={() => onSubmit({ title: title.trim(), subject, grade, text: text.trim(), note: note.trim(), photo })}>
-        Add to list
-      </button>
-    </Modal>
-  );
-}
-
-/* ---------------------------------------------------------------------- */
-/* Grid Questions                                                         */
-/* ---------------------------------------------------------------------- */
-
-const GRID_TYPES = [{ id: "mc", label: "Multiple choice" }, { id: "tf", label: "True / False" }, { id: "short", label: "Short answer" }];
-
-function GridQuestionsView({ gridQuestions, user, attempts, onAdd, onAttempt }) {
-  const [showForm, setShowForm] = useState(false);
-  const [query, setQuery] = useState("");
-  const [subject, setSubject] = useState("");
-  const [grade, setGrade] = useState("");
-  const [openId, setOpenId] = useState(null);
-  const isAdmin = isStaffRole(user?.role);
-
-  const filtered = useMemo(() => {
-    let list = gridQuestions;
-    if (subject) list = list.filter((q) => q.subject === subject);
-    if (grade) list = list.filter((q) => q.grade === grade);
-    if (query.trim()) { const s = query.trim().toLowerCase(); list = list.filter((q) => q.prompt.toLowerCase().includes(s) || q.subject.toLowerCase().includes(s)); }
-    return [...list].sort((a, b) => b.createdAt - a.createdAt);
-  }, [gridQuestions, query, subject, grade]);
-
-  return (
-    <div>
-      <div style={{ fontSize: 13.5, color: "var(--muted)", marginBottom: 16, lineHeight: 1.5 }}>Practice questions from admins. Answer one and find out right away if you've got it.</div>
-      <FilterBar query={query} setQuery={setQuery} subject={subject} setSubject={setSubject} grade={grade} setGrade={setGrade} placeholder="Search grid questions…"
-        extra={isAdmin && <button className="pp-btn pp-btn-primary" style={{ padding: "9px 14px", fontSize: 13.5, display: "flex", alignItems: "center", gap: 6 }} onClick={() => setShowForm(true)}><Plus size={15} /> Add question</button>} />
-      {filtered.length === 0 ? (
-        <EmptyState icon={LayoutGrid} title="No grid questions yet" body={isAdmin ? "Add a practice question — multiple choice, true/false, or short answer." : "Admins haven't added any grid questions yet — check back soon."} />
-      ) : (
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(300px, 1fr))", gap: 14 }}>
-          {filtered.map((gq) => <GridQuestionCard key={gq.id} gq={gq} attempt={attempts[gq.id]} open={openId === gq.id} onToggle={() => setOpenId(openId === gq.id ? null : gq.id)} onAttempt={(payload) => onAttempt(gq.id, payload)} />)}
-        </div>
-      )}
-      {showForm && <AddGridQuestionModal onClose={() => setShowForm(false)} onSubmit={async (payload) => { const ok = await onAdd(payload); if (ok) setShowForm(false); }} />}
-    </div>
-  );
-}
-
-function GridQuestionCard({ gq, attempt, open, onToggle, onAttempt }) {
-  const [shortValue, setShortValue] = useState("");
-  return (
-    <div className="pp-card" style={{ borderRadius: 10, padding: 14 }}>
-      <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 8 }}>
-        <Tag text={gq.subject} /><GradeTag text={gq.grade} />
-        {attempt && <span style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 4, fontSize: 11, fontWeight: 700, color: attempt.correct ? "#33662F" : "#8A3434" }}>{attempt.correct ? <Check size={12} /> : <X size={12} />} {attempt.correct ? "Correct" : "Answered"}</span>}
-      </div>
-      <div className="pp-serif" style={{ fontSize: 15, fontWeight: 600, lineHeight: 1.35, cursor: "pointer" }} onClick={onToggle}><MathText text={gq.prompt} /></div>
-      {open && (
-        <div style={{ marginTop: 12, display: "flex", flexDirection: "column", gap: 8 }}>
-          {gq.qType !== "short" ? (
-            <>
-              {gq.options.map((opt, i) => {
-                const picked = attempt?.selectedIndex === i;
-                const isCorrectOpt = i === gq.correctIndex;
-                let bg = "var(--bg)", border = "var(--border)", color = "var(--text)";
-                if (attempt) {
-                  if (isCorrectOpt) { bg = "#DCEFD9"; border = "#33662F"; color = "#254D22"; }
-                  else if (picked && !isCorrectOpt) { bg = "#F6DEDE"; border = "#8A3434"; color = "#6E2A2A"; }
-                }
-                return <button key={i} className="pp-btn" style={{ textAlign: "left", padding: "9px 12px", fontSize: 13.5, background: bg, border: `1.5px solid ${border}`, color, borderRadius: 8 }} onClick={() => !attempt && onAttempt({ selectedIndex: i, correct: i === gq.correctIndex })}>{opt}</button>;
-              })}
-            </>
-          ) : (
-            <>
-              <div style={{ display: "flex", gap: 8 }}>
-                <input className="pp-input" style={{ flex: 1, padding: "8px 10px", fontSize: 13.5 }} placeholder="Type your answer…" value={shortValue} onChange={(e) => setShortValue(e.target.value)} disabled={!!attempt} />
-                {!attempt && <button className="pp-btn pp-btn-primary" style={{ padding: "8px 14px", fontSize: 13, opacity: shortValue.trim() ? 1 : 0.5 }} disabled={!shortValue.trim()} onClick={() => onAttempt({ enteredText: shortValue.trim(), correct: shortValue.trim().toLowerCase() === gq.correctAnswer.trim().toLowerCase() })}>Submit</button>}
-              </div>
-              {attempt && <div style={{ fontSize: 12.5, color: "var(--muted)" }}>Correct answer: <span style={{ color: "var(--text)", fontWeight: 600 }}>{gq.correctAnswer}</span></div>}
-            </>
-          )}
-          {attempt && <div className="pp-pop" style={{ fontSize: 12.5, marginTop: 4, color: attempt.correct ? "#33662F" : "#8A3434", fontWeight: 600 }}>{attempt.correct ? "Nice — that's right!" : "Not quite — see the correct answer above."}</div>}
-        </div>
-      )}
-    </div>
-  );
-}
-
-function AddGridQuestionModal({ onClose, onSubmit }) {
-  const [prompt, setPrompt] = useState("");
-  const promptRef = useRef(null);
-  const [subject, setSubject] = useState("");
-  const [grade, setGrade] = useState("");
-  const [qType, setQType] = useState("mc");
-  const [options, setOptions] = useState(["", ""]);
-  const [correctIndex, setCorrectIndex] = useState(0);
-  const [correctAnswer, setCorrectAnswer] = useState("");
-
-  const canSubmit = prompt.trim() && subject && grade && (qType === "short" ? correctAnswer.trim() : options.every((o) => o.trim()) && options.length >= 2);
-
-  function setOption(i, val) { setOptions((prev) => prev.map((o, idx) => (idx === i ? val : o))); }
-  function addOption() { if (options.length < 6) setOptions((prev) => [...prev, ""]); }
-  function removeOption(i) { if (options.length <= 2) return; setOptions((prev) => prev.filter((_, idx) => idx !== i)); if (correctIndex >= options.length - 1) setCorrectIndex(0); }
-
-  function submit() {
-    if (qType === "short") onSubmit([{ prompt: prompt.trim(), subject, grade, qType, correctAnswer: correctAnswer.trim() }]);
-    else if (qType === "tf") onSubmit([{ prompt: prompt.trim(), subject, grade, qType, options: ["True", "False"], correctIndex }]);
-    else onSubmit([{ prompt: prompt.trim(), subject, grade, qType, options: options.map((o) => o.trim()), correctIndex }]);
-  }
-
-  return (
-    <Modal title="Add a grid question" onClose={onClose}>
-      <TwoUp>
-        <Field label="Subject"><SubjectSelect value={subject} onChange={setSubject} /></Field>
-        <Field label="Grade"><GradeSelect value={grade} onChange={setGrade} /></Field>
-      </TwoUp>
-      <Field label="Question type">
-        <div style={{ display: "flex", gap: 8 }}>
-          {GRID_TYPES.map((t) => <button key={t.id} className="pp-btn pp-btn-ghost" style={{ padding: "7px 12px", fontSize: 12.5, background: qType === t.id ? "var(--surface)" : "transparent", borderColor: qType === t.id ? "var(--accent)" : "var(--border)" }} onClick={() => setQType(t.id)}>{t.label}</button>)}
-        </div>
-      </Field>
-      <Field label="Question"><MathToolbar textareaRef={promptRef} value={prompt} setValue={setPrompt} /><textarea ref={promptRef} className="pp-input" style={{ width: "100%", padding: "9px 12px", fontSize: 14.5, minHeight: 70, resize: "vertical", fontFamily: "inherit" }} value={prompt} onChange={(e) => setPrompt(e.target.value)} placeholder="e.g. What is the derivative of sin(x)?" /></Field>
-      {qType === "mc" && (
-        <Field label="Answer options — select the correct one">
-          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-            {options.map((opt, i) => (
-              <div key={i} style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                <input type="radio" name="correct" checked={correctIndex === i} onChange={() => setCorrectIndex(i)} style={{ accentColor: "var(--accent)", width: 16, height: 16, flexShrink: 0 }} aria-label={`Mark option ${i + 1} correct`} />
-                <input className="pp-input" style={{ flex: 1, padding: "8px 10px", fontSize: 13.5 }} value={opt} onChange={(e) => setOption(i, e.target.value)} placeholder={`Option ${i + 1}`} />
-                {options.length > 2 && (
-                  <button className="pp-btn pp-btn-ghost" style={{ padding: 6, borderRadius: 999 }} onClick={() => removeOption(i)} aria-label="Remove option"><X size={13} /></button>
-                )}
-              </div>
-            ))}
-          </div>
-          {options.length < 6 && (
-            <button className="pp-btn pp-btn-ghost" style={{ marginTop: 8, padding: "6px 12px", fontSize: 12.5, display: "flex", alignItems: "center", gap: 5 }} onClick={addOption}><Plus size={13} /> Add option</button>
-          )}
-        </Field>
-      )}
-      {qType === "tf" && (
-        <Field label="Correct answer">
-          <div style={{ display: "flex", gap: 8 }}>
-            {["True", "False"].map((label, i) => <button key={label} className="pp-btn pp-btn-ghost" style={{ flex: 1, padding: "9px 0", fontSize: 13.5, background: correctIndex === i ? "var(--surface)" : "transparent", borderColor: correctIndex === i ? "var(--accent)" : "var(--border)" }} onClick={() => setCorrectIndex(i)}>{label}</button>)}
-          </div>
-        </Field>
-      )}
-      {qType === "short" && (
-        <Field label="Correct answer">
-          <input className="pp-input" style={{ width: "100%", padding: "9px 12px", fontSize: 14.5 }} value={correctAnswer} onChange={(e) => setCorrectAnswer(e.target.value)} placeholder="e.g. cos(x)" />
-          <div style={{ fontSize: 11.5, color: "var(--muted)", marginTop: 6 }}>Matched against what the student types, ignoring case and extra spaces.</div>
-        </Field>
-      )}
-      <button className="pp-btn pp-btn-primary" style={{ width: "100%", padding: "10px 0", opacity: canSubmit ? 1 : 0.5, marginTop: 4 }} disabled={!canSubmit} onClick={submit}>Add question</button>
-    </Modal>
-  );
-}
-
-/* ---------------------------------------------------------------------- */
-/* Review queue (admin) — reads the flat reviewQueue collection           */
-/* ---------------------------------------------------------------------- */
-
-function ReviewRow({ item, onApprove, onReject }) {
-  return (
-    <div className="pp-card" style={{ borderRadius: 8, padding: 12, marginBottom: 10 }}>
-      <div style={{ fontSize: 12, color: "var(--muted)", marginBottom: 6 }}>{item.title}</div>
-      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
-        <RoleBadge role={item.authorRole} size={22} />
-        <span style={{ fontSize: 13, fontWeight: 600 }}>{roleLabel(item.authorRole)}</span>
-        <span style={{ fontSize: 12, color: "var(--muted)" }}>· {timeAgo(item.createdAt)}</span>
-      </div>
-      {item.photo && <img src={item.photo} alt="" style={{ maxHeight: 140, borderRadius: 6, border: "1px solid var(--border)", marginBottom: 6 }} />}
-      <p style={{ fontSize: 13.5 }}><MathText text={item.text} /></p>
-      <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
-        <button className="pp-btn pp-btn-primary" style={{ padding: "6px 12px", fontSize: 12.5, display: "flex", alignItems: "center", gap: 5 }} onClick={onApprove}><Check size={13} /> Approve</button>
-        <button className="pp-btn pp-btn-ghost" style={{ padding: "6px 12px", fontSize: 12.5, display: "flex", alignItems: "center", gap: 5 }} onClick={onReject}><X size={13} /> Reject</button>
-      </div>
-    </div>
-  );
-}
-
-function ReviewView({ reviewQueue }) {
-  const notify = useToast();
-  async function decide(item, status) {
-    try {
-      await db.doc(item.targetPath).update({ modStatus: status });
-      await db.collection("reviewQueue").doc(item.id).delete();
-    } catch (e) {
-      notify({ kind: "error", text: friendlyDbError(e) });
-    }
-  }
-  const byKind = { question: [], answer: [], solution: [] };
-  reviewQueue.forEach((it) => { if (byKind[it.kind]) byKind[it.kind].push(it); });
-  const total = reviewQueue.length;
-
-  if (total === 0) return <EmptyState icon={ListChecks} title="All caught up" body="Nothing waiting on review right now — student submissions will show up here." />;
-
-  const SECTIONS = [["question", "Questions"], ["answer", "Answers"], ["solution", "Solutions"]];
-  return (
-    <div>
-      {SECTIONS.map(([kind, label]) => byKind[kind].length > 0 && (
-        <div key={kind} style={{ marginBottom: 26 }}>
-          <div className="pp-serif" style={{ fontSize: 15, fontWeight: 700, marginBottom: 10 }}>{label} ({byKind[kind].length})</div>
-          {byKind[kind].map((item) => <ReviewRow key={item.id} item={item} onApprove={() => decide(item, "approved")} onReject={() => decide(item, "rejected")} />)}
-        </div>
-      ))}
-    </div>
-  );
-}
-
-/* ---------------------------------------------------------------------- */
-/* Events & Announcements                                                 */
-/* ---------------------------------------------------------------------- */
-
-function formatDateStr(dateStr) {
-  if (!dateStr) return "";
-  const d = new Date(dateStr + "T00:00:00");
-  return d.toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric", year: "numeric" });
-}
-function formatEventRange(ev) {
-  if (!ev.startDate) return "";
-  if (!ev.endDate || ev.endDate === ev.startDate) return formatDateStr(ev.startDate);
-  return `${formatDateStr(ev.startDate)} – ${formatDateStr(ev.endDate)}`;
-}
-
-function EventsAnnouncementsView({ events, announcements, user, myVolunteeredIds, onAddEvent, onToggleVolunteer, onAddAnnouncement }) {
-  const [sub, setSub] = useState("events");
-  return (
-    <div>
-      <div style={{ display: "flex", gap: 8, marginBottom: 18 }}>
-        <button className={`pp-chip ${sub === "events" ? "selected" : ""}`} onClick={() => setSub("events")}><Calendar size={13} style={{ marginRight: 5, display: "inline", verticalAlign: -2 }} /> Events</button>
-        <button className={`pp-chip ${sub === "announcements" ? "selected" : ""}`} onClick={() => setSub("announcements")}><Megaphone size={13} style={{ marginRight: 5, display: "inline", verticalAlign: -2 }} /> Announcements</button>
-      </div>
-      {sub === "events"
-        ? <EventsView events={events} user={user} myVolunteeredIds={myVolunteeredIds} onAdd={onAddEvent} onToggleVolunteer={onToggleVolunteer} />
-        : <AnnouncementsView announcements={announcements} user={user} onAdd={onAddAnnouncement} />}
-    </div>
-  );
-}
-
-function EventsView({ events, user, myVolunteeredIds, onAdd, onToggleVolunteer }) {
-  const [showForm, setShowForm] = useState(false);
-  const [department, setDepartment] = useState("");
-  const canAdd = canLeadDepartment(user);
-  const sorted = useMemo(() => {
-    let list = department ? events.filter((ev) => ev.department === department) : events;
-    return [...list].sort((a, b) => (a.startDate || "").localeCompare(b.startDate || ""));
-  }, [events, department]);
-
-  return (
-    <div>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 16, gap: 10, flexWrap: "wrap" }}>
-        <div style={{ fontSize: 13.5, color: "var(--muted)", lineHeight: 1.5, maxWidth: 460 }}>Upcoming events from the department. If one needs a hand, sign up right here.</div>
-        {canAdd && <button className="pp-btn pp-btn-primary" style={{ padding: "9px 14px", fontSize: 13.5, display: "flex", alignItems: "center", gap: 6, flexShrink: 0 }} onClick={() => setShowForm(true)}><Plus size={15} /> Add event</button>}
-      </div>
-      <div style={{ marginBottom: 16, maxWidth: 220 }}>
-        <select className="pp-select" style={{ width: "100%", padding: "9px 10px", fontSize: 14 }} value={department} onChange={(e) => setDepartment(e.target.value)}>
-          <option value="">All departments</option>
-          {DEPARTMENTS.map((d) => <option key={d} value={d}>{d}</option>)}
-        </select>
-      </div>
-      {sorted.length === 0 ? (
-        <EmptyState icon={Calendar} title="No events yet" body={canAdd ? "Add an upcoming event, and let students know if you need volunteers." : "Nothing scheduled yet — check back soon."} />
-      ) : (
-        <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-          {sorted.map((ev) => <EventCard key={ev.id} ev={ev} joined={myVolunteeredIds.includes(ev.id)} onToggleVolunteer={onToggleVolunteer} />)}
-        </div>
-      )}
-      {showForm && <AddEventModal onClose={() => setShowForm(false)} onSubmit={async (payload) => { const ok = await onAdd(payload); if (ok) setShowForm(false); }} />}
-    </div>
-  );
-}
-
-function EventCard({ ev, joined, onToggleVolunteer }) {
-  const needsVolunteers = ev.volunteersNeeded > 0;
-  const count = ev.volunteerCount || 0;
-  const isFull = count >= ev.volunteersNeeded && !joined;
-
-  return (
-    <div className="pp-card pp-index-card" style={{ borderRadius: 8, padding: 16 }}>
-      <div style={{ marginLeft: 10 }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6, flexWrap: "wrap" }}>
-          <span style={{ display: "inline-flex", alignItems: "center", gap: 5, fontSize: 12, fontWeight: 700, color: "var(--accent-ink)", background: "var(--accent)", padding: "2px 9px", borderRadius: 999 }}><Calendar size={11} /> {formatEventRange(ev)}</span>
-          <GradeTag text={ev.department} />
-        </div>
-        <div className="pp-serif" style={{ fontSize: 17, fontWeight: 600 }}>{ev.title}</div>
-        <div style={{ fontSize: 12.5, color: "var(--muted)", marginTop: 4 }}>Posted by {roleLabel(ev.createdByRole)} · {timeAgo(ev.createdAt)}</div>
-        <p style={{ fontSize: 14.5, marginTop: 10, lineHeight: 1.55 }}>{ev.description}</p>
-        {needsVolunteers && (
-          <div style={{ marginTop: 14, borderTop: "1px dashed var(--border)", paddingTop: 12, display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-            <Users size={14} style={{ color: "var(--muted)" }} />
-            <span style={{ fontSize: 13, fontWeight: 600 }}>{count} of {ev.volunteersNeeded} spots filled</span>
-            {!joined ? (
-              <button className="pp-btn pp-btn-ghost" style={{ marginLeft: "auto", padding: "6px 12px", fontSize: 12.5 }} onClick={() => onToggleVolunteer(ev.id, true)} disabled={isFull}>{isFull ? "Full" : "I'll help"}</button>
-            ) : (
-              <button className="pp-btn pp-btn-ghost" style={{ marginLeft: "auto", padding: "6px 12px", fontSize: 12.5, display: "flex", alignItems: "center", gap: 5, background: "var(--surface)", borderColor: "var(--accent)" }} onClick={() => onToggleVolunteer(ev.id, false)}><Check size={13} /> You're signed up — cancel</button>
-            )}
-          </div>
-        )}
-      </div>
-    </div>
-  );
-}
-
-function AddEventModal({ onClose, onSubmit }) {
-  const [title, setTitle] = useState("");
-  const [department, setDepartment] = useState("");
-  const [startDate, setStartDate] = useState("");
-  const [endDate, setEndDate] = useState("");
-  const [description, setDescription] = useState("");
-  const [needsVolunteers, setNeedsVolunteers] = useState(false);
-  const [volunteersNeeded, setVolunteersNeeded] = useState(1);
-  const canSubmit = title.trim() && department && startDate && description.trim();
-
-  return (
-    <Modal title="Add an event" onClose={onClose}>
-      <Field label="Title"><input className="pp-input" style={{ width: "100%", padding: "9px 12px", fontSize: 14.5 }} value={title} onChange={(e) => setTitle(e.target.value)} placeholder="e.g. Fall science fair" /></Field>
-      <Field label="Department">
-        <select className="pp-select" style={{ width: "100%", padding: "9px 10px", fontSize: 14.5 }} value={department} onChange={(e) => setDepartment(e.target.value)}>
-          <option value="" disabled>Select a department…</option>
-          {DEPARTMENTS.map((d) => <option key={d} value={d}>{d}</option>)}
-        </select>
-      </Field>
-      <TwoUp>
-        <Field label="From"><input type="date" className="pp-input" style={{ width: "100%", padding: "9px 12px", fontSize: 14.5 }} value={startDate} onChange={(e) => setStartDate(e.target.value)} /></Field>
-        <Field label="To"><input type="date" className="pp-input" style={{ width: "100%", padding: "9px 12px", fontSize: 14.5 }} value={endDate} min={startDate || undefined} onChange={(e) => setEndDate(e.target.value)} /></Field>
-      </TwoUp>
-      <Field label="Details"><textarea className="pp-input" style={{ width: "100%", padding: "9px 12px", fontSize: 14, minHeight: 90, resize: "vertical", fontFamily: "inherit" }} value={description} onChange={(e) => setDescription(e.target.value)} placeholder="What's happening, where, and anything students should know…" /></Field>
-      <Field label="Volunteers">
-        <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13.5, cursor: "pointer" }}>
-          <input type="checkbox" checked={needsVolunteers} onChange={(e) => setNeedsVolunteers(e.target.checked)} style={{ accentColor: "var(--accent)", width: 15, height: 15 }} />
-          This event needs student volunteers
-        </label>
-        {needsVolunteers && (
-          <div style={{ marginTop: 8, display: "flex", alignItems: "center", gap: 8 }}>
-            <span style={{ fontSize: 13, color: "var(--muted)" }}>How many?</span>
-            <input type="number" min={1} className="pp-input" style={{ width: 80, padding: "7px 10px", fontSize: 14 }} value={volunteersNeeded} onChange={(e) => setVolunteersNeeded(Math.max(1, Number(e.target.value) || 1))} />
-          </div>
-        )}
-      </Field>
-      <button className="pp-btn pp-btn-primary" style={{ width: "100%", padding: "10px 0", opacity: canSubmit ? 1 : 0.5 }} disabled={!canSubmit}
-        onClick={() => onSubmit({ title: title.trim(), department, startDate, endDate: endDate || startDate, description: description.trim(), volunteersNeeded: needsVolunteers ? volunteersNeeded : 0, volunteerCount: 0 })}>
-        Add event
-      </button>
-    </Modal>
-  );
-}
-
-function AnnouncementsView({ announcements, user, onAdd }) {
-  const [showForm, setShowForm] = useState(false);
-  const canAdd = hasElevatedAccess(user);
-  const sorted = useMemo(() => [...announcements].sort((a, b) => b.createdAt - a.createdAt), [announcements]);
-
-  return (
-    <div>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 16, gap: 10, flexWrap: "wrap" }}>
-        <div style={{ fontSize: 13.5, color: "var(--muted)", lineHeight: 1.5, maxWidth: 520 }}>School news from teachers and admins — exam requirements, reminders, and anything else worth knowing.</div>
-        {canAdd && <button className="pp-btn pp-btn-primary" style={{ padding: "9px 14px", fontSize: 13.5, display: "flex", alignItems: "center", gap: 6, flexShrink: 0 }} onClick={() => setShowForm(true)}><Plus size={15} /> Add announcement</button>}
-      </div>
-      {sorted.length === 0 ? (
-        <EmptyState icon={Megaphone} title="No announcements yet" body={canAdd ? "Post something students and staff should know about." : "Nothing posted yet — check back soon."} />
-      ) : (
-        <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-          {sorted.map((a) => (
-            <div key={a.id} className="pp-card" style={{ borderRadius: 8, padding: 16 }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6, flexWrap: "wrap" }}><span style={{ fontSize: 12, color: "var(--muted)" }}>{new Date(a.createdAt).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" })}</span></div>
-              <div className="pp-serif" style={{ fontSize: 16.5, fontWeight: 600 }}>{a.title}</div>
-              <div style={{ fontSize: 12.5, color: "var(--muted)", marginTop: 4 }}>{roleLabel(a.authorRole)}</div>
-              <p style={{ fontSize: 14.5, marginTop: 10, lineHeight: 1.55, whiteSpace: "pre-wrap" }}>{a.body}</p>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(230px, 1fr))", gap: 14 }}>
+          {filtered.map((p) => (
+            <div key={p.id} className="pp-card" style={{ borderRadius: 10, padding: 14, transform: `rotate(${cardTilt(p.id) * 0.6}deg)` }}>
+              <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}><Tag text={p.subject} /><GradeTag text={p.examType} /></div>
+              <div className="pp-serif" style={{ fontSize: 15.5, fontWeight: 600, marginTop: 8 }}>{p.title}</div>
+              <a className="pp-btn pp-btn-ghost" href={p.fileData} target="_blank" rel="noopener noreferrer" download={p.fileName || `${p.title}.pdf`}
+                style={{ display: "inline-flex", alignItems: "center", gap: 6, marginTop: 10, padding: "6px 12px", fontSize: 12.5, textDecoration: "none" }}>
+                <FileText size={13} /> Open PDF
+              </a>
+              <div style={{ fontSize: 11.5, color: "var(--muted)", marginTop: 10 }}>{roleLabel(p.uploadedByRole)} · {timeAgo(p.createdAt)}</div>
             </div>
           ))}
         </div>
       )}
-      {showForm && <AddAnnouncementModal onClose={() => setShowForm(false)} onSubmit={async (payload) => { const ok = await onAdd(payload); if (ok) setShowForm(false); }} />}
+      {showForm && <AddPaperModal onClose={() => setShowForm(false)} onSubmit={async (payload) => { const ok = await onAddPaper(payload); if (ok) setShowForm(false); }} />}
     </div>
   );
 }
 
-function AddAnnouncementModal({ onClose, onSubmit }) {
+function AddPaperModal({ onClose, onSubmit }) {
   const [title, setTitle] = useState("");
-  const [body, setBody] = useState("");
-  const canSubmit = title.trim() && body.trim();
+  const [subject, setSubject] = useState("");
+  const [examType, setExamType] = useState("");
+  const [fileData, setFileData] = useState(null);
+  const [fileName, setFileName] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const canSubmit = title.trim() && subject && examType && fileData && !busy;
+
+  async function handleFile(e) {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file) return;
+    setError("");
+    setBusy(true);
+    try {
+      const data = await readPdfAsDataUrl(file);
+      setFileData(data);
+      setFileName(file.name);
+    } catch (err) {
+      setFileData(null);
+      setFileName("");
+      setError(err.message || "Couldn't read that file.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
   return (
-    <Modal title="Add an announcement" onClose={onClose}>
-      <Field label="Title"><input className="pp-input" style={{ width: "100%", padding: "9px 12px", fontSize: 14.5 }} value={title} onChange={(e) => setTitle(e.target.value)} placeholder="e.g. Midterm exam schedule" /></Field>
-      <Field label="Details"><textarea className="pp-input" style={{ width: "100%", padding: "9px 12px", fontSize: 14, minHeight: 110, resize: "vertical", fontFamily: "inherit" }} value={body} onChange={(e) => setBody(e.target.value)} placeholder="What students and staff need to know…" /></Field>
-      <button className="pp-btn pp-btn-primary" style={{ width: "100%", padding: "10px 0", opacity: canSubmit ? 1 : 0.5 }} disabled={!canSubmit} onClick={() => onSubmit({ title: title.trim(), body: body.trim() })}>Post announcement</button>
+    <Modal title="Upload a past paper" onClose={onClose}>
+      <Field label="Title"><input className="pp-input" style={{ width: "100%", padding: "9px 12px", fontSize: 14.5 }} value={title} onChange={(e) => setTitle(e.target.value)} placeholder="e.g. May/June 2023 Paper 1" /></Field>
+      <TwoUp>
+        <Field label="Subject"><SubjectSelect value={subject} onChange={setSubject} /></Field>
+        <Field label="Exam type"><ExamTypeSelect value={examType} onChange={setExamType} /></Field>
+      </TwoUp>
+      <Field label="PDF file">
+        {fileData ? (
+          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <span className="pp-file-slot" style={{ fontSize: 13, display: "flex", alignItems: "center", gap: 6 }}><FileText size={13} /> {fileName}</span>
+            <button type="button" className="pp-btn pp-btn-ghost" style={{ padding: 6, borderRadius: 999 }} onClick={() => { setFileData(null); setFileName(""); }} aria-label="Remove file"><X size={13} /></button>
+          </div>
+        ) : busy ? (
+          <div className="pp-btn pp-btn-ghost" style={{ display: "inline-flex", alignItems: "center", gap: 8, padding: "9px 14px", fontSize: 13.5 }}><Loader2 size={15} style={{ animation: "pp-spin 0.9s linear infinite" }} /> Reading file…</div>
+        ) : (
+          <div className="pp-file-slot" style={{ display: "inline-block" }}>
+            <div style={{ fontSize: 11.5, fontWeight: 600, color: "var(--muted)", marginBottom: 5 }}>Choose a PDF (max ~{Math.round(MAX_PDF_BYTES / 1024)}KB)</div>
+            <input type="file" accept="application/pdf" onChange={handleFile} className="pp-file-input" />
+          </div>
+        )}
+        {error && <div style={{ fontSize: 12, color: "#8A3434", marginTop: 6 }}>{error}</div>}
+      </Field>
+      <button className="pp-btn pp-btn-primary" style={{ width: "100%", padding: "10px 0", opacity: canSubmit ? 1 : 0.5 }} disabled={!canSubmit}
+        onClick={() => onSubmit({ title: title.trim(), subject, examType, fileData, fileName })}>
+        Publish past paper
+      </button>
     </Modal>
   );
 }
@@ -1575,33 +939,17 @@ function AddAnnouncementModal({ onClose, onSubmit }) {
 /* ---------------------------------------------------------------------- */
 
 const TABS = [
-  { id: "feed", label: "Feed", icon: MessageSquare },
-  { id: "mine", label: "My Prep List", icon: Pencil },
   { id: "notes", label: "Notes", icon: BookOpen },
   { id: "videos", label: "Videos", icon: VideoIcon },
-  { id: "poor", label: "Poorly Answered Questions", icon: Flag },
-  { id: "grid", label: "Grid Questions", icon: LayoutGrid },
-  { id: "events", label: "Events & Announcements", icon: Calendar },
-  { id: "review", label: "Review Queue", icon: ListChecks, adminOnly: true }
+  { id: "papers", label: "Past Papers", icon: FileText }
 ];
 
 function MainApp({ user, onSwitchRole, theme, setTheme }) {
-  const [questions, questionsReady] = useCollection("questions");
   const [notes, notesReady] = useCollection("notes");
   const [videos, videosReady] = useCollection("videos");
-  const [poorQuestions, poorReady] = useCollection("poorQuestions");
-  const [gridQuestions, gridReady] = useCollection("gridQuestions");
-  const [events, eventsReady] = useCollection("events");
-  const [announcements, announcementsReady] = useCollection("announcements");
-  const [reviewQueue] = useCollection(user.role === "admin" ? "reviewQueue" : null);
-  const [attempts, setAttemptsLocal] = useLocalState("preplist:gridAttempts", {});
-  const [myQuestionIds, setMyQuestionIds] = useLocalState("preplist:myQuestions", []);
-  const [myVolunteeredIds, setMyVolunteeredIds] = useLocalState("preplist:myVolunteered", []);
+  const [papers, papersReady] = useCollection("pastPapers");
 
-  const [tab, setTab] = useState("feed");
-  const [showAsk, setShowAsk] = useState(false);
-  const [expandedId, setExpandedId] = useState(null);
-  const [expandedPoorId, setExpandedPoorId] = useState(null);
+  const [tab, setTab] = useState("notes");
   const [toast, setToast] = useState(null);
   const notify = useCallback((t) => setToast(t), []);
   useEffect(() => {
@@ -1609,27 +957,6 @@ function MainApp({ user, onSwitchRole, theme, setTheme }) {
     const t = setTimeout(() => setToast(null), 4500);
     return () => clearTimeout(t);
   }, [toast]);
-
-  async function addQuestion(payload) {
-    const q = { ...payload, askerRole: user.role, createdAt: Date.now(), solved: false, modStatus: hasElevatedAccess(user) ? "approved" : "pending" };
-    try {
-      const ref = await db.collection("questions").add(q);
-      setMyQuestionIds((prev) => [ref.id, ...prev]);
-      if (q.modStatus === "pending") {
-        await db.collection("reviewQueue").doc(`question_${ref.id}`).set({ kind: "question", title: q.title, authorRole: q.askerRole, text: q.text, photo: q.photo, createdAt: q.createdAt, targetPath: `questions/${ref.id}` });
-      }
-      setShowAsk(false);
-      setTab(hasElevatedAccess(user) ? "feed" : "mine");
-      return true;
-    } catch (e) {
-      notify({ kind: "error", text: friendlyDbError(e) });
-      return false;
-    }
-  }
-  async function markAnswered(q) {
-    try { await db.collection("questions").doc(q.id).update({ solved: !q.solved }); }
-    catch (e) { notify({ kind: "error", text: friendlyDbError(e) }); }
-  }
 
   async function addNote(payload) {
     try { await db.collection("notes").add({ ...payload, authorRole: user.role, createdAt: Date.now() }); return true; }
@@ -1639,54 +966,12 @@ function MainApp({ user, onSwitchRole, theme, setTheme }) {
     try { await db.collection("videos").add({ ...payload, addedByRole: user.role, createdAt: Date.now() }); return true; }
     catch (e) { notify({ kind: "error", text: friendlyDbError(e) }); return false; }
   }
-  async function addPoorQuestion(payload) {
-    try { await db.collection("poorQuestions").add({ ...payload, addedByRole: user.role, createdAt: Date.now() }); return true; }
-    catch (e) { notify({ kind: "error", text: friendlyDbError(e) }); return false; }
-  }
-  async function addGridQuestion(payloads) {
-    const items = Array.isArray(payloads) ? payloads : [payloads];
-    try {
-      const batch = db.batch();
-      items.forEach((p) => batch.set(db.collection("gridQuestions").doc(), { ...p, createdByRole: user.role, createdAt: Date.now() }));
-      await batch.commit();
-      return true;
-    } catch (e) {
-      notify({ kind: "error", text: friendlyDbError(e) });
-      return false;
-    }
-  }
-  function attemptGrid(qid, payload) { setAttemptsLocal((prev) => ({ ...prev, [qid]: { ...payload, answeredAt: Date.now() } })); }
-
-  async function addEvent(payload) {
-    try { await db.collection("events").add({ ...payload, createdByRole: user.role, createdAt: Date.now() }); return true; }
-    catch (e) { notify({ kind: "error", text: friendlyDbError(e) }); return false; }
-  }
-  async function toggleVolunteer(eventId, joining) {
-    const ev = events.find((e) => e.id === eventId);
-    if (!ev) return;
-    const already = myVolunteeredIds.includes(eventId);
-    try {
-      if (joining) {
-        if (already || (ev.volunteerCount || 0) >= ev.volunteersNeeded) return;
-        await db.collection("events").doc(eventId).update({ volunteerCount: firebase.firestore.FieldValue.increment(1) });
-        setMyVolunteeredIds((prev) => [...prev, eventId]);
-      } else {
-        if (!already) return;
-        await db.collection("events").doc(eventId).update({ volunteerCount: firebase.firestore.FieldValue.increment(-1) });
-        setMyVolunteeredIds((prev) => prev.filter((id) => id !== eventId));
-      }
-    } catch (e) {
-      notify({ kind: "error", text: friendlyDbError(e) });
-    }
-  }
-  async function addAnnouncement(payload) {
-    try { await db.collection("announcements").add({ ...payload, authorRole: user.role, createdAt: Date.now() }); return true; }
+  async function addPaper(payload) {
+    try { await db.collection("pastPapers").add({ ...payload, uploadedByRole: user.role, createdAt: Date.now() }); return true; }
     catch (e) { notify({ kind: "error", text: friendlyDbError(e) }); return false; }
   }
 
-  const dataReady = questionsReady && notesReady && videosReady && poorReady && gridReady && eventsReady && announcementsReady;
-  const isAdmin = user.role === "admin";
-  const visibleTabs = TABS.filter((t) => !t.adminOnly || isAdmin);
+  const dataReady = notesReady && videosReady && papersReady;
 
   return (
     <ToastContext.Provider value={notify}>
@@ -1704,34 +989,24 @@ function MainApp({ user, onSwitchRole, theme, setTheme }) {
             </button>
           </div>
           <nav className="pp-scrollbar" style={{ maxWidth: 960, margin: "0 auto", padding: "0 18px", display: "flex", gap: 20, overflowX: "auto" }}>
-            {visibleTabs.map((t) => (
+            {TABS.map((t) => (
               <div key={t.id} className={`pp-tab ${tab === t.id ? "active" : ""}`} style={{ padding: "10px 2px", fontSize: 14, display: "flex", alignItems: "center", gap: 6 }} onClick={() => setTab(t.id)}>
                 <t.icon size={14} /> {t.label}
-                {t.id === "review" && reviewQueue.length > 0 && <span style={{ background: "var(--accent)", color: "var(--accent-ink)", fontSize: 10.5, fontWeight: 700, borderRadius: 999, padding: "1px 6px" }}>{reviewQueue.length}</span>}
               </div>
             ))}
           </nav>
         </header>
 
         <main style={{ maxWidth: 960, margin: "0 auto", padding: "22px 18px 90px" }}>
-          {!dataReady ? <Loading label="Loading the feed…" /> : (
+          {!dataReady ? <Loading label="Loading…" /> : (
             <>
-              {tab === "feed" && <FeedView questions={questions} user={user} mineOnly={false} myQuestionIds={myQuestionIds} onMarkAnswered={markAnswered} expandedId={expandedId} setExpandedId={setExpandedId} />}
-              {tab === "mine" && <FeedView questions={questions} user={user} mineOnly={true} myQuestionIds={myQuestionIds} onMarkAnswered={markAnswered} expandedId={expandedId} setExpandedId={setExpandedId} />}
               {tab === "notes" && <NotesView notes={notes} user={user} onAddNote={addNote} />}
               {tab === "videos" && <VideosView videos={videos} user={user} onAddVideo={addVideo} />}
-              {tab === "poor" && <PoorQuestionsView poorQuestions={poorQuestions} user={user} onAdd={addPoorQuestion} expandedId={expandedPoorId} setExpandedId={setExpandedPoorId} />}
-              {tab === "grid" && <GridQuestionsView gridQuestions={gridQuestions} user={user} attempts={attempts} onAdd={addGridQuestion} onAttempt={attemptGrid} />}
-              {tab === "events" && <EventsAnnouncementsView events={events} announcements={announcements} user={user} myVolunteeredIds={myVolunteeredIds} onAddEvent={addEvent} onToggleVolunteer={toggleVolunteer} onAddAnnouncement={addAnnouncement} />}
-              {tab === "review" && isAdmin && <ReviewView reviewQueue={reviewQueue} />}
+              {tab === "papers" && <PapersView papers={papers} user={user} onAddPaper={addPaper} />}
             </>
           )}
         </main>
 
-        {(tab === "feed" || tab === "mine") && (
-          <button className="pp-btn pp-btn-primary" style={{ position: "fixed", bottom: 22, right: 22, borderRadius: 999, width: 56, height: 56, display: "flex", alignItems: "center", justifyContent: "center", boxShadow: "0 4px 14px rgba(0,0,0,0.18)", zIndex: 30 }} onClick={() => setShowAsk(true)} aria-label="Ask a question"><Plus size={22} /></button>
-        )}
-        {showAsk && <AskQuestionModal onClose={() => setShowAsk(false)} onSubmit={addQuestion} />}
         <Toast toast={toast} onClose={() => setToast(null)} />
       </div>
     </ToastContext.Provider>
