@@ -1,4 +1,4 @@
-const { useState, useEffect, useCallback, useMemo, useContext, createContext } = React;
+const { useState, useEffect, useCallback, useMemo, useContext, createContext, useRef } = React;
 
 /* ---------------------------------------------------------------------- */
 /* Firebase setup                                                         */
@@ -325,6 +325,19 @@ function GlobalStyle() {
       .pp-pop { animation: pp-pop 0.25s ease-out; }
       @keyframes pp-spin { to { transform: rotate(360deg); } }
       @media (prefers-reduced-motion: reduce) { .pp-stamp, .pp-pop, .pp-btn { animation: none !important; transition: none !important; } }
+
+      .pp-twoup { display: flex; gap: 10px; }
+      .katex { font-size: 1.05em; }
+
+      @media (max-width: 480px) {
+        .pp-twoup { flex-direction: column; gap: 14px; }
+        .pp-tab { font-size: 13px; padding: 9px 1px !important; }
+        header nav.pp-scrollbar { gap: 14px !important; }
+        .pp-modal-card { padding: 16px !important; }
+        .pp-header-title { font-size: 16px !important; }
+        .pp-header-row { padding: 12px 14px !important; gap: 8px !important; }
+        .pp-role-pill span { display: none; }
+      }
     `}</style>
   );
 }
@@ -502,7 +515,7 @@ function RoleGate({ onSelectRole, theme, setTheme }) {
 function Modal({ title, onClose, children, wide }) {
   return (
     <div style={{ position: "fixed", inset: 0, background: "rgba(20,16,10,0.45)", display: "flex", alignItems: "flex-end", justifyContent: "center", zIndex: 60 }} onClick={onClose}>
-      <div className="pp-card pp-pop" onClick={(e) => e.stopPropagation()} style={{ width: "100%", maxWidth: wide ? 620 : 480, maxHeight: "92dvh", overflowY: "auto", borderRadius: "16px 16px 0 0", padding: 22 }}>
+      <div className="pp-card pp-pop pp-modal-card" onClick={(e) => e.stopPropagation()} style={{ width: "100%", maxWidth: wide ? 620 : 480, maxHeight: "92dvh", overflowY: "auto", borderRadius: "16px 16px 0 0", padding: 22 }}>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
           <div className="pp-serif" style={{ fontSize: 19, fontWeight: 700 }}>{title}</div>
           <button className="pp-btn pp-btn-ghost" style={{ padding: 6, borderRadius: 999 }} onClick={onClose} aria-label="Close"><X size={17} /></button>
@@ -521,7 +534,64 @@ function Field({ label, children }) {
   );
 }
 function TwoUp({ children }) {
-  return <div style={{ display: "flex", gap: 10 }}>{React.Children.map(children, (c) => <div style={{ flex: 1 }}>{c}</div>)}</div>;
+  return <div className="pp-twoup">{React.Children.map(children, (c) => <div style={{ flex: 1 }}>{c}</div>)}</div>;
+}
+
+/* ---------------------------------------------------------------------- */
+/* Math notation — type $...$ (or use the toolbar) for fractions,         */
+/* integrals, square roots, etc. Rendered live via KaTeX.                 */
+/* ---------------------------------------------------------------------- */
+
+function MathText({ text }) {
+  if (!text) return null;
+  const parts = String(text).split(/(\$[^$]+\$)/g);
+  return (
+    <>
+      {parts.map((part, i) => {
+        if (part.length > 2 && part.startsWith("$") && part.endsWith("$") && window.katex) {
+          try {
+            const html = window.katex.renderToString(part.slice(1, -1), { throwOnError: false, displayMode: false });
+            return <span key={i} dangerouslySetInnerHTML={{ __html: html }} />;
+          } catch {
+            return <span key={i}>{part}</span>;
+          }
+        }
+        return <React.Fragment key={i}>{part}</React.Fragment>;
+      })}
+    </>
+  );
+}
+
+const MATH_SYMBOLS = [
+  { label: "π", before: "\\pi", after: "" },
+  { label: "√", before: "\\sqrt{", after: "}" },
+  { label: "a⁄b", before: "\\frac{", after: "}{}" },
+  { label: "∫", before: "\\int", after: "" },
+  { label: "±", before: "\\pm", after: "" },
+  { label: "∞", before: "\\infty", after: "" },
+  { label: "θ", before: "\\theta", after: "" }
+];
+
+function MathToolbar({ textareaRef, value, setValue }) {
+  function insert(before, after) {
+    const el = textareaRef.current;
+    const start = el ? (el.selectionStart ?? value.length) : value.length;
+    const end = el ? (el.selectionEnd ?? value.length) : value.length;
+    const snippet = "$" + before + after + "$";
+    const newValue = value.slice(0, start) + snippet + value.slice(end);
+    setValue(newValue);
+    const cursorPos = after ? start + 1 + before.length : start + snippet.length;
+    requestAnimationFrame(() => {
+      if (el) { el.focus(); el.setSelectionRange(cursorPos, cursorPos); }
+    });
+  }
+  return (
+    <div style={{ display: "flex", flexWrap: "wrap", gap: 5, marginBottom: 6 }}>
+      {MATH_SYMBOLS.map((s) => (
+        <button key={s.label} type="button" className="pp-btn pp-btn-ghost" style={{ padding: "3px 9px", fontSize: 13.5, minWidth: 30 }} title="Insert math — fills in as you type" onClick={() => insert(s.before, s.after)}>{s.label}</button>
+      ))}
+    </div>
+  );
 }
 
 function PhotoPicker({ value, onChange, required }) {
@@ -581,6 +651,7 @@ function AskQuestionModal({ onClose, onSubmit }) {
   const [subject, setSubject] = useState("");
   const [grade, setGrade] = useState("");
   const [text, setText] = useState("");
+  const textRef = useRef(null);
   const [photo, setPhoto] = useState(null);
   const [format, setFormat] = useState("text");
   const [options, setOptions] = useState(["", ""]);
@@ -616,7 +687,8 @@ function AskQuestionModal({ onClose, onSubmit }) {
         <Field label="Grade"><GradeSelect value={grade} onChange={setGrade} /></Field>
       </TwoUp>
       <Field label="Question">
-        <textarea className="pp-input" style={{ width: "100%", padding: "9px 12px", fontSize: 14.5, minHeight: 90, resize: "vertical", fontFamily: "inherit" }} placeholder="Type out the question, or describe what's in the photo…" value={text} onChange={(e) => setText(e.target.value)} />
+        <MathToolbar textareaRef={textRef} value={text} setValue={setText} />
+        <textarea ref={textRef} className="pp-input" style={{ width: "100%", padding: "9px 12px", fontSize: 14.5, minHeight: 90, resize: "vertical", fontFamily: "inherit" }} placeholder="Type out the question, or describe what's in the photo…" value={text} onChange={(e) => setText(e.target.value)} />
       </Field>
       <Field label="Format (optional)">
         <div style={{ display: "flex", gap: 8 }}>
@@ -663,6 +735,7 @@ function AskQuestionModal({ onClose, onSubmit }) {
 function AnswerForm({ onSubmit, note }) {
   const [photo, setPhoto] = useState(null);
   const [explanation, setExplanation] = useState("");
+  const explanationRef = useRef(null);
   const [busy, setBusy] = useState(false);
   const canSubmit = photo && explanation.trim() && !busy;
 
@@ -679,7 +752,8 @@ function AnswerForm({ onSubmit, note }) {
       <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 10 }} className="pp-serif">Post your answer</div>
       <Field label="Photo of your worked solution"><PhotoPicker value={photo} onChange={setPhoto} required /></Field>
       <Field label="Explain your reasoning">
-        <textarea className="pp-input" style={{ width: "100%", padding: "9px 12px", fontSize: 14, minHeight: 70, resize: "vertical", fontFamily: "inherit" }} placeholder="Walk through how you got there…" value={explanation} onChange={(e) => setExplanation(e.target.value)} />
+        <MathToolbar textareaRef={explanationRef} value={explanation} setValue={setExplanation} />
+        <textarea ref={explanationRef} className="pp-input" style={{ width: "100%", padding: "9px 12px", fontSize: 14, minHeight: 70, resize: "vertical", fontFamily: "inherit" }} placeholder="Walk through how you got there…" value={explanation} onChange={(e) => setExplanation(e.target.value)} />
       </Field>
       <button className="pp-btn pp-btn-primary" style={{ width: "100%", padding: "8px 0", fontSize: 13.5, opacity: canSubmit ? 1 : 0.5, display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }} disabled={!canSubmit} onClick={submit}>
         {busy && <Loader2 size={14} style={{ animation: "pp-spin 0.9s linear infinite" }} />}
@@ -743,7 +817,7 @@ function QuestionCard({ q, user, onMarkAnswered, expanded, onToggleExpand, showS
         <div style={{ fontSize: 12.5, color: "var(--muted)", marginTop: 4 }}>{roleLabel(q.askerRole)} · {timeAgo(q.createdAt)}</div>
       </div>
 
-      <p style={{ marginLeft: 10, marginTop: 10, fontSize: 14.5, lineHeight: 1.55, color: "var(--text)" }}>{q.text}</p>
+      <p style={{ marginLeft: 10, marginTop: 10, fontSize: 14.5, lineHeight: 1.55, color: "var(--text)" }}><MathText text={q.text} /></p>
 
       {q.format === "mc" && q.options && (
         <div style={{ marginLeft: 10, marginTop: 8, display: "flex", flexDirection: "column", gap: 4 }}>
@@ -790,7 +864,7 @@ function QuestionCard({ q, user, onMarkAnswered, expanded, onToggleExpand, showS
                     {a.helpful && <span style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 3, fontSize: 11.5, fontWeight: 700, color: "var(--accent-ink)" }}><Star size={12} fill="var(--accent)" stroke="var(--accent-ink)" /> Most helpful</span>}
                   </div>
                   <img src={a.photo} alt="" style={{ maxHeight: 200, borderRadius: 6, border: "1px solid var(--border)", marginBottom: 8 }} />
-                  <p style={{ fontSize: 14, lineHeight: 1.55 }}>{a.explanation}</p>
+                  <p style={{ fontSize: 14, lineHeight: 1.55 }}><MathText text={a.explanation} /></p>
                   {!a.helpful && (
                     <button className="pp-btn pp-btn-ghost" style={{ marginTop: 8, padding: "5px 10px", fontSize: 12, display: "flex", alignItems: "center", gap: 5 }} onClick={() => markHelpful(a.id)}><Star size={12} /> Mark most helpful</button>
                   )}
@@ -1025,7 +1099,7 @@ function PoorQuestionItem({ pq, user, expanded, onToggle }) {
       <div style={{ marginLeft: 10 }}>
         <div style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 6, flexWrap: "wrap" }}><Tag text={pq.subject} /><GradeTag text={pq.grade} /></div>
         <div className="pp-serif" style={{ fontSize: 17, fontWeight: 600, cursor: "pointer" }} onClick={onToggle}>{pq.title}</div>
-        <p style={{ fontSize: 14.5, marginTop: 8, lineHeight: 1.55 }}>{pq.text}</p>
+        <p style={{ fontSize: 14.5, marginTop: 8, lineHeight: 1.55 }}><MathText text={pq.text} /></p>
         {pq.note && <div style={{ fontSize: 13, marginTop: 8, color: "var(--muted)", fontStyle: "italic" }}>Why it's tricky: {pq.note}</div>}
         {pq.photo && <img src={pq.photo} alt="" style={{ marginTop: 10, maxHeight: expanded ? 300 : 150, borderRadius: 6, border: "1px solid var(--border)" }} />}
         <button className="pp-btn pp-btn-ghost" style={{ marginTop: 12, padding: "6px 12px", fontSize: 13, display: "flex", alignItems: "center", gap: 6 }} onClick={onToggle}>
@@ -1043,7 +1117,7 @@ function PoorQuestionItem({ pq, user, expanded, onToggle }) {
                       <span style={{ fontSize: 12, color: "var(--muted)" }}>· {timeAgo(s.createdAt)}</span>
                     </div>
                     <img src={s.photo} alt="" style={{ maxHeight: 200, borderRadius: 6, border: "1px solid var(--border)", marginBottom: 8 }} />
-                    <p style={{ fontSize: 14, lineHeight: 1.55 }}>{s.explanation}</p>
+                    <p style={{ fontSize: 14, lineHeight: 1.55 }}><MathText text={s.explanation} /></p>
                   </div>
                 ))}
               </div>
@@ -1091,6 +1165,7 @@ function AddPoorQuestionModal({ onClose, onSubmit }) {
   const [subject, setSubject] = useState("");
   const [grade, setGrade] = useState("");
   const [text, setText] = useState("");
+  const textRef = useRef(null);
   const [note, setNote] = useState("");
   const [photo, setPhoto] = useState(null);
   const canSubmit = title.trim() && subject && grade && text.trim();
@@ -1102,7 +1177,7 @@ function AddPoorQuestionModal({ onClose, onSubmit }) {
         <Field label="Subject"><SubjectSelect value={subject} onChange={setSubject} /></Field>
         <Field label="Grade"><GradeSelect value={grade} onChange={setGrade} /></Field>
       </TwoUp>
-      <Field label="Question"><textarea className="pp-input" style={{ width: "100%", padding: "9px 12px", fontSize: 14.5, minHeight: 90, resize: "vertical", fontFamily: "inherit" }} value={text} onChange={(e) => setText(e.target.value)} placeholder="Type out the question…" /></Field>
+      <Field label="Question"><MathToolbar textareaRef={textRef} value={text} setValue={setText} /><textarea ref={textRef} className="pp-input" style={{ width: "100%", padding: "9px 12px", fontSize: 14.5, minHeight: 90, resize: "vertical", fontFamily: "inherit" }} value={text} onChange={(e) => setText(e.target.value)} placeholder="Type out the question…" /></Field>
       <Field label="Why it's tricky (optional)"><input className="pp-input" style={{ width: "100%", padding: "9px 12px", fontSize: 14 }} value={note} onChange={(e) => setNote(e.target.value)} placeholder="e.g. Students forget to resolve gravity into components" /></Field>
       <Field label="Photo (optional)"><PhotoPicker value={photo} onChange={setPhoto} /></Field>
       <button className="pp-btn pp-btn-primary" style={{ width: "100%", padding: "10px 0", opacity: canSubmit ? 1 : 0.5 }} disabled={!canSubmit}
@@ -1160,7 +1235,7 @@ function GridQuestionCard({ gq, attempt, open, onToggle, onAttempt }) {
         <Tag text={gq.subject} /><GradeTag text={gq.grade} />
         {attempt && <span style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 4, fontSize: 11, fontWeight: 700, color: attempt.correct ? "#33662F" : "#8A3434" }}>{attempt.correct ? <Check size={12} /> : <X size={12} />} {attempt.correct ? "Correct" : "Answered"}</span>}
       </div>
-      <div className="pp-serif" style={{ fontSize: 15, fontWeight: 600, lineHeight: 1.35, cursor: "pointer" }} onClick={onToggle}>{gq.prompt}</div>
+      <div className="pp-serif" style={{ fontSize: 15, fontWeight: 600, lineHeight: 1.35, cursor: "pointer" }} onClick={onToggle}><MathText text={gq.prompt} /></div>
       {open && (
         <div style={{ marginTop: 12, display: "flex", flexDirection: "column", gap: 8 }}>
           {gq.qType !== "short" ? (
@@ -1194,6 +1269,7 @@ function GridQuestionCard({ gq, attempt, open, onToggle, onAttempt }) {
 
 function AddGridQuestionModal({ onClose, onSubmit }) {
   const [prompt, setPrompt] = useState("");
+  const promptRef = useRef(null);
   const [subject, setSubject] = useState("");
   const [grade, setGrade] = useState("");
   const [qType, setQType] = useState("mc");
@@ -1224,7 +1300,7 @@ function AddGridQuestionModal({ onClose, onSubmit }) {
           {GRID_TYPES.map((t) => <button key={t.id} className="pp-btn pp-btn-ghost" style={{ padding: "7px 12px", fontSize: 12.5, background: qType === t.id ? "var(--surface)" : "transparent", borderColor: qType === t.id ? "var(--accent)" : "var(--border)" }} onClick={() => setQType(t.id)}>{t.label}</button>)}
         </div>
       </Field>
-      <Field label="Question"><textarea className="pp-input" style={{ width: "100%", padding: "9px 12px", fontSize: 14.5, minHeight: 70, resize: "vertical", fontFamily: "inherit" }} value={prompt} onChange={(e) => setPrompt(e.target.value)} placeholder="e.g. What is the derivative of sin(x)?" /></Field>
+      <Field label="Question"><MathToolbar textareaRef={promptRef} value={prompt} setValue={setPrompt} /><textarea ref={promptRef} className="pp-input" style={{ width: "100%", padding: "9px 12px", fontSize: 14.5, minHeight: 70, resize: "vertical", fontFamily: "inherit" }} value={prompt} onChange={(e) => setPrompt(e.target.value)} placeholder="e.g. What is the derivative of sin(x)?" /></Field>
       {qType === "mc" && (
         <Field label="Answer options — select the correct one">
           <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
@@ -1275,7 +1351,7 @@ function ReviewRow({ item, onApprove, onReject }) {
         <span style={{ fontSize: 12, color: "var(--muted)" }}>· {timeAgo(item.createdAt)}</span>
       </div>
       {item.photo && <img src={item.photo} alt="" style={{ maxHeight: 140, borderRadius: 6, border: "1px solid var(--border)", marginBottom: 6 }} />}
-      <p style={{ fontSize: 13.5 }}>{item.text}</p>
+      <p style={{ fontSize: 13.5 }}><MathText text={item.text} /></p>
       <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
         <button className="pp-btn pp-btn-primary" style={{ padding: "6px 12px", fontSize: 12.5, display: "flex", alignItems: "center", gap: 5 }} onClick={onApprove}><Check size={13} /> Approve</button>
         <button className="pp-btn pp-btn-ghost" style={{ padding: "6px 12px", fontSize: 12.5, display: "flex", alignItems: "center", gap: 5 }} onClick={onReject}><X size={13} /> Reject</button>
@@ -1617,11 +1693,11 @@ function MainApp({ user, onSwitchRole, theme, setTheme }) {
       <div className="pp-root" data-theme={theme} style={{ minHeight: "100dvh" }}>
         <GlobalStyle />
         <header style={{ borderBottom: "1px solid var(--border)", position: "sticky", top: 0, background: "var(--bg)", zIndex: 40 }}>
-          <div style={{ maxWidth: 960, margin: "0 auto", padding: "14px 18px", display: "flex", alignItems: "center", gap: 12 }}>
-            <div className="pp-serif" style={{ fontSize: 19, fontWeight: 700, display: "flex", alignItems: "center", gap: 6 }}><Sparkles size={17} style={{ color: "var(--accent)" }} /> PrepList Pro</div>
+          <div className="pp-header-row" style={{ maxWidth: 960, margin: "0 auto", padding: "14px 18px", display: "flex", alignItems: "center", gap: 12 }}>
+            <div className="pp-serif pp-header-title" style={{ fontSize: 19, fontWeight: 700, display: "flex", alignItems: "center", gap: 6 }}><Sparkles size={17} style={{ color: "var(--accent)" }} /> PrepList Pro</div>
             <div style={{ flex: 1 }} />
             <button className="pp-btn pp-btn-ghost" style={{ padding: 8, borderRadius: 999 }} onClick={() => setTheme(theme === "light" ? "dark" : "light")} aria-label="Toggle dark mode">{theme === "light" ? <Moon size={16} /> : <Sun size={16} />}</button>
-            <button className="pp-btn pp-btn-ghost" style={{ display: "flex", alignItems: "center", gap: 8, padding: "5px 10px 5px 5px" }} onClick={onSwitchRole} title="Switch role">
+            <button className="pp-btn pp-btn-ghost pp-role-pill" style={{ display: "flex", alignItems: "center", gap: 8, padding: "5px 10px 5px 5px" }} onClick={onSwitchRole} title="Switch role">
               <RoleBadge role={user.role} size={26} />
               <span style={{ fontSize: 13, fontWeight: 600 }}>{roleLabel(user.role)}</span>
               <LogOut size={13} style={{ color: "var(--muted)" }} />
