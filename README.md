@@ -85,8 +85,17 @@ your behalf.
   list (`PAPER_SUBJECTS` in `app.jsx`): Math, Physics, Chemistry, Biology,
   English, History, Computer Science, Economics, Business, French, Arabic,
   Mandarin Chinese — separate from the subject list used by Notes/Videos.
-  Each paper is also tagged with a Zone (1–3) and a Variant (1–3), matching
-  Cambridge's own paper-numbering scheme.
+  Each paper is also tagged with a Zone (1–3), a Variant (1–3), and a
+  free-text Syllabus code (e.g. "0610" for Biology) — syllabus codes vary
+  per subject and curriculum, so instead of a fixed list, whoever uploads a
+  paper types the code straight off the paper's cover page, and the browse
+  filter is built from whatever codes have actually been uploaded so far.
+- **Continue where you left off.** Notes, Videos, and Past Papers each
+  remember the last item you opened on this device (stored in
+  `localStorage`, since there are no accounts) and show a "Continue where
+  you left off" shortcut back to it. For past papers this jumps straight
+  back to the same PDF — it can't resume mid-document, since PDFs open in
+  the browser's own viewer rather than an embedded one the app can track.
 - **No AI PDF-to-quiz conversion (yet).** That would need a real AI model
   reading the PDF, which needs an API key kept secret on a small backend —
   ask if you want that built.

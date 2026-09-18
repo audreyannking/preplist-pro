@@ -99,7 +99,8 @@ const ICON_PATHS = {
   calendar: <><rect x="3" y="5" width="18" height="16" rx="2"/><line x1="3" y1="10" x2="21" y2="10"/><line x1="8" y1="3" x2="8" y2="7"/><line x1="16" y1="3" x2="16" y2="7"/></>,
   users: <><circle cx="8.8" cy="8.3" r="3.1"/><path d="M3 19.8c0-3.4 2.6-5.3 5.8-5.3s5.8 1.9 5.8 5.3"/><circle cx="17" cy="9.2" r="2.5"/><path d="M14.6 14.4c2.5 0.4 4.1 2 4.4 5.1"/></>,
   megaphone: <><path d="M3 10.2v4.2h2.9l8.6 3.8V6.4Z"/><path d="M17.5 9a3.1 3.1 0 0 1 0 6.2"/></>,
-  camera: <><path d="M4 8h3l1.4-1.9h7.2L17 8h3a1 1 0 0 1 1 1v10.2a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V9a1 1 0 0 1 1-1Z"/><circle cx="12" cy="13.3" r="3.4"/></>
+  camera: <><path d="M4 8h3l1.4-1.9h7.2L17 8h3a1 1 0 0 1 1 1v10.2a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V9a1 1 0 0 1 1-1Z"/><circle cx="12" cy="13.3" r="3.4"/></>,
+  bookmark: <path d="M6.5 3.5h11a1 1 0 0 1 1 1V21l-6.5-4.2L5.5 21V4.5a1 1 0 0 1 1-1Z"/>
 };
 
 function Icon({ name, size = 16, style, className, fill = "none", stroke = "currentColor", strokeWidth = 1.9, ...rest }) {
@@ -121,7 +122,7 @@ const Sun = makeIcon("sun"), Moon = makeIcon("moon"), Plus = makeIcon("plus"), X
   GraduationCap = makeIcon("graduationcap"), ListChecks = makeIcon("listchecks"), Clock = makeIcon("clock"),
   Briefcase = makeIcon("briefcase"), ShieldCheck = makeIcon("shieldcheck"), LayoutGrid = makeIcon("layoutgrid"),
   ChevronRight = makeIcon("chevronright"), Calendar = makeIcon("calendar"), Users = makeIcon("users"),
-  Megaphone = makeIcon("megaphone"), Camera = makeIcon("camera");
+  Megaphone = makeIcon("megaphone"), Camera = makeIcon("camera"), Bookmark = makeIcon("bookmark");
 
 /* ---------------------------------------------------------------------- */
 /* Constants                                                              */
@@ -596,6 +597,26 @@ function TwoUp({ children }) {
 }
 
 /* ---------------------------------------------------------------------- */
+/* "Continue where you left off" — remembers the last note/video/paper     */
+/* opened on this device (no accounts, so it's stored in localStorage).   */
+/* ---------------------------------------------------------------------- */
+
+function ContinueBanner({ title, subtitle, onClick }) {
+  return (
+    <button className="pp-card" onClick={onClick}
+      style={{ display: "flex", alignItems: "center", gap: 10, width: "100%", textAlign: "left", padding: "10px 14px", borderRadius: 10, marginBottom: 14, cursor: "pointer", border: "1px solid var(--accent)" }}>
+      <Bookmark size={16} style={{ color: "var(--accent)", flexShrink: 0 }} />
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ fontSize: 11, fontWeight: 700, color: "var(--accent)", textTransform: "uppercase", letterSpacing: 0.3 }}>Continue where you left off</div>
+        <div style={{ fontSize: 13.5, fontWeight: 600, marginTop: 2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{title}</div>
+        {subtitle && <div style={{ fontSize: 11.5, color: "var(--muted)", marginTop: 1 }}>{subtitle}</div>}
+      </div>
+      <ChevronRight size={15} style={{ color: "var(--muted)", flexShrink: 0 }} />
+    </button>
+  );
+}
+
+/* ---------------------------------------------------------------------- */
 /* Math notation — type $...$ (or use the toolbar) for fractions,         */
 /* integrals, square roots, etc. Rendered live via KaTeX.                 */
 /* ---------------------------------------------------------------------- */
@@ -713,6 +734,7 @@ function NotesView({ notes, user, onAddNote }) {
   const [query, setQuery] = useState("");
   const [subject, setSubject] = useState("");
   const [grade, setGrade] = useState("");
+  const [lastNoteId, setLastNoteId] = useLocalState("preplist:lastNote", null);
   const canUpload = hasElevatedAccess(user);
 
   const filtered = useMemo(() => {
@@ -723,17 +745,24 @@ function NotesView({ notes, user, onAddNote }) {
     return [...list].sort((a, b) => b.createdAt - a.createdAt);
   }, [notes, query, subject, grade]);
 
+  const lastNote = notes.find((n) => n.id === lastNoteId);
+
   return (
     <div>
       <FilterBar query={query} setQuery={setQuery} subject={subject} setSubject={setSubject} grade={grade} setGrade={setGrade} placeholder="Search notes…"
         extra={canUpload && <button className="pp-btn pp-btn-primary" style={{ padding: "9px 14px", fontSize: 13.5, display: "flex", alignItems: "center", gap: 6 }} onClick={() => setShowForm(true)}><Plus size={15} /> Upload note</button>} />
+      {lastNote && (
+        <ContinueBanner title={lastNote.title} subtitle={lastNote.subject}
+          onClick={() => document.getElementById(`note-${lastNote.id}`)?.scrollIntoView({ behavior: "smooth", block: "center" })} />
+      )}
       {filtered.length === 0 ? (
         <EmptyState icon={BookOpen} title="No notes yet" body={canUpload ? "Upload the first set of notes for students to study from." : "Only admins and teachers can upload notes — check back soon."} />
       ) : (
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(230px, 1fr))", gap: 14 }}>
           {filtered.map((n) => (
-            <div key={n.id} className="pp-card" style={{ borderRadius: 10, padding: 14, transform: `rotate(${cardTilt(n.id) * 0.6}deg)` }}>
-              <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}><Tag text={n.subject} /><GradeTag text={n.grade} /></div>
+            <div key={n.id} id={`note-${n.id}`} className="pp-card" onClick={() => setLastNoteId(n.id)}
+              style={{ borderRadius: 10, padding: 14, cursor: "pointer", transform: `rotate(${cardTilt(n.id) * 0.6}deg)`, outline: n.id === lastNoteId ? "2px solid var(--accent)" : "none", outlineOffset: 2 }}>
+              <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}><Tag text={n.subject} /><GradeTag text={n.grade} />{n.id === lastNoteId && <Bookmark size={13} style={{ color: "var(--accent)" }} />}</div>
               <div className="pp-serif" style={{ fontSize: 15.5, fontWeight: 600, marginTop: 8 }}>{n.title}</div>
               {n.type === "image" ? <img src={n.content} alt="" style={{ width: "100%", marginTop: 8, borderRadius: 6, border: "1px solid var(--border)" }} /> : <p style={{ fontSize: 13.5, marginTop: 8, lineHeight: 1.5, color: "var(--text)", whiteSpace: "pre-wrap" }}><MathText text={n.content} /></p>}
               <div style={{ fontSize: 11.5, color: "var(--muted)", marginTop: 10 }}>{roleLabel(n.authorRole)} · {timeAgo(n.createdAt)}</div>
@@ -788,6 +817,7 @@ function VideosView({ videos, user, onAddVideo }) {
   const [query, setQuery] = useState("");
   const [subject, setSubject] = useState("");
   const [grade, setGrade] = useState("");
+  const [lastVideoId, setLastVideoId] = useLocalState("preplist:lastVideo", null);
   const isAdmin = canLeadDepartment(user);
 
   const filtered = useMemo(() => {
@@ -798,21 +828,28 @@ function VideosView({ videos, user, onAddVideo }) {
     return [...list].sort((a, b) => b.createdAt - a.createdAt);
   }, [videos, query, subject, grade]);
 
+  const lastVideo = videos.find((v) => v.id === lastVideoId);
+
   return (
     <div>
       <FilterBar query={query} setQuery={setQuery} subject={subject} setSubject={setSubject} grade={grade} setGrade={setGrade} placeholder="Search videos…"
         extra={isAdmin && <button className="pp-btn pp-btn-primary" style={{ padding: "9px 14px", fontSize: 13.5, display: "flex", alignItems: "center", gap: 6 }} onClick={() => setShowForm(true)}><Plus size={15} /> Add video</button>} />
+      {lastVideo && (
+        <ContinueBanner title={lastVideo.title} subtitle={lastVideo.subject}
+          onClick={() => document.getElementById(`video-${lastVideo.id}`)?.scrollIntoView({ behavior: "smooth", block: "center" })} />
+      )}
       {filtered.length === 0 ? (
         <EmptyState icon={VideoIcon} title="No videos yet" body={isAdmin ? "Paste a YouTube link to add the first video." : "Only admins can add videos — check back soon."} />
       ) : (
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))", gap: 16 }}>
           {filtered.map((v) => (
-            <div key={v.id} className="pp-card" style={{ borderRadius: 10, overflow: "hidden" }}>
+            <div key={v.id} id={`video-${v.id}`} className="pp-card" onClick={() => setLastVideoId(v.id)}
+              style={{ borderRadius: 10, overflow: "hidden", outline: v.id === lastVideoId ? "2px solid var(--accent)" : "none", outlineOffset: 2 }}>
               <div style={{ position: "relative", paddingTop: "56.25%", background: "#000" }}>
                 <iframe title={v.title} src={`https://www.youtube.com/embed/${v.youtubeId}`} style={{ position: "absolute", inset: 0, width: "100%", height: "100%", border: 0 }} allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowFullScreen />
               </div>
               <div style={{ padding: 12 }}>
-                <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}><Tag text={v.subject} /><GradeTag text={v.grade} /></div>
+                <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}><Tag text={v.subject} /><GradeTag text={v.grade} />{v.id === lastVideoId && <Bookmark size={13} style={{ color: "var(--accent)" }} />}</div>
                 <div className="pp-serif" style={{ fontSize: 14.5, fontWeight: 600, marginTop: 8 }}>{v.title}</div>
                 <div style={{ fontSize: 11.5, color: "var(--muted)", marginTop: 6 }}>Added by {roleLabel(v.addedByRole)} · {timeAgo(v.createdAt)}</div>
               </div>
@@ -863,19 +900,26 @@ function PapersView({ papers, user, onAddPaper }) {
   const [query, setQuery] = useState("");
   const [subject, setSubject] = useState("");
   const [examType, setExamType] = useState("");
+  const [syllabus, setSyllabus] = useState("");
   const [zone, setZone] = useState("");
   const [variant, setVariant] = useState("");
+  const [lastPaperId, setLastPaperId] = useLocalState("preplist:lastPaper", null);
   const canUpload = hasElevatedAccess(user);
+
+  const syllabusOptions = useMemo(() => Array.from(new Set(papers.map((p) => p.syllabus).filter(Boolean))).sort(), [papers]);
 
   const filtered = useMemo(() => {
     let list = papers;
     if (subject) list = list.filter((p) => p.subject === subject);
     if (examType) list = list.filter((p) => p.examType === examType);
+    if (syllabus) list = list.filter((p) => p.syllabus === syllabus);
     if (zone) list = list.filter((p) => p.zone === zone);
     if (variant) list = list.filter((p) => p.variant === variant);
     if (query.trim()) { const s = query.trim().toLowerCase(); list = list.filter((p) => p.title.toLowerCase().includes(s) || p.subject.toLowerCase().includes(s)); }
     return [...list].sort((a, b) => b.createdAt - a.createdAt);
-  }, [papers, query, subject, examType, zone, variant]);
+  }, [papers, query, subject, examType, syllabus, zone, variant]);
+
+  const lastPaper = papers.find((p) => p.id === lastPaperId);
 
   return (
     <div>
@@ -886,19 +930,29 @@ function PapersView({ papers, user, onAddPaper }) {
       <div style={{ display: "flex", gap: 10, marginBottom: 16, flexWrap: "wrap", alignItems: "flex-start" }}>
         <div style={{ width: 168 }}><PaperSubjectSelect value={subject} onChange={setSubject} includeAll /></div>
         <div style={{ width: 140 }}><ExamTypeSelect value={examType} onChange={setExamType} includeAll /></div>
+        <div style={{ width: 140 }}>
+          <select className="pp-select" aria-label="Syllabus" style={{ padding: "9px 10px", fontSize: 14, width: "100%" }} value={syllabus} onChange={(e) => setSyllabus(e.target.value)}>
+            <option value="">All syllabuses</option>
+            {syllabusOptions.map((s) => <option key={s} value={s}>{s}</option>)}
+          </select>
+        </div>
         <div style={{ width: 120 }}><ZoneSelect value={zone} onChange={setZone} includeAll /></div>
         <div style={{ width: 140 }}><VariantSelect value={variant} onChange={setVariant} includeAll /></div>
         {canUpload && <button className="pp-btn pp-btn-primary" style={{ padding: "9px 14px", fontSize: 13.5, display: "flex", alignItems: "center", gap: 6 }} onClick={() => setShowForm(true)}><Plus size={15} /> Upload paper</button>}
       </div>
+      {lastPaper && (
+        <ContinueBanner title={lastPaper.title} subtitle={`${lastPaper.subject} · ${lastPaper.examType}${lastPaper.syllabus ? ` · ${lastPaper.syllabus}` : ""}`}
+          onClick={() => { const el = document.getElementById(`paper-${lastPaper.id}`); el?.scrollIntoView({ behavior: "smooth", block: "center" }); }} />
+      )}
       {filtered.length === 0 ? (
         <EmptyState icon={FileText} title="No past papers yet" body={canUpload ? "Upload the first past paper as a PDF." : "Only admins and teachers can upload past papers — check back soon."} />
       ) : (
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(230px, 1fr))", gap: 14 }}>
           {filtered.map((p) => (
-            <div key={p.id} className="pp-card" style={{ borderRadius: 10, padding: 14, transform: `rotate(${cardTilt(p.id) * 0.6}deg)` }}>
-              <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}><Tag text={p.subject} /><GradeTag text={p.examType} /><GradeTag text={p.zone} /><GradeTag text={p.variant} /></div>
+            <div key={p.id} id={`paper-${p.id}`} className="pp-card" style={{ borderRadius: 10, padding: 14, transform: `rotate(${cardTilt(p.id) * 0.6}deg)`, outline: p.id === lastPaperId ? "2px solid var(--accent)" : "none", outlineOffset: 2 }}>
+              <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}><Tag text={p.subject} /><GradeTag text={p.examType} />{p.syllabus && <GradeTag text={p.syllabus} />}<GradeTag text={p.zone} /><GradeTag text={p.variant} />{p.id === lastPaperId && <Bookmark size={13} style={{ color: "var(--accent)" }} />}</div>
               <div className="pp-serif" style={{ fontSize: 15.5, fontWeight: 600, marginTop: 8 }}>{p.title}</div>
-              <a className="pp-btn pp-btn-ghost" href={p.fileData} target="_blank" rel="noopener noreferrer" download={p.fileName || `${p.title}.pdf`}
+              <a className="pp-btn pp-btn-ghost" href={p.fileData} target="_blank" rel="noopener noreferrer" download={p.fileName || `${p.title}.pdf`} onClick={() => setLastPaperId(p.id)}
                 style={{ display: "inline-flex", alignItems: "center", gap: 6, marginTop: 10, padding: "6px 12px", fontSize: 12.5, textDecoration: "none" }}>
                 <FileText size={13} /> Open PDF
               </a>
@@ -916,13 +970,14 @@ function AddPaperModal({ onClose, onSubmit }) {
   const [title, setTitle] = useState("");
   const [subject, setSubject] = useState("");
   const [examType, setExamType] = useState("");
+  const [syllabus, setSyllabus] = useState("");
   const [zone, setZone] = useState("");
   const [variant, setVariant] = useState("");
   const [fileData, setFileData] = useState(null);
   const [fileName, setFileName] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
-  const canSubmit = title.trim() && subject && examType && zone && variant && fileData && !busy;
+  const canSubmit = title.trim() && subject && examType && syllabus.trim() && zone && variant && fileData && !busy;
 
   async function handleFile(e) {
     const file = e.target.files?.[0];
@@ -950,6 +1005,9 @@ function AddPaperModal({ onClose, onSubmit }) {
         <Field label="Subject"><PaperSubjectSelect value={subject} onChange={setSubject} /></Field>
         <Field label="Exam type"><ExamTypeSelect value={examType} onChange={setExamType} /></Field>
       </TwoUp>
+      <Field label="Syllabus code">
+        <input className="pp-input" style={{ width: "100%", padding: "9px 12px", fontSize: 14.5 }} value={syllabus} onChange={(e) => setSyllabus(e.target.value)} placeholder="e.g. 0610 (check the front page of the paper)" />
+      </Field>
       <TwoUp>
         <Field label="Zone"><ZoneSelect value={zone} onChange={setZone} /></Field>
         <Field label="Variant"><VariantSelect value={variant} onChange={setVariant} /></Field>
@@ -971,7 +1029,7 @@ function AddPaperModal({ onClose, onSubmit }) {
         {error && <div style={{ fontSize: 12, color: "#8A3434", marginTop: 6 }}>{error}</div>}
       </Field>
       <button className="pp-btn pp-btn-primary" style={{ width: "100%", padding: "10px 0", opacity: canSubmit ? 1 : 0.5 }} disabled={!canSubmit}
-        onClick={() => onSubmit({ title: title.trim(), subject, examType, zone, variant, fileData, fileName })}>
+        onClick={() => onSubmit({ title: title.trim(), subject, examType, syllabus: syllabus.trim(), zone, variant, fileData, fileName })}>
         Publish past paper
       </button>
     </Modal>
