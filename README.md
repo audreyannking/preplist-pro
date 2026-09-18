@@ -1,9 +1,9 @@
 # PrepList Pro
 
-A shared study website: notes, videos, and past exam papers, organized by
-subject (and exam type for past papers — A Level, AS Level, IGCSE, AP). No
-accounts, no sign-up — pick a role (Student / Teacher / Admin) and go.
-Public to anyone worldwide.
+A shared study website: notes, videos, and past exam papers. Past papers are
+organized by subject, exam type (IGCSE / AS Level / A Level), zone, and
+variant, matching how Cambridge papers are labeled. No accounts, no sign-up —
+pick a role (Student / Teacher / Admin) and go. Public to anyone worldwide.
 
 It's a single static page (`index.html`) — no build step, no server to run.
 Data is stored in [Firebase](https://firebase.google.com/) Firestore on the
@@ -81,6 +81,12 @@ your behalf.
   you want to switch to Firebase Storage for larger files (needs the paid
   "Blaze" plan, which needs a card on file, though actual cost should stay
   $0 at this scale).
+- **Past Papers subjects.** The Past Papers tab has its own fixed subject
+  list (`PAPER_SUBJECTS` in `app.jsx`): Math, Physics, Chemistry, Biology,
+  English, History, Computer Science, Economics, Business, French, Arabic,
+  Mandarin Chinese — separate from the subject list used by Notes/Videos.
+  Each paper is also tagged with a Zone (1–3) and a Variant (1–3), matching
+  Cambridge's own paper-numbering scheme.
 - **No AI PDF-to-quiz conversion (yet).** That would need a real AI model
   reading the PDF, which needs an API key kept secret on a small backend —
   ask if you want that built.

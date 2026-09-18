@@ -131,9 +131,17 @@ const SUBJECTS = [
   "Math", "Science", "Statistics", "Mechanics", "Physics", "Chemistry", "Biology",
   "English", "History", "Computer Science", "Economics", "Business", "French", "Arabic", "Other"
 ];
-const DEPARTMENTS = ["Academics", "Lower School", "Outreach", "Social Responsibility", "Management", "Activities", "Discipline", "Wellness", "Sports"];
 const GRADES = ["6th Grade", "7th Grade", "8th Grade", "9th Grade", "10th Grade", "11th Grade", "12th Grade"];
-const EXAM_TYPES = ["A Level", "AS Level", "IGCSE", "AP"];
+
+// Past Papers has its own subject list and exam-type set (Cambridge-style),
+// separate from the general SUBJECTS used by Notes/Videos.
+const PAPER_SUBJECTS = [
+  "Math", "Physics", "Chemistry", "Biology", "English", "History",
+  "Computer Science", "Economics", "Business", "French", "Arabic", "Mandarin Chinese"
+];
+const EXAM_TYPES = ["IGCSE", "AS Level", "A Level"];
+const ZONES = ["Zone 1", "Zone 2", "Zone 3"];
+const VARIANTS = ["Variant 1", "Variant 2", "Variant 3"];
 const ACCESS_PASSWORD = "3147"; // gate for Teacher/Admin role — client-side only, not real security
 
 /* ---------------------------------------------------------------------- */
@@ -425,6 +433,30 @@ function ExamTypeSelect({ value, onChange, includeAll, label }) {
     <select className="pp-select" aria-label={label || "Exam type"} style={{ padding: "9px 10px", fontSize: 14, width: "100%" }} value={value} onChange={(e) => onChange(e.target.value)}>
       {includeAll ? <option value="">All exam types</option> : <option value="" disabled>Exam type…</option>}
       {EXAM_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
+    </select>
+  );
+}
+function PaperSubjectSelect({ value, onChange, includeAll, label }) {
+  return (
+    <select className="pp-select" aria-label={label || "Subject"} style={{ padding: "9px 10px", fontSize: 14, width: "100%" }} value={value} onChange={(e) => onChange(e.target.value)}>
+      {includeAll ? <option value="">All subjects</option> : <option value="" disabled>Subject…</option>}
+      {PAPER_SUBJECTS.map((s) => <option key={s} value={s}>{s}</option>)}
+    </select>
+  );
+}
+function ZoneSelect({ value, onChange, includeAll, label }) {
+  return (
+    <select className="pp-select" aria-label={label || "Zone"} style={{ padding: "9px 10px", fontSize: 14, width: "100%" }} value={value} onChange={(e) => onChange(e.target.value)}>
+      {includeAll ? <option value="">All zones</option> : <option value="" disabled>Zone…</option>}
+      {ZONES.map((z) => <option key={z} value={z}>{z}</option>)}
+    </select>
+  );
+}
+function VariantSelect({ value, onChange, includeAll, label }) {
+  return (
+    <select className="pp-select" aria-label={label || "Variant"} style={{ padding: "9px 10px", fontSize: 14, width: "100%" }} value={value} onChange={(e) => onChange(e.target.value)}>
+      {includeAll ? <option value="">All variants</option> : <option value="" disabled>Variant…</option>}
+      {VARIANTS.map((v) => <option key={v} value={v}>{v}</option>)}
     </select>
   );
 }
@@ -831,25 +863,31 @@ function PapersView({ papers, user, onAddPaper }) {
   const [query, setQuery] = useState("");
   const [subject, setSubject] = useState("");
   const [examType, setExamType] = useState("");
+  const [zone, setZone] = useState("");
+  const [variant, setVariant] = useState("");
   const canUpload = hasElevatedAccess(user);
 
   const filtered = useMemo(() => {
     let list = papers;
     if (subject) list = list.filter((p) => p.subject === subject);
     if (examType) list = list.filter((p) => p.examType === examType);
+    if (zone) list = list.filter((p) => p.zone === zone);
+    if (variant) list = list.filter((p) => p.variant === variant);
     if (query.trim()) { const s = query.trim().toLowerCase(); list = list.filter((p) => p.title.toLowerCase().includes(s) || p.subject.toLowerCase().includes(s)); }
     return [...list].sort((a, b) => b.createdAt - a.createdAt);
-  }, [papers, query, subject, examType]);
+  }, [papers, query, subject, examType, zone, variant]);
 
   return (
     <div>
+      <div style={{ position: "relative", marginBottom: 10 }}>
+        <Search size={15} style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)", color: "var(--muted)" }} />
+        <input className="pp-input" style={{ width: "100%", padding: "9px 12px 9px 34px", fontSize: 14 }} placeholder="Search past papers…" value={query} onChange={(e) => setQuery(e.target.value)} />
+      </div>
       <div style={{ display: "flex", gap: 10, marginBottom: 16, flexWrap: "wrap", alignItems: "flex-start" }}>
-        <div style={{ position: "relative", flex: 2, minWidth: 180 }}>
-          <Search size={15} style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)", color: "var(--muted)" }} />
-          <input className="pp-input" style={{ width: "100%", padding: "9px 12px 9px 34px", fontSize: 14 }} placeholder="Search past papers…" value={query} onChange={(e) => setQuery(e.target.value)} />
-        </div>
-        <div style={{ width: 168 }}><SubjectSelect value={subject} onChange={setSubject} includeAll /></div>
-        <div style={{ width: 150 }}><ExamTypeSelect value={examType} onChange={setExamType} includeAll /></div>
+        <div style={{ width: 168 }}><PaperSubjectSelect value={subject} onChange={setSubject} includeAll /></div>
+        <div style={{ width: 140 }}><ExamTypeSelect value={examType} onChange={setExamType} includeAll /></div>
+        <div style={{ width: 120 }}><ZoneSelect value={zone} onChange={setZone} includeAll /></div>
+        <div style={{ width: 140 }}><VariantSelect value={variant} onChange={setVariant} includeAll /></div>
         {canUpload && <button className="pp-btn pp-btn-primary" style={{ padding: "9px 14px", fontSize: 13.5, display: "flex", alignItems: "center", gap: 6 }} onClick={() => setShowForm(true)}><Plus size={15} /> Upload paper</button>}
       </div>
       {filtered.length === 0 ? (
@@ -858,7 +896,7 @@ function PapersView({ papers, user, onAddPaper }) {
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(230px, 1fr))", gap: 14 }}>
           {filtered.map((p) => (
             <div key={p.id} className="pp-card" style={{ borderRadius: 10, padding: 14, transform: `rotate(${cardTilt(p.id) * 0.6}deg)` }}>
-              <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}><Tag text={p.subject} /><GradeTag text={p.examType} /></div>
+              <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}><Tag text={p.subject} /><GradeTag text={p.examType} /><GradeTag text={p.zone} /><GradeTag text={p.variant} /></div>
               <div className="pp-serif" style={{ fontSize: 15.5, fontWeight: 600, marginTop: 8 }}>{p.title}</div>
               <a className="pp-btn pp-btn-ghost" href={p.fileData} target="_blank" rel="noopener noreferrer" download={p.fileName || `${p.title}.pdf`}
                 style={{ display: "inline-flex", alignItems: "center", gap: 6, marginTop: 10, padding: "6px 12px", fontSize: 12.5, textDecoration: "none" }}>
@@ -878,11 +916,13 @@ function AddPaperModal({ onClose, onSubmit }) {
   const [title, setTitle] = useState("");
   const [subject, setSubject] = useState("");
   const [examType, setExamType] = useState("");
+  const [zone, setZone] = useState("");
+  const [variant, setVariant] = useState("");
   const [fileData, setFileData] = useState(null);
   const [fileName, setFileName] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
-  const canSubmit = title.trim() && subject && examType && fileData && !busy;
+  const canSubmit = title.trim() && subject && examType && zone && variant && fileData && !busy;
 
   async function handleFile(e) {
     const file = e.target.files?.[0];
@@ -907,8 +947,12 @@ function AddPaperModal({ onClose, onSubmit }) {
     <Modal title="Upload a past paper" onClose={onClose}>
       <Field label="Title"><input className="pp-input" style={{ width: "100%", padding: "9px 12px", fontSize: 14.5 }} value={title} onChange={(e) => setTitle(e.target.value)} placeholder="e.g. May/June 2023 Paper 1" /></Field>
       <TwoUp>
-        <Field label="Subject"><SubjectSelect value={subject} onChange={setSubject} /></Field>
+        <Field label="Subject"><PaperSubjectSelect value={subject} onChange={setSubject} /></Field>
         <Field label="Exam type"><ExamTypeSelect value={examType} onChange={setExamType} /></Field>
+      </TwoUp>
+      <TwoUp>
+        <Field label="Zone"><ZoneSelect value={zone} onChange={setZone} /></Field>
+        <Field label="Variant"><VariantSelect value={variant} onChange={setVariant} /></Field>
       </TwoUp>
       <Field label="PDF file">
         {fileData ? (
@@ -927,7 +971,7 @@ function AddPaperModal({ onClose, onSubmit }) {
         {error && <div style={{ fontSize: 12, color: "#8A3434", marginTop: 6 }}>{error}</div>}
       </Field>
       <button className="pp-btn pp-btn-primary" style={{ width: "100%", padding: "10px 0", opacity: canSubmit ? 1 : 0.5 }} disabled={!canSubmit}
-        onClick={() => onSubmit({ title: title.trim(), subject, examType, fileData, fileName })}>
+        onClick={() => onSubmit({ title: title.trim(), subject, examType, zone, variant, fileData, fileName })}>
         Publish past paper
       </button>
     </Modal>
