@@ -90,12 +90,16 @@ your behalf.
   per subject and curriculum, so instead of a fixed list, whoever uploads a
   paper types the code straight off the paper's cover page, and the browse
   filter is built from whatever codes have actually been uploaded so far.
-- **Continue where you left off.** Notes, Videos, and Past Papers each
-  remember the last item you opened on this device (stored in
+- **Continue where you left off, and a Saved tab.** Notes, Videos, and Past
+  Papers each remember the last item you opened on this device (stored in
   `localStorage`, since there are no accounts) and show a "Continue where
   you left off" shortcut back to it. For past papers this jumps straight
   back to the same PDF — it can't resume mid-document, since PDFs open in
   the browser's own viewer rather than an embedded one the app can track.
+  Every note, video, and past paper also has a bookmark button, and the
+  **Saved** tab lists everything you've bookmarked (grouped by type)
+  alongside the most recent item from each of the other three tabs —
+  tapping any entry jumps straight back to it.
 - **No AI PDF-to-quiz conversion (yet).** That would need a real AI model
   reading the PDF, which needs an API key kept secret on a small backend —
   ask if you want that built.

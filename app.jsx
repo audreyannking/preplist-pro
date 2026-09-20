@@ -729,12 +729,11 @@ function PhotoPicker({ value, onChange, required }) {
 /* Notes                                                                   */
 /* ---------------------------------------------------------------------- */
 
-function NotesView({ notes, user, onAddNote }) {
+function NotesView({ notes, user, onAddNote, lastNoteId, setLastNoteId, savedNoteIds, onToggleSavedNote }) {
   const [showForm, setShowForm] = useState(false);
   const [query, setQuery] = useState("");
   const [subject, setSubject] = useState("");
   const [grade, setGrade] = useState("");
-  const [lastNoteId, setLastNoteId] = useLocalState("preplist:lastNote", null);
   const canUpload = hasElevatedAccess(user);
 
   const filtered = useMemo(() => {
@@ -759,15 +758,23 @@ function NotesView({ notes, user, onAddNote }) {
         <EmptyState icon={BookOpen} title="No notes yet" body={canUpload ? "Upload the first set of notes for students to study from." : "Only admins and teachers can upload notes — check back soon."} />
       ) : (
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(230px, 1fr))", gap: 14 }}>
-          {filtered.map((n) => (
-            <div key={n.id} id={`note-${n.id}`} className="pp-card" onClick={() => setLastNoteId(n.id)}
-              style={{ borderRadius: 10, padding: 14, cursor: "pointer", transform: `rotate(${cardTilt(n.id) * 0.6}deg)`, outline: n.id === lastNoteId ? "2px solid var(--accent)" : "none", outlineOffset: 2 }}>
-              <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}><Tag text={n.subject} /><GradeTag text={n.grade} />{n.id === lastNoteId && <Bookmark size={13} style={{ color: "var(--accent)" }} />}</div>
-              <div className="pp-serif" style={{ fontSize: 15.5, fontWeight: 600, marginTop: 8 }}>{n.title}</div>
-              {n.type === "image" ? <img src={n.content} alt="" style={{ width: "100%", marginTop: 8, borderRadius: 6, border: "1px solid var(--border)" }} /> : <p style={{ fontSize: 13.5, marginTop: 8, lineHeight: 1.5, color: "var(--text)", whiteSpace: "pre-wrap" }}><MathText text={n.content} /></p>}
-              <div style={{ fontSize: 11.5, color: "var(--muted)", marginTop: 10 }}>{roleLabel(n.authorRole)} · {timeAgo(n.createdAt)}</div>
-            </div>
-          ))}
+          {filtered.map((n) => {
+            const isSaved = savedNoteIds.includes(n.id);
+            return (
+              <div key={n.id} id={`note-${n.id}`} className="pp-card" onClick={() => setLastNoteId(n.id)}
+                style={{ borderRadius: 10, padding: 14, cursor: "pointer", transform: `rotate(${cardTilt(n.id) * 0.6}deg)`, outline: n.id === lastNoteId ? "2px solid var(--accent)" : "none", outlineOffset: 2 }}>
+                <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                  <div style={{ display: "flex", gap: 6, flexWrap: "wrap", flex: 1 }}><Tag text={n.subject} /><GradeTag text={n.grade} /></div>
+                  <button className="pp-btn pp-btn-ghost" style={{ padding: 5, borderRadius: 999, flexShrink: 0 }} onClick={(e) => { e.stopPropagation(); onToggleSavedNote(n.id); }} aria-label={isSaved ? "Remove bookmark" : "Add bookmark"}>
+                    <Bookmark size={14} fill={isSaved ? "var(--accent)" : "none"} style={{ color: "var(--accent)" }} />
+                  </button>
+                </div>
+                <div className="pp-serif" style={{ fontSize: 15.5, fontWeight: 600, marginTop: 8 }}>{n.title}</div>
+                {n.type === "image" ? <img src={n.content} alt="" style={{ width: "100%", marginTop: 8, borderRadius: 6, border: "1px solid var(--border)" }} /> : <p style={{ fontSize: 13.5, marginTop: 8, lineHeight: 1.5, color: "var(--text)", whiteSpace: "pre-wrap" }}><MathText text={n.content} /></p>}
+                <div style={{ fontSize: 11.5, color: "var(--muted)", marginTop: 10 }}>{roleLabel(n.authorRole)} · {timeAgo(n.createdAt)}</div>
+              </div>
+            );
+          })}
         </div>
       )}
       {showForm && <AddNoteModal onClose={() => setShowForm(false)} onSubmit={async (payload) => { const ok = await onAddNote(payload); if (ok) setShowForm(false); }} />}
@@ -812,12 +819,11 @@ function AddNoteModal({ onClose, onSubmit }) {
 /* Videos                                                                  */
 /* ---------------------------------------------------------------------- */
 
-function VideosView({ videos, user, onAddVideo }) {
+function VideosView({ videos, user, onAddVideo, lastVideoId, setLastVideoId, savedVideoIds, onToggleSavedVideo }) {
   const [showForm, setShowForm] = useState(false);
   const [query, setQuery] = useState("");
   const [subject, setSubject] = useState("");
   const [grade, setGrade] = useState("");
-  const [lastVideoId, setLastVideoId] = useLocalState("preplist:lastVideo", null);
   const isAdmin = canLeadDepartment(user);
 
   const filtered = useMemo(() => {
@@ -842,19 +848,27 @@ function VideosView({ videos, user, onAddVideo }) {
         <EmptyState icon={VideoIcon} title="No videos yet" body={isAdmin ? "Paste a YouTube link to add the first video." : "Only admins can add videos — check back soon."} />
       ) : (
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))", gap: 16 }}>
-          {filtered.map((v) => (
-            <div key={v.id} id={`video-${v.id}`} className="pp-card" onClick={() => setLastVideoId(v.id)}
-              style={{ borderRadius: 10, overflow: "hidden", outline: v.id === lastVideoId ? "2px solid var(--accent)" : "none", outlineOffset: 2 }}>
-              <div style={{ position: "relative", paddingTop: "56.25%", background: "#000" }}>
-                <iframe title={v.title} src={`https://www.youtube.com/embed/${v.youtubeId}`} style={{ position: "absolute", inset: 0, width: "100%", height: "100%", border: 0 }} allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowFullScreen />
+          {filtered.map((v) => {
+            const isSaved = savedVideoIds.includes(v.id);
+            return (
+              <div key={v.id} id={`video-${v.id}`} className="pp-card" onClick={() => setLastVideoId(v.id)}
+                style={{ borderRadius: 10, overflow: "hidden", outline: v.id === lastVideoId ? "2px solid var(--accent)" : "none", outlineOffset: 2 }}>
+                <div style={{ position: "relative", paddingTop: "56.25%", background: "#000" }}>
+                  <iframe title={v.title} src={`https://www.youtube.com/embed/${v.youtubeId}`} style={{ position: "absolute", inset: 0, width: "100%", height: "100%", border: 0 }} allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowFullScreen />
+                </div>
+                <div style={{ padding: 12 }}>
+                  <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                    <div style={{ display: "flex", gap: 6, flexWrap: "wrap", flex: 1 }}><Tag text={v.subject} /><GradeTag text={v.grade} /></div>
+                    <button className="pp-btn pp-btn-ghost" style={{ padding: 5, borderRadius: 999, flexShrink: 0 }} onClick={(e) => { e.stopPropagation(); onToggleSavedVideo(v.id); }} aria-label={isSaved ? "Remove bookmark" : "Add bookmark"}>
+                      <Bookmark size={14} fill={isSaved ? "var(--accent)" : "none"} style={{ color: "var(--accent)" }} />
+                    </button>
+                  </div>
+                  <div className="pp-serif" style={{ fontSize: 14.5, fontWeight: 600, marginTop: 8 }}>{v.title}</div>
+                  <div style={{ fontSize: 11.5, color: "var(--muted)", marginTop: 6 }}>Added by {roleLabel(v.addedByRole)} · {timeAgo(v.createdAt)}</div>
+                </div>
               </div>
-              <div style={{ padding: 12 }}>
-                <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}><Tag text={v.subject} /><GradeTag text={v.grade} />{v.id === lastVideoId && <Bookmark size={13} style={{ color: "var(--accent)" }} />}</div>
-                <div className="pp-serif" style={{ fontSize: 14.5, fontWeight: 600, marginTop: 8 }}>{v.title}</div>
-                <div style={{ fontSize: 11.5, color: "var(--muted)", marginTop: 6 }}>Added by {roleLabel(v.addedByRole)} · {timeAgo(v.createdAt)}</div>
-              </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
       {showForm && <AddVideoModal onClose={() => setShowForm(false)} onSubmit={async (payload) => { const ok = await onAddVideo(payload); if (ok) setShowForm(false); }} />}
@@ -895,7 +909,7 @@ function AddVideoModal({ onClose, onSubmit }) {
 /* Past Papers                                                            */
 /* ---------------------------------------------------------------------- */
 
-function PapersView({ papers, user, onAddPaper }) {
+function PapersView({ papers, user, onAddPaper, lastPaperId, setLastPaperId, savedPaperIds, onToggleSavedPaper }) {
   const [showForm, setShowForm] = useState(false);
   const [query, setQuery] = useState("");
   const [subject, setSubject] = useState("");
@@ -903,7 +917,6 @@ function PapersView({ papers, user, onAddPaper }) {
   const [syllabus, setSyllabus] = useState("");
   const [zone, setZone] = useState("");
   const [variant, setVariant] = useState("");
-  const [lastPaperId, setLastPaperId] = useLocalState("preplist:lastPaper", null);
   const canUpload = hasElevatedAccess(user);
 
   const syllabusOptions = useMemo(() => Array.from(new Set(papers.map((p) => p.syllabus).filter(Boolean))).sort(), [papers]);
@@ -948,17 +961,25 @@ function PapersView({ papers, user, onAddPaper }) {
         <EmptyState icon={FileText} title="No past papers yet" body={canUpload ? "Upload the first past paper as a PDF." : "Only admins and teachers can upload past papers — check back soon."} />
       ) : (
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(230px, 1fr))", gap: 14 }}>
-          {filtered.map((p) => (
-            <div key={p.id} id={`paper-${p.id}`} className="pp-card" style={{ borderRadius: 10, padding: 14, transform: `rotate(${cardTilt(p.id) * 0.6}deg)`, outline: p.id === lastPaperId ? "2px solid var(--accent)" : "none", outlineOffset: 2 }}>
-              <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}><Tag text={p.subject} /><GradeTag text={p.examType} />{p.syllabus && <GradeTag text={p.syllabus} />}<GradeTag text={p.zone} /><GradeTag text={p.variant} />{p.id === lastPaperId && <Bookmark size={13} style={{ color: "var(--accent)" }} />}</div>
-              <div className="pp-serif" style={{ fontSize: 15.5, fontWeight: 600, marginTop: 8 }}>{p.title}</div>
-              <a className="pp-btn pp-btn-ghost" href={p.fileData} target="_blank" rel="noopener noreferrer" download={p.fileName || `${p.title}.pdf`} onClick={() => setLastPaperId(p.id)}
-                style={{ display: "inline-flex", alignItems: "center", gap: 6, marginTop: 10, padding: "6px 12px", fontSize: 12.5, textDecoration: "none" }}>
-                <FileText size={13} /> Open PDF
-              </a>
-              <div style={{ fontSize: 11.5, color: "var(--muted)", marginTop: 10 }}>{roleLabel(p.uploadedByRole)} · {timeAgo(p.createdAt)}</div>
-            </div>
-          ))}
+          {filtered.map((p) => {
+            const isSaved = savedPaperIds.includes(p.id);
+            return (
+              <div key={p.id} id={`paper-${p.id}`} className="pp-card" style={{ borderRadius: 10, padding: 14, transform: `rotate(${cardTilt(p.id) * 0.6}deg)`, outline: p.id === lastPaperId ? "2px solid var(--accent)" : "none", outlineOffset: 2 }}>
+                <div style={{ display: "flex", gap: 6, alignItems: "flex-start" }}>
+                  <div style={{ display: "flex", gap: 6, flexWrap: "wrap", flex: 1 }}><Tag text={p.subject} /><GradeTag text={p.examType} />{p.syllabus && <GradeTag text={p.syllabus} />}<GradeTag text={p.zone} /><GradeTag text={p.variant} /></div>
+                  <button className="pp-btn pp-btn-ghost" style={{ padding: 5, borderRadius: 999, flexShrink: 0 }} onClick={() => onToggleSavedPaper(p.id)} aria-label={isSaved ? "Remove bookmark" : "Add bookmark"}>
+                    <Bookmark size={14} fill={isSaved ? "var(--accent)" : "none"} style={{ color: "var(--accent)" }} />
+                  </button>
+                </div>
+                <div className="pp-serif" style={{ fontSize: 15.5, fontWeight: 600, marginTop: 8 }}>{p.title}</div>
+                <a className="pp-btn pp-btn-ghost" href={p.fileData} target="_blank" rel="noopener noreferrer" download={p.fileName || `${p.title}.pdf`} onClick={() => setLastPaperId(p.id)}
+                  style={{ display: "inline-flex", alignItems: "center", gap: 6, marginTop: 10, padding: "6px 12px", fontSize: 12.5, textDecoration: "none" }}>
+                  <FileText size={13} /> Open PDF
+                </a>
+                <div style={{ fontSize: 11.5, color: "var(--muted)", marginTop: 10 }}>{roleLabel(p.uploadedByRole)} · {timeAgo(p.createdAt)}</div>
+              </div>
+            );
+          })}
         </div>
       )}
       {showForm && <AddPaperModal onClose={() => setShowForm(false)} onSubmit={async (payload) => { const ok = await onAddPaper(payload); if (ok) setShowForm(false); }} />}
@@ -1037,13 +1058,99 @@ function AddPaperModal({ onClose, onSubmit }) {
 }
 
 /* ---------------------------------------------------------------------- */
+/* Saved — everything bookmarked, plus what you were last reading/       */
+/* watching/opening in each tab.                                         */
+/* ---------------------------------------------------------------------- */
+
+function BookmarkRow({ tags, title, onOpen, onRemove }) {
+  return (
+    <div className="pp-card" onClick={onOpen}
+      style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 12px", borderRadius: 10, cursor: "pointer" }}>
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 4 }}>{tags}</div>
+        <div style={{ fontSize: 13.5, fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{title}</div>
+      </div>
+      <button className="pp-btn pp-btn-ghost" style={{ padding: 6, borderRadius: 999, flexShrink: 0 }} onClick={(e) => { e.stopPropagation(); onRemove(); }} aria-label="Remove bookmark"><X size={13} /></button>
+    </div>
+  );
+}
+
+function BookmarkSection({ label, icon: SectionIcon, items, children }) {
+  if (items.length === 0) return null;
+  return (
+    <div style={{ marginBottom: 22 }}>
+      <div style={{ fontSize: 12, fontWeight: 700, color: "var(--muted)", textTransform: "uppercase", letterSpacing: 0.4, marginBottom: 8, display: "flex", alignItems: "center", gap: 6 }}>
+        <SectionIcon size={13} /> {label}
+      </div>
+      <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>{children}</div>
+    </div>
+  );
+}
+
+function SavedView({ notes, videos, papers, lastNoteId, lastVideoId, lastPaperId, savedNoteIds, savedVideoIds, savedPaperIds, onToggleSavedNote, onToggleSavedVideo, onToggleSavedPaper, onJump }) {
+  const lastNote = notes.find((n) => n.id === lastNoteId);
+  const lastVideo = videos.find((v) => v.id === lastVideoId);
+  const lastPaper = papers.find((p) => p.id === lastPaperId);
+  const recents = [
+    lastNote && { tab: "notes", elId: `note-${lastNote.id}`, title: lastNote.title, subtitle: lastNote.subject },
+    lastVideo && { tab: "videos", elId: `video-${lastVideo.id}`, title: lastVideo.title, subtitle: lastVideo.subject },
+    lastPaper && { tab: "papers", elId: `paper-${lastPaper.id}`, title: lastPaper.title, subtitle: `${lastPaper.subject} · ${lastPaper.examType}` }
+  ].filter(Boolean);
+
+  const savedNotes = notes.filter((n) => savedNoteIds.includes(n.id));
+  const savedVideos = videos.filter((v) => savedVideoIds.includes(v.id));
+  const savedPapers = papers.filter((p) => savedPaperIds.includes(p.id));
+  const hasSaved = savedNotes.length || savedVideos.length || savedPapers.length;
+
+  return (
+    <div>
+      <div className="pp-serif" style={{ fontSize: 16.5, fontWeight: 700, marginBottom: 10 }}>Continue where you left off</div>
+      {recents.length === 0 ? (
+        <div style={{ fontSize: 13, color: "var(--muted)", marginBottom: 24 }}>Nothing opened yet — browse Notes, Videos, or Past Papers to get started.</div>
+      ) : (
+        <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 24 }}>
+          {recents.map((r) => <ContinueBanner key={r.tab} title={r.title} subtitle={r.subtitle} onClick={() => onJump(r.tab, r.elId)} />)}
+        </div>
+      )}
+
+      <div className="pp-serif" style={{ fontSize: 16.5, fontWeight: 700, marginBottom: 10 }}>Bookmarked</div>
+      {!hasSaved ? (
+        <EmptyState icon={Bookmark} title="Nothing bookmarked yet" body="Tap the bookmark icon on any note, video, or past paper to save it here." />
+      ) : (
+        <>
+          <BookmarkSection label="Notes" icon={BookOpen} items={savedNotes}>
+            {savedNotes.map((n) => (
+              <BookmarkRow key={n.id} title={n.title} tags={<><Tag text={n.subject} /><GradeTag text={n.grade} /></>}
+                onOpen={() => onJump("notes", `note-${n.id}`)} onRemove={() => onToggleSavedNote(n.id)} />
+            ))}
+          </BookmarkSection>
+          <BookmarkSection label="Videos" icon={VideoIcon} items={savedVideos}>
+            {savedVideos.map((v) => (
+              <BookmarkRow key={v.id} title={v.title} tags={<><Tag text={v.subject} /><GradeTag text={v.grade} /></>}
+                onOpen={() => onJump("videos", `video-${v.id}`)} onRemove={() => onToggleSavedVideo(v.id)} />
+            ))}
+          </BookmarkSection>
+          <BookmarkSection label="Past Papers" icon={FileText} items={savedPapers}>
+            {savedPapers.map((p) => (
+              <BookmarkRow key={p.id} title={p.title} tags={<><Tag text={p.subject} /><GradeTag text={p.examType} /></>}
+                onOpen={() => onJump("papers", `paper-${p.id}`)} onRemove={() => onToggleSavedPaper(p.id)} />
+            ))}
+          </BookmarkSection>
+        </>
+      )}
+    </div>
+  );
+}
+
+/* ---------------------------------------------------------------------- */
 /* App shell                                                              */
 /* ---------------------------------------------------------------------- */
 
 const TABS = [
   { id: "notes", label: "Notes", icon: BookOpen },
   { id: "videos", label: "Videos", icon: VideoIcon },
-  { id: "papers", label: "Past Papers", icon: FileText }
+  { id: "papers", label: "Past Papers", icon: FileText },
+  { id: "saved", label: "Saved", icon: Bookmark }
 ];
 
 function MainApp({ user, onSwitchRole, theme, setTheme }) {
@@ -1059,6 +1166,28 @@ function MainApp({ user, onSwitchRole, theme, setTheme }) {
     const t = setTimeout(() => setToast(null), 4500);
     return () => clearTimeout(t);
   }, [toast]);
+
+  const [lastNoteId, setLastNoteId] = useLocalState("preplist:lastNote", null);
+  const [lastVideoId, setLastVideoId] = useLocalState("preplist:lastVideo", null);
+  const [lastPaperId, setLastPaperId] = useLocalState("preplist:lastPaper", null);
+  const [savedNoteIds, setSavedNoteIds] = useLocalState("preplist:savedNotes", []);
+  const [savedVideoIds, setSavedVideoIds] = useLocalState("preplist:savedVideos", []);
+  const [savedPaperIds, setSavedPaperIds] = useLocalState("preplist:savedPapers", []);
+  const toggleSaved = (setList) => (id) => setList((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
+  const onToggleSavedNote = useCallback(toggleSaved(setSavedNoteIds), [setSavedNoteIds]);
+  const onToggleSavedVideo = useCallback(toggleSaved(setSavedVideoIds), [setSavedVideoIds]);
+  const onToggleSavedPaper = useCallback(toggleSaved(setSavedPaperIds), [setSavedPaperIds]);
+
+  const [pendingScroll, setPendingScroll] = useState(null);
+  useEffect(() => {
+    if (!pendingScroll || pendingScroll.tab !== tab) return;
+    const t = setTimeout(() => {
+      document.getElementById(pendingScroll.elId)?.scrollIntoView({ behavior: "smooth", block: "center" });
+      setPendingScroll(null);
+    }, 80);
+    return () => clearTimeout(t);
+  }, [tab, pendingScroll]);
+  const jumpTo = useCallback((tabId, elId) => { setTab(tabId); setPendingScroll({ tab: tabId, elId }); }, []);
 
   async function addNote(payload) {
     try { await db.collection("notes").add({ ...payload, authorRole: user.role, createdAt: Date.now() }); return true; }
@@ -1102,9 +1231,14 @@ function MainApp({ user, onSwitchRole, theme, setTheme }) {
         <main style={{ maxWidth: 960, margin: "0 auto", padding: "22px 18px 90px" }}>
           {!dataReady ? <Loading label="Loading…" /> : (
             <>
-              {tab === "notes" && <NotesView notes={notes} user={user} onAddNote={addNote} />}
-              {tab === "videos" && <VideosView videos={videos} user={user} onAddVideo={addVideo} />}
-              {tab === "papers" && <PapersView papers={papers} user={user} onAddPaper={addPaper} />}
+              {tab === "notes" && <NotesView notes={notes} user={user} onAddNote={addNote} lastNoteId={lastNoteId} setLastNoteId={setLastNoteId} savedNoteIds={savedNoteIds} onToggleSavedNote={onToggleSavedNote} />}
+              {tab === "videos" && <VideosView videos={videos} user={user} onAddVideo={addVideo} lastVideoId={lastVideoId} setLastVideoId={setLastVideoId} savedVideoIds={savedVideoIds} onToggleSavedVideo={onToggleSavedVideo} />}
+              {tab === "papers" && <PapersView papers={papers} user={user} onAddPaper={addPaper} lastPaperId={lastPaperId} setLastPaperId={setLastPaperId} savedPaperIds={savedPaperIds} onToggleSavedPaper={onToggleSavedPaper} />}
+              {tab === "saved" && <SavedView notes={notes} videos={videos} papers={papers}
+                lastNoteId={lastNoteId} lastVideoId={lastVideoId} lastPaperId={lastPaperId}
+                savedNoteIds={savedNoteIds} savedVideoIds={savedVideoIds} savedPaperIds={savedPaperIds}
+                onToggleSavedNote={onToggleSavedNote} onToggleSavedVideo={onToggleSavedVideo} onToggleSavedPaper={onToggleSavedPaper}
+                onJump={jumpTo} />}
             </>
           )}
         </main>
