@@ -143,6 +143,9 @@ const PAPER_SUBJECTS = [
 const EXAM_TYPES = ["IGCSE", "AS Level", "A Level"];
 const ZONES = ["Zone 1", "Zone 2", "Zone 3"];
 const VARIANTS = ["Variant 1", "Variant 2", "Variant 3"];
+const SESSIONS = ["Feb/March", "May/June", "Oct/Nov"];
+const CURRENT_YEAR = new Date().getFullYear();
+const YEARS = Array.from({ length: 16 }, (_, i) => String(CURRENT_YEAR + 1 - i));
 const ACCESS_PASSWORD = "3147"; // gate for Teacher/Admin role — client-side only, not real security
 
 /* ---------------------------------------------------------------------- */
@@ -229,6 +232,27 @@ function readPdfAsDataUrl(file) {
     reader.onerror = reject;
     reader.readAsDataURL(file);
   });
+}
+
+/* ---------------------------------------------------------------------- */
+/* Past papers are stored one Firestore doc per PDF (kind: "qp" or "ms")  */
+/* so a question paper + mark scheme pair never has to fit in one doc.    */
+/* This groups matching docs back into one card for display.             */
+/* ---------------------------------------------------------------------- */
+
+function groupPapers(papers) {
+  const map = new Map();
+  for (const p of papers) {
+    const key = [p.subject, p.examType, p.syllabus, p.zone, p.variant, p.year || "", p.session || "", p.title].join("||");
+    let g = map.get(key);
+    if (!g) {
+      g = { id: key, title: p.title, subject: p.subject, examType: p.examType, syllabus: p.syllabus, zone: p.zone, variant: p.variant, year: p.year, session: p.session, uploadedByRole: p.uploadedByRole, createdAt: p.createdAt, qp: null, ms: null };
+      map.set(key, g);
+    }
+    if (p.createdAt > g.createdAt) g.createdAt = p.createdAt;
+    if (p.kind === "ms") g.ms = p; else g.qp = p;
+  }
+  return Array.from(map.values());
 }
 
 /* ---------------------------------------------------------------------- */
@@ -334,6 +358,7 @@ function GlobalStyle() {
       .pp-scrollbar::-webkit-scrollbar { height: 6px; width: 6px; }
       .pp-scrollbar::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
       .pp-file-slot { border: 1px solid var(--border); border-radius: 8px; padding: 8px 10px; background: var(--bg); }
+      .pp-search-row:hover { background: var(--bg); }
       .pp-file-input { display: block; font-family: 'Karla', sans-serif; font-size: 12px; color: var(--muted); max-width: 190px; }
       .pp-file-input::file-selector-button {
         font-family: 'Karla', sans-serif; font-weight: 600; font-size: 12.5px;
@@ -458,6 +483,22 @@ function VariantSelect({ value, onChange, includeAll, label }) {
     <select className="pp-select" aria-label={label || "Variant"} style={{ padding: "9px 10px", fontSize: 14, width: "100%" }} value={value} onChange={(e) => onChange(e.target.value)}>
       {includeAll ? <option value="">All variants</option> : <option value="" disabled>Variant…</option>}
       {VARIANTS.map((v) => <option key={v} value={v}>{v}</option>)}
+    </select>
+  );
+}
+function SessionSelect({ value, onChange, includeAll, label }) {
+  return (
+    <select className="pp-select" aria-label={label || "Session"} style={{ padding: "9px 10px", fontSize: 14, width: "100%" }} value={value} onChange={(e) => onChange(e.target.value)}>
+      {includeAll ? <option value="">All sessions</option> : <option value="" disabled>Session…</option>}
+      {SESSIONS.map((s) => <option key={s} value={s}>{s}</option>)}
+    </select>
+  );
+}
+function YearSelect({ value, onChange, includeAll, label }) {
+  return (
+    <select className="pp-select" aria-label={label || "Year"} style={{ padding: "9px 10px", fontSize: 14, width: "100%" }} value={value} onChange={(e) => onChange(e.target.value)}>
+      {includeAll ? <option value="">All years</option> : <option value="" disabled>Year…</option>}
+      {YEARS.map((y) => <option key={y} value={y}>{y}</option>)}
     </select>
   );
 }
@@ -909,12 +950,55 @@ function AddVideoModal({ onClose, onSubmit }) {
 /* Past Papers                                                            */
 /* ---------------------------------------------------------------------- */
 
+function PdfFilePicker({ label, value, onChange }) {
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+
+  async function handleFile(e) {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file) return;
+    setError("");
+    setBusy(true);
+    try {
+      const data = await readPdfAsDataUrl(file);
+      onChange({ fileData: data, fileName: file.name });
+    } catch (err) {
+      onChange(null);
+      setError(err.message || "Couldn't read that file.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <Field label={label}>
+      {value ? (
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <span className="pp-file-slot" style={{ fontSize: 13, display: "flex", alignItems: "center", gap: 6 }}><FileText size={13} /> {value.fileName}</span>
+          <button type="button" className="pp-btn pp-btn-ghost" style={{ padding: 6, borderRadius: 999 }} onClick={() => onChange(null)} aria-label="Remove file"><X size={13} /></button>
+        </div>
+      ) : busy ? (
+        <div className="pp-btn pp-btn-ghost" style={{ display: "inline-flex", alignItems: "center", gap: 8, padding: "9px 14px", fontSize: 13.5 }}><Loader2 size={15} style={{ animation: "pp-spin 0.9s linear infinite" }} /> Reading file…</div>
+      ) : (
+        <div className="pp-file-slot" style={{ display: "inline-block" }}>
+          <div style={{ fontSize: 11.5, fontWeight: 600, color: "var(--muted)", marginBottom: 5 }}>Choose a PDF (max ~{Math.round(MAX_PDF_BYTES / 1024)}KB)</div>
+          <input type="file" accept="application/pdf" onChange={handleFile} className="pp-file-input" />
+        </div>
+      )}
+      {error && <div style={{ fontSize: 12, color: "#8A3434", marginTop: 6 }}>{error}</div>}
+    </Field>
+  );
+}
+
 function PapersView({ papers, user, onAddPaper, lastPaperId, setLastPaperId, savedPaperIds, onToggleSavedPaper }) {
   const [showForm, setShowForm] = useState(false);
   const [query, setQuery] = useState("");
   const [subject, setSubject] = useState("");
   const [examType, setExamType] = useState("");
   const [syllabus, setSyllabus] = useState("");
+  const [year, setYear] = useState("");
+  const [session, setSession] = useState("");
   const [zone, setZone] = useState("");
   const [variant, setVariant] = useState("");
   const canUpload = hasElevatedAccess(user);
@@ -926,11 +1010,13 @@ function PapersView({ papers, user, onAddPaper, lastPaperId, setLastPaperId, sav
     if (subject) list = list.filter((p) => p.subject === subject);
     if (examType) list = list.filter((p) => p.examType === examType);
     if (syllabus) list = list.filter((p) => p.syllabus === syllabus);
+    if (year) list = list.filter((p) => p.year === year);
+    if (session) list = list.filter((p) => p.session === session);
     if (zone) list = list.filter((p) => p.zone === zone);
     if (variant) list = list.filter((p) => p.variant === variant);
     if (query.trim()) { const s = query.trim().toLowerCase(); list = list.filter((p) => p.title.toLowerCase().includes(s) || p.subject.toLowerCase().includes(s)); }
     return [...list].sort((a, b) => b.createdAt - a.createdAt);
-  }, [papers, query, subject, examType, syllabus, zone, variant]);
+  }, [papers, query, subject, examType, syllabus, year, session, zone, variant]);
 
   const lastPaper = papers.find((p) => p.id === lastPaperId);
 
@@ -949,6 +1035,8 @@ function PapersView({ papers, user, onAddPaper, lastPaperId, setLastPaperId, sav
             {syllabusOptions.map((s) => <option key={s} value={s}>{s}</option>)}
           </select>
         </div>
+        <div style={{ width: 130 }}><SessionSelect value={session} onChange={setSession} includeAll /></div>
+        <div style={{ width: 110 }}><YearSelect value={year} onChange={setYear} includeAll /></div>
         <div style={{ width: 120 }}><ZoneSelect value={zone} onChange={setZone} includeAll /></div>
         <div style={{ width: 140 }}><VariantSelect value={variant} onChange={setVariant} includeAll /></div>
         {canUpload && <button className="pp-btn pp-btn-primary" style={{ padding: "9px 14px", fontSize: 13.5, display: "flex", alignItems: "center", gap: 6 }} onClick={() => setShowForm(true)}><Plus size={15} /> Upload paper</button>}
@@ -966,16 +1054,30 @@ function PapersView({ papers, user, onAddPaper, lastPaperId, setLastPaperId, sav
             return (
               <div key={p.id} id={`paper-${p.id}`} className="pp-card" style={{ borderRadius: 10, padding: 14, transform: `rotate(${cardTilt(p.id) * 0.6}deg)`, outline: p.id === lastPaperId ? "2px solid var(--accent)" : "none", outlineOffset: 2 }}>
                 <div style={{ display: "flex", gap: 6, alignItems: "flex-start" }}>
-                  <div style={{ display: "flex", gap: 6, flexWrap: "wrap", flex: 1 }}><Tag text={p.subject} /><GradeTag text={p.examType} />{p.syllabus && <GradeTag text={p.syllabus} />}<GradeTag text={p.zone} /><GradeTag text={p.variant} /></div>
+                  <div style={{ display: "flex", gap: 6, flexWrap: "wrap", flex: 1 }}>
+                    <Tag text={p.subject} /><GradeTag text={p.examType} />{p.syllabus && <GradeTag text={p.syllabus} />}
+                    {(p.session || p.year) && <GradeTag text={`${p.session || ""} ${p.year || ""}`.trim()} />}
+                    <GradeTag text={p.zone} /><GradeTag text={p.variant} />
+                  </div>
                   <button className="pp-btn pp-btn-ghost" style={{ padding: 5, borderRadius: 999, flexShrink: 0 }} onClick={() => onToggleSavedPaper(p.id)} aria-label={isSaved ? "Remove bookmark" : "Add bookmark"}>
                     <Bookmark size={14} fill={isSaved ? "var(--accent)" : "none"} style={{ color: "var(--accent)" }} />
                   </button>
                 </div>
                 <div className="pp-serif" style={{ fontSize: 15.5, fontWeight: 600, marginTop: 8 }}>{p.title}</div>
-                <a className="pp-btn pp-btn-ghost" href={p.fileData} target="_blank" rel="noopener noreferrer" download={p.fileName || `${p.title}.pdf`} onClick={() => setLastPaperId(p.id)}
-                  style={{ display: "inline-flex", alignItems: "center", gap: 6, marginTop: 10, padding: "6px 12px", fontSize: 12.5, textDecoration: "none" }}>
-                  <FileText size={13} /> Open PDF
-                </a>
+                <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 10 }}>
+                  {p.qp && (
+                    <a className="pp-btn pp-btn-ghost" href={p.qp.fileData} target="_blank" rel="noopener noreferrer" download={p.qp.fileName || `${p.title} QP.pdf`} onClick={() => setLastPaperId(p.id)}
+                      style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "6px 12px", fontSize: 12.5, textDecoration: "none" }}>
+                      <FileText size={13} /> Question Paper
+                    </a>
+                  )}
+                  {p.ms && (
+                    <a className="pp-btn pp-btn-ghost" href={p.ms.fileData} target="_blank" rel="noopener noreferrer" download={p.ms.fileName || `${p.title} MS.pdf`} onClick={() => setLastPaperId(p.id)}
+                      style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "6px 12px", fontSize: 12.5, textDecoration: "none" }}>
+                      <FileText size={13} /> Mark Scheme
+                    </a>
+                  )}
+                </div>
                 <div style={{ fontSize: 11.5, color: "var(--muted)", marginTop: 10 }}>{roleLabel(p.uploadedByRole)} · {timeAgo(p.createdAt)}</div>
               </div>
             );
@@ -992,36 +1094,17 @@ function AddPaperModal({ onClose, onSubmit }) {
   const [subject, setSubject] = useState("");
   const [examType, setExamType] = useState("");
   const [syllabus, setSyllabus] = useState("");
+  const [year, setYear] = useState("");
+  const [session, setSession] = useState("");
   const [zone, setZone] = useState("");
   const [variant, setVariant] = useState("");
-  const [fileData, setFileData] = useState(null);
-  const [fileName, setFileName] = useState("");
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState("");
-  const canSubmit = title.trim() && subject && examType && syllabus.trim() && zone && variant && fileData && !busy;
-
-  async function handleFile(e) {
-    const file = e.target.files?.[0];
-    e.target.value = "";
-    if (!file) return;
-    setError("");
-    setBusy(true);
-    try {
-      const data = await readPdfAsDataUrl(file);
-      setFileData(data);
-      setFileName(file.name);
-    } catch (err) {
-      setFileData(null);
-      setFileName("");
-      setError(err.message || "Couldn't read that file.");
-    } finally {
-      setBusy(false);
-    }
-  }
+  const [qp, setQp] = useState(null);
+  const [ms, setMs] = useState(null);
+  const canSubmit = title.trim() && subject && examType && syllabus.trim() && year && session && zone && variant && (qp || ms);
 
   return (
-    <Modal title="Upload a past paper" onClose={onClose}>
-      <Field label="Title"><input className="pp-input" style={{ width: "100%", padding: "9px 12px", fontSize: 14.5 }} value={title} onChange={(e) => setTitle(e.target.value)} placeholder="e.g. May/June 2023 Paper 1" /></Field>
+    <Modal title="Upload a past paper" onClose={onClose} wide>
+      <Field label="Title"><input className="pp-input" style={{ width: "100%", padding: "9px 12px", fontSize: 14.5 }} value={title} onChange={(e) => setTitle(e.target.value)} placeholder="e.g. Paper 1" /></Field>
       <TwoUp>
         <Field label="Subject"><PaperSubjectSelect value={subject} onChange={setSubject} /></Field>
         <Field label="Exam type"><ExamTypeSelect value={examType} onChange={setExamType} /></Field>
@@ -1030,30 +1113,96 @@ function AddPaperModal({ onClose, onSubmit }) {
         <input className="pp-input" style={{ width: "100%", padding: "9px 12px", fontSize: 14.5 }} value={syllabus} onChange={(e) => setSyllabus(e.target.value)} placeholder="e.g. 0610 (check the front page of the paper)" />
       </Field>
       <TwoUp>
+        <Field label="Session"><SessionSelect value={session} onChange={setSession} /></Field>
+        <Field label="Year"><YearSelect value={year} onChange={setYear} /></Field>
+      </TwoUp>
+      <TwoUp>
         <Field label="Zone"><ZoneSelect value={zone} onChange={setZone} /></Field>
         <Field label="Variant"><VariantSelect value={variant} onChange={setVariant} /></Field>
       </TwoUp>
-      <Field label="PDF file">
-        {fileData ? (
-          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            <span className="pp-file-slot" style={{ fontSize: 13, display: "flex", alignItems: "center", gap: 6 }}><FileText size={13} /> {fileName}</span>
-            <button type="button" className="pp-btn pp-btn-ghost" style={{ padding: 6, borderRadius: 999 }} onClick={() => { setFileData(null); setFileName(""); }} aria-label="Remove file"><X size={13} /></button>
-          </div>
-        ) : busy ? (
-          <div className="pp-btn pp-btn-ghost" style={{ display: "inline-flex", alignItems: "center", gap: 8, padding: "9px 14px", fontSize: 13.5 }}><Loader2 size={15} style={{ animation: "pp-spin 0.9s linear infinite" }} /> Reading file…</div>
-        ) : (
-          <div className="pp-file-slot" style={{ display: "inline-block" }}>
-            <div style={{ fontSize: 11.5, fontWeight: 600, color: "var(--muted)", marginBottom: 5 }}>Choose a PDF (max ~{Math.round(MAX_PDF_BYTES / 1024)}KB)</div>
-            <input type="file" accept="application/pdf" onChange={handleFile} className="pp-file-input" />
-          </div>
-        )}
-        {error && <div style={{ fontSize: 12, color: "#8A3434", marginTop: 6 }}>{error}</div>}
-      </Field>
+      <TwoUp>
+        <PdfFilePicker label="Question paper PDF" value={qp} onChange={setQp} />
+        <PdfFilePicker label="Mark scheme PDF" value={ms} onChange={setMs} />
+      </TwoUp>
+      <div style={{ fontSize: 12, color: "var(--muted)", marginTop: -6, marginBottom: 14 }}>Add at least one of the two — both together show up as one card with both buttons.</div>
       <button className="pp-btn pp-btn-primary" style={{ width: "100%", padding: "10px 0", opacity: canSubmit ? 1 : 0.5 }} disabled={!canSubmit}
-        onClick={() => onSubmit({ title: title.trim(), subject, examType, syllabus: syllabus.trim(), zone, variant, fileData, fileName })}>
+        onClick={() => onSubmit({ title: title.trim(), subject, examType, syllabus: syllabus.trim(), year, session, zone, variant, qp, ms })}>
         Publish past paper
       </button>
     </Modal>
+  );
+}
+
+/* ---------------------------------------------------------------------- */
+/* Checklist — teachers/admins lay out topics per subject, everyone can   */
+/* tick them off as studied (personal, stored on-device).                 */
+/* ---------------------------------------------------------------------- */
+
+function ChecklistView({ items, user, onAddItem, onDeleteItem, checkedIds, onToggleChecked }) {
+  const [subject, setSubject] = useState("");
+  const [newText, setNewText] = useState("");
+  const [busy, setBusy] = useState(false);
+  const canManage = hasElevatedAccess(user);
+
+  const filtered = subject ? items.filter((i) => i.subject === subject) : items;
+  const grouped = useMemo(() => {
+    const map = new Map();
+    for (const it of filtered) {
+      if (!map.has(it.subject)) map.set(it.subject, []);
+      map.get(it.subject).push(it);
+    }
+    return Array.from(map.entries()).sort((a, b) => a[0].localeCompare(b[0]));
+  }, [filtered]);
+
+  async function handleAdd() {
+    if (!newText.trim() || !subject || busy) return;
+    setBusy(true);
+    const ok = await onAddItem({ subject, text: newText.trim() });
+    setBusy(false);
+    if (ok) setNewText("");
+  }
+
+  return (
+    <div>
+      <div style={{ display: "flex", gap: 10, marginBottom: 16, flexWrap: "wrap", alignItems: "flex-start" }}>
+        <div style={{ width: 200 }}><SubjectSelect value={subject} onChange={setSubject} includeAll /></div>
+      </div>
+      {canManage && (
+        <div style={{ display: "flex", gap: 8, marginBottom: 22, flexWrap: "wrap" }}>
+          <input className="pp-input" style={{ flex: 1, minWidth: 180, padding: "9px 12px", fontSize: 14 }}
+            placeholder={subject ? `Add a topic to ${subject}…` : "Pick a subject above first…"} value={newText}
+            onChange={(e) => setNewText(e.target.value)} disabled={!subject}
+            onKeyDown={(e) => { if (e.key === "Enter") handleAdd(); }} />
+          <button className="pp-btn pp-btn-primary" style={{ padding: "9px 16px", fontSize: 13.5, opacity: (newText.trim() && subject && !busy) ? 1 : 0.5 }}
+            disabled={!(newText.trim() && subject) || busy} onClick={handleAdd}>Add</button>
+        </div>
+      )}
+      {grouped.length === 0 ? (
+        <EmptyState icon={ListChecks} title="No checklist items yet" body={canManage ? "Pick a subject above and add the first topic." : "Ask a teacher or admin to add topics here — check back soon."} />
+      ) : grouped.map(([subj, list]) => {
+        const doneCount = list.filter((i) => checkedIds.includes(i.id)).length;
+        return (
+          <div key={subj} style={{ marginBottom: 24 }}>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
+              <div className="pp-serif" style={{ fontSize: 15.5, fontWeight: 700 }}>{subj}</div>
+              <div style={{ fontSize: 12, color: "var(--muted)" }}>{doneCount}/{list.length} studied</div>
+            </div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+              {list.map((it) => {
+                const checked = checkedIds.includes(it.id);
+                return (
+                  <label key={it.id} id={`topic-${it.id}`} className="pp-card" style={{ display: "flex", alignItems: "center", gap: 10, padding: "9px 12px", borderRadius: 8, cursor: "pointer" }}>
+                    <input type="checkbox" checked={checked} onChange={() => onToggleChecked(it.id)} style={{ width: 16, height: 16, accentColor: "var(--accent)", flexShrink: 0 }} />
+                    <span style={{ flex: 1, fontSize: 13.5, textDecoration: checked ? "line-through" : "none", color: checked ? "var(--muted)" : "var(--text)" }}>{it.text}</span>
+                    {canManage && <button type="button" className="pp-btn pp-btn-ghost" style={{ padding: 5, borderRadius: 999, flexShrink: 0 }} onClick={(e) => { e.preventDefault(); onDeleteItem(it.id); }} aria-label="Delete topic"><X size={13} /></button>}
+                  </label>
+                );
+              })}
+            </div>
+          </div>
+        );
+      })}
+    </div>
   );
 }
 
@@ -1143,6 +1292,66 @@ function SavedView({ notes, videos, papers, lastNoteId, lastVideoId, lastPaperId
 }
 
 /* ---------------------------------------------------------------------- */
+/* Global search — one search box that looks across Notes, Videos, Past   */
+/* Papers, and the Checklist at once.                                     */
+/* ---------------------------------------------------------------------- */
+
+function SearchResultGroup({ label, icon: SectionIcon, items, labelKey, onPick }) {
+  if (items.length === 0) return null;
+  return (
+    <div style={{ marginBottom: 12 }}>
+      <div style={{ fontSize: 11.5, fontWeight: 700, color: "var(--muted)", textTransform: "uppercase", letterSpacing: 0.4, marginBottom: 6, display: "flex", alignItems: "center", gap: 6 }}>
+        <SectionIcon size={12} /> {label}
+      </div>
+      <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+        {items.slice(0, 8).map((it) => (
+          <div key={it.id} className="pp-search-row" onClick={() => onPick(it)} style={{ padding: "7px 8px", borderRadius: 7, fontSize: 13.5, cursor: "pointer" }}>
+            {labelKey ? it[labelKey] : it.title} <span style={{ color: "var(--muted)", fontSize: 11.5 }}>· {it.subject}</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function GlobalSearchModal({ notes, videos, papers, checklistItems, onClose, onJump }) {
+  const [q, setQ] = useState("");
+  const s = q.trim().toLowerCase();
+  const noteMatches = s ? notes.filter((n) => n.title.toLowerCase().includes(s) || n.subject.toLowerCase().includes(s)) : [];
+  const videoMatches = s ? videos.filter((v) => v.title.toLowerCase().includes(s) || v.subject.toLowerCase().includes(s)) : [];
+  const paperMatches = s ? papers.filter((p) => p.title.toLowerCase().includes(s) || p.subject.toLowerCase().includes(s)) : [];
+  const topicMatches = s ? checklistItems.filter((i) => i.text.toLowerCase().includes(s) || i.subject.toLowerCase().includes(s)) : [];
+  const totalMatches = noteMatches.length + videoMatches.length + paperMatches.length + topicMatches.length;
+
+  function pick(tabId, elId) { onJump(tabId, elId); onClose(); }
+
+  return (
+    <div style={{ position: "fixed", inset: 0, background: "rgba(20,16,10,0.45)", display: "flex", alignItems: "flex-start", justifyContent: "center", zIndex: 70, padding: "10vh 16px 16px" }} onClick={onClose}>
+      <div className="pp-card pp-pop" onClick={(e) => e.stopPropagation()} style={{ width: "100%", maxWidth: 560, maxHeight: "75vh", overflowY: "auto", borderRadius: 14, padding: 18 }}>
+        <div style={{ position: "relative" }}>
+          <Search size={15} style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)", color: "var(--muted)" }} />
+          <input autoFocus className="pp-input" style={{ width: "100%", padding: "10px 12px 10px 34px", fontSize: 15 }} placeholder="Search notes, videos, papers, topics…" value={q} onChange={(e) => setQ(e.target.value)} />
+        </div>
+        {s && (
+          <div style={{ marginTop: 14 }}>
+            {totalMatches === 0 ? (
+              <div style={{ fontSize: 13, color: "var(--muted)", padding: "10px 2px" }}>No matches for "{q}".</div>
+            ) : (
+              <>
+                <SearchResultGroup label="Notes" icon={BookOpen} items={noteMatches} onPick={(n) => pick("notes", `note-${n.id}`)} />
+                <SearchResultGroup label="Videos" icon={VideoIcon} items={videoMatches} onPick={(v) => pick("videos", `video-${v.id}`)} />
+                <SearchResultGroup label="Past Papers" icon={FileText} items={paperMatches} onPick={(p) => pick("papers", `paper-${p.id}`)} />
+                <SearchResultGroup label="Checklist" icon={ListChecks} items={topicMatches} labelKey="text" onPick={(i) => pick("checklist", `topic-${i.id}`)} />
+              </>
+            )}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/* ---------------------------------------------------------------------- */
 /* App shell                                                              */
 /* ---------------------------------------------------------------------- */
 
@@ -1150,15 +1359,19 @@ const TABS = [
   { id: "notes", label: "Notes", icon: BookOpen },
   { id: "videos", label: "Videos", icon: VideoIcon },
   { id: "papers", label: "Past Papers", icon: FileText },
+  { id: "checklist", label: "Checklist", icon: ListChecks },
   { id: "saved", label: "Saved", icon: Bookmark }
 ];
 
 function MainApp({ user, onSwitchRole, theme, setTheme }) {
   const [notes, notesReady] = useCollection("notes");
   const [videos, videosReady] = useCollection("videos");
-  const [papers, papersReady] = useCollection("pastPapers");
+  const [rawPapers, papersReady] = useCollection("pastPapers");
+  const papers = useMemo(() => groupPapers(rawPapers), [rawPapers]);
+  const [checklistItems, checklistReady] = useCollection("checklistItems");
 
   const [tab, setTab] = useState("notes");
+  const [showSearch, setShowSearch] = useState(false);
   const [toast, setToast] = useState(null);
   const notify = useCallback((t) => setToast(t), []);
   useEffect(() => {
@@ -1177,6 +1390,8 @@ function MainApp({ user, onSwitchRole, theme, setTheme }) {
   const onToggleSavedNote = useCallback(toggleSaved(setSavedNoteIds), [setSavedNoteIds]);
   const onToggleSavedVideo = useCallback(toggleSaved(setSavedVideoIds), [setSavedVideoIds]);
   const onToggleSavedPaper = useCallback(toggleSaved(setSavedPaperIds), [setSavedPaperIds]);
+  const [checkedTopicIds, setCheckedTopicIds] = useLocalState("preplist:checkedTopics", []);
+  const onToggleChecked = useCallback(toggleSaved(setCheckedTopicIds), [setCheckedTopicIds]);
 
   const [pendingScroll, setPendingScroll] = useState(null);
   useEffect(() => {
@@ -1198,11 +1413,26 @@ function MainApp({ user, onSwitchRole, theme, setTheme }) {
     catch (e) { notify({ kind: "error", text: friendlyDbError(e) }); return false; }
   }
   async function addPaper(payload) {
-    try { await db.collection("pastPapers").add({ ...payload, uploadedByRole: user.role, createdAt: Date.now() }); return true; }
+    const { qp, ms, ...meta } = payload;
+    try {
+      const now = Date.now();
+      const writes = [];
+      if (qp) writes.push(db.collection("pastPapers").add({ ...meta, kind: "qp", fileData: qp.fileData, fileName: qp.fileName, uploadedByRole: user.role, createdAt: now }));
+      if (ms) writes.push(db.collection("pastPapers").add({ ...meta, kind: "ms", fileData: ms.fileData, fileName: ms.fileName, uploadedByRole: user.role, createdAt: now }));
+      await Promise.all(writes);
+      return true;
+    } catch (e) { notify({ kind: "error", text: friendlyDbError(e) }); return false; }
+  }
+  async function addChecklistItem(payload) {
+    try { await db.collection("checklistItems").add({ ...payload, addedByRole: user.role, createdAt: Date.now() }); return true; }
     catch (e) { notify({ kind: "error", text: friendlyDbError(e) }); return false; }
   }
+  async function deleteChecklistItem(id) {
+    try { await db.collection("checklistItems").doc(id).delete(); }
+    catch (e) { notify({ kind: "error", text: friendlyDbError(e) }); }
+  }
 
-  const dataReady = notesReady && videosReady && papersReady;
+  const dataReady = notesReady && videosReady && papersReady && checklistReady;
 
   return (
     <ToastContext.Provider value={notify}>
@@ -1212,6 +1442,7 @@ function MainApp({ user, onSwitchRole, theme, setTheme }) {
           <div className="pp-header-row" style={{ maxWidth: 960, margin: "0 auto", padding: "14px 18px", display: "flex", alignItems: "center", gap: 12 }}>
             <div className="pp-serif pp-header-title" style={{ fontSize: 19, fontWeight: 700, display: "flex", alignItems: "center", gap: 6 }}><Sparkles size={17} style={{ color: "var(--accent)" }} /> PrepList Pro</div>
             <div style={{ flex: 1 }} />
+            <button className="pp-btn pp-btn-ghost" style={{ padding: 8, borderRadius: 999 }} onClick={() => setShowSearch(true)} aria-label="Search everything"><Search size={16} /></button>
             <button className="pp-btn pp-btn-ghost" style={{ padding: 8, borderRadius: 999 }} onClick={() => setTheme(theme === "light" ? "dark" : "light")} aria-label="Toggle dark mode">{theme === "light" ? <Moon size={16} /> : <Sun size={16} />}</button>
             <button className="pp-btn pp-btn-ghost pp-role-pill" style={{ display: "flex", alignItems: "center", gap: 8, padding: "5px 10px 5px 5px" }} onClick={onSwitchRole} title="Switch role">
               <RoleBadge role={user.role} size={26} />
@@ -1234,6 +1465,7 @@ function MainApp({ user, onSwitchRole, theme, setTheme }) {
               {tab === "notes" && <NotesView notes={notes} user={user} onAddNote={addNote} lastNoteId={lastNoteId} setLastNoteId={setLastNoteId} savedNoteIds={savedNoteIds} onToggleSavedNote={onToggleSavedNote} />}
               {tab === "videos" && <VideosView videos={videos} user={user} onAddVideo={addVideo} lastVideoId={lastVideoId} setLastVideoId={setLastVideoId} savedVideoIds={savedVideoIds} onToggleSavedVideo={onToggleSavedVideo} />}
               {tab === "papers" && <PapersView papers={papers} user={user} onAddPaper={addPaper} lastPaperId={lastPaperId} setLastPaperId={setLastPaperId} savedPaperIds={savedPaperIds} onToggleSavedPaper={onToggleSavedPaper} />}
+              {tab === "checklist" && <ChecklistView items={checklistItems} user={user} onAddItem={addChecklistItem} onDeleteItem={deleteChecklistItem} checkedIds={checkedTopicIds} onToggleChecked={onToggleChecked} />}
               {tab === "saved" && <SavedView notes={notes} videos={videos} papers={papers}
                 lastNoteId={lastNoteId} lastVideoId={lastVideoId} lastPaperId={lastPaperId}
                 savedNoteIds={savedNoteIds} savedVideoIds={savedVideoIds} savedPaperIds={savedPaperIds}
@@ -1243,6 +1475,7 @@ function MainApp({ user, onSwitchRole, theme, setTheme }) {
           )}
         </main>
 
+        {showSearch && <GlobalSearchModal notes={notes} videos={videos} papers={papers} checklistItems={checklistItems} onClose={() => setShowSearch(false)} onJump={jumpTo} />}
         <Toast toast={toast} onClose={() => setToast(null)} />
       </div>
     </ToastContext.Provider>

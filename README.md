@@ -85,11 +85,26 @@ your behalf.
   list (`PAPER_SUBJECTS` in `app.jsx`): Math, Physics, Chemistry, Biology,
   English, History, Computer Science, Economics, Business, French, Arabic,
   Mandarin Chinese — separate from the subject list used by Notes/Videos.
-  Each paper is also tagged with a Zone (1–3), a Variant (1–3), and a
-  free-text Syllabus code (e.g. "0610" for Biology) — syllabus codes vary
-  per subject and curriculum, so instead of a fixed list, whoever uploads a
-  paper types the code straight off the paper's cover page, and the browse
-  filter is built from whatever codes have actually been uploaded so far.
+  Each paper is also tagged with a Zone (1–3), a Variant (1–3), a Session
+  (Feb/March, May/June, Oct/Nov), a Year, and a free-text Syllabus code
+  (e.g. "0610" for Biology) — syllabus codes vary per subject and
+  curriculum, so instead of a fixed list, whoever uploads a paper types the
+  code straight off the paper's cover page, and the browse filter is built
+  from whatever codes have actually been uploaded so far.
+- **Question papers + mark schemes.** Each Past Papers upload can include a
+  Question Paper PDF, a Mark Scheme PDF, or both. Under the hood each PDF is
+  its own Firestore document (`kind: "qp"` or `"ms"`, see `groupPapers()` in
+  `app.jsx`) so a pair never has to fit Firestore's 1&nbsp;MiB document
+  limit together — the app groups matching ones back into a single card
+  with "Question Paper" / "Mark Scheme" buttons for display.
+- **Revision checklist.** The Checklist tab lets Teachers and Admins lay out
+  a list of topics per subject; anyone can tick items off as studied. The
+  topic list itself is shared (Firestore, `checklistItems` collection) but
+  which boxes are checked is personal per device (`localStorage`), same as
+  the rest of this no-accounts app.
+- **Global search.** The search icon in the header opens one search box
+  that looks across Notes, Videos, Past Papers, and the Checklist at once
+  and jumps straight to whatever you pick.
 - **Continue where you left off, and a Saved tab.** Notes, Videos, and Past
   Papers each remember the last item you opened on this device (stored in
   `localStorage`, since there are no accounts) and show a "Continue where
