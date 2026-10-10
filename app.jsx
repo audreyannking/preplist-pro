@@ -140,10 +140,164 @@ const PAPER_SUBJECTS = [
   "Math", "Physics", "Chemistry", "Biology", "English", "History",
   "Computer Science", "Economics", "Business", "French", "Arabic", "Mandarin Chinese"
 ];
-const EXAM_TYPES = ["IGCSE", "AS Level", "A Level"];
+const BOARDS = ["Cambridge", "Edexcel", "College Board"];
+const EXAM_TYPES = ["IGCSE", "AS Level", "A Level", "SAT", "AP"];
+const EXAM_TYPES_BY_BOARD = {
+  Cambridge: ["IGCSE", "AS Level", "A Level"],
+  Edexcel: ["IGCSE", "AS Level", "A Level"],
+  "College Board": ["SAT", "AP"]
+};
+const SAT_SECTIONS = ["Reading and Writing", "Math"];
+const AP_COURSES = [
+  "2-D Art and Design", "3-D Art and Design", "African American Studies", "Art History", "Biology",
+  "Business with Personal Finance", "Calculus AB", "Calculus BC", "Chemistry", "Chinese Language and Culture",
+  "Comparative Government and Politics", "Computer Science A", "Computer Science Principles", "Cybersecurity",
+  "Drawing", "English Language and Composition", "English Literature and Composition", "Environmental Science",
+  "European History", "French Language and Culture", "German Language and Culture", "Human Geography",
+  "Italian Language and Culture", "Japanese Language and Culture", "Latin", "Macroeconomics", "Microeconomics",
+  "Music Theory", "Physics 1", "Physics 2", "Physics C: Electricity and Magnetism", "Physics C: Mechanics",
+  "Precalculus", "Psychology", "Research", "Seminar", "Spanish Language and Culture", "Spanish Literature and Culture",
+  "Statistics", "United States Government and Politics", "United States History", "World History: Modern"
+];
 const ZONES = ["Zone 1", "Zone 2", "Zone 3"];
 const VARIANTS = ["Variant 1", "Variant 2", "Variant 3"];
-const SESSIONS = ["Feb/March", "May/June", "Oct/Nov"];
+const SESSIONS_BY_BOARD = {
+  Cambridge: ["Feb/March", "May/June", "Oct/Nov"],
+  Edexcel: ["January", "May/June", "October/November"],
+  "College Board": ["March", "May", "June", "August", "October", "November", "December"]
+};
+const ALL_SESSIONS = Array.from(new Set(Object.values(SESSIONS_BY_BOARD).flat()));
+
+function subjectsFor(board, examType) {
+  if (examType === "SAT") return SAT_SECTIONS;
+  if (examType === "AP") return AP_COURSES;
+  if (examType) return PAPER_SUBJECTS;
+  if (board === "College Board") return Array.from(new Set([...SAT_SECTIONS, ...AP_COURSES]));
+  if (board) return PAPER_SUBJECTS;
+  return Array.from(new Set([...PAPER_SUBJECTS, ...SAT_SECTIONS, ...AP_COURSES]));
+}
+
+/* ---------------------------------------------------------------------- */
+/* Official syllabus / specification codes, compiled from Cambridge's     */
+/* published subject lists and Pearson's 2025/26 information manuals.     */
+/* SAT and AP have no syllabus-code system, so they aren't listed here.   */
+/* ---------------------------------------------------------------------- */
+
+const cd = (code, label) => ({ code, label });
+const mergeCodes = (base, extra) => {
+  const out = { ...base };
+  for (const k of Object.keys(extra)) out[k] = [...(base[k] || []), ...extra[k]];
+  return out;
+};
+
+const CAMBRIDGE_IGCSE = {
+  Math: [cd("0580", "Mathematics"), cd("0980", "Mathematics (9-1)"), cd("0606", "Additional Mathematics"), cd("0607", "International Mathematics"), cd("0444", "Mathematics (US)")],
+  Physics: [cd("0625", "Physics"), cd("0972", "Physics (9-1)")],
+  Chemistry: [cd("0620", "Chemistry"), cd("0971", "Chemistry (9-1)")],
+  Biology: [cd("0610", "Biology"), cd("0970", "Biology (9-1)")],
+  English: [cd("0500", "English - First Language"), cd("0990", "English - First Language (9-1)"), cd("0524", "English - First Language (US)"), cd("0475", "English - Literature in English"), cd("0992", "English - Literature in English (9-1)"), cd("0472", "English (as an Additional Language)"), cd("0772", "English (as an Additional Language) (9-1)"), cd("0510", "English as a Second Language (Speaking endorsement)"), cd("0993", "English as a Second Language (Speaking endorsement) (9-1)"), cd("0511", "English as a Second Language (Count-in speaking)"), cd("0991", "English as a Second Language (Count-in speaking) (9-1)")],
+  History: [cd("0470", "History"), cd("0977", "History (9-1)"), cd("0409", "History - American (US)")],
+  "Computer Science": [cd("0478", "Computer Science"), cd("0984", "Computer Science (9-1)"), cd("0265", "Computer Science (new)")],
+  Economics: [cd("0455", "Economics"), cd("0987", "Economics (9-1)")],
+  Business: [cd("0450", "Business Studies"), cd("0986", "Business Studies (9-1)"), cd("0264", "Business"), cd("0774", "Business (9-1)")],
+  French: [cd("0520", "French - Foreign Language"), cd("0501", "French - First Language"), cd("7156", "French (9-1)")],
+  Arabic: [cd("0544", "Arabic - Foreign Language"), cd("0508", "Arabic - First Language"), cd("7184", "Arabic - First Language (9-1)"), cd("7180", "Arabic (9-1)")],
+  "Mandarin Chinese": [cd("0547", "Chinese (Mandarin) - Foreign Language"), cd("0523", "Chinese - Second Language"), cd("0509", "Chinese - First Language")]
+};
+const CAMBRIDGE_ASA_SHARED = {
+  Math: [cd("9709", "Mathematics"), cd("9231", "Mathematics - Further")],
+  Physics: [cd("9702", "Physics")],
+  Chemistry: [cd("9701", "Chemistry")],
+  Biology: [cd("9700", "Biology")],
+  English: [cd("9093", "English Language"), cd("9695", "English - Literature")],
+  History: [cd("9489", "History"), cd("9981", "European History (new)"), cd("9982", "International History (new)")],
+  "Computer Science": [cd("9618", "Computer Science"), cd("9626", "Information Technology")],
+  Economics: [cd("9708", "Economics")],
+  Business: [cd("9609", "Business")],
+  French: [],
+  Arabic: [cd("9680", "Arabic"), cd("9865", "Arabic (new)")],
+  "Mandarin Chinese": []
+};
+const CAMBRIDGE_AS = mergeCodes(CAMBRIDGE_ASA_SHARED, {
+  English: [cd("8021", "English General Paper (AS only)"), cd("8695", "English - Language and Literature (AS only)")],
+  History: [cd("8101", "US History to 1877 (AS only)"), cd("8102", "US History since 1877 (AS only)")],
+  French: [cd("8028", "French Language (AS only)")],
+  Arabic: [cd("8680", "Arabic - Language (AS only)")],
+  "Mandarin Chinese": [cd("8238", "Chinese Language (AS only)")]
+});
+const CAMBRIDGE_A = mergeCodes(CAMBRIDGE_ASA_SHARED, {
+  French: [cd("9898", "French Language & Literature (A Level only)")],
+  "Mandarin Chinese": [cd("9868", "Chinese - Language & Literature (A Level only)")]
+});
+
+// "R" = the regional papers that Pearson requires centres in the UAE, Oman,
+// and several other countries to sit.
+const EDEXCEL_IGCSE = {
+  Math: [cd("4MA1", "Mathematics A"), cd("4MA1 R", "Mathematics A - regional (R) papers"), cd("4MB1", "Mathematics B"), cd("4MB1 R", "Mathematics B - regional (R) papers"), cd("4PM1", "Further Pure Mathematics"), cd("4PM1 R", "Further Pure Mathematics - regional (R) papers")],
+  Physics: [cd("4PH1", "Physics"), cd("4PH1 R", "Physics - regional (R) papers")],
+  Chemistry: [cd("4CH1", "Chemistry"), cd("4CH1 R", "Chemistry - regional (R) papers")],
+  Biology: [cd("4BI1", "Biology"), cd("4BI1 R", "Biology - regional (R) papers"), cd("4HB1", "Human Biology"), cd("4HB1 R", "Human Biology - regional (R) papers")],
+  English: [cd("4EA1", "English Language A"), cd("4EA1 R", "English Language A - regional (R) papers"), cd("4EB1", "English Language B"), cd("4EB1 R", "English Language B - regional (R) papers"), cd("4ET1", "English Literature"), cd("4ET1 R", "English Literature - regional (R) papers")],
+  History: [cd("4HI1", "History"), cd("4HI1 R", "History - regional (R) papers")],
+  "Computer Science": [cd("4CP0", "Computer Science")],
+  Economics: [cd("4EC1", "Economics"), cd("4EC1 R", "Economics - regional (R) papers")],
+  Business: [cd("4BS1", "Business"), cd("4BS1 R", "Business - regional (R) papers")],
+  French: [cd("4FR1", "French"), cd("4FR1 R", "French - regional (R) papers")],
+  Arabic: [cd("4AA1", "Arabic (First Language)")],
+  "Mandarin Chinese": [cd("4CN1", "Chinese (Mandarin / Cantonese speaking)"), cd("4CN1 R", "Chinese - regional (R) papers")]
+};
+// Edexcel International AS/A Level: X.../Y... are the AS / full A Level
+// award codes, W... are the individual unit (paper) codes.
+const ial = (asCode, aCode, name, units) => ({
+  as: [cd(asCode, `${name} - International Advanced Subsidiary`), ...units],
+  a: [cd(aCode, `${name} - International Advanced Level`), ...units]
+});
+const IAL_MATH_UNITS = [cd("WMA11", "Pure Maths P1"), cd("WMA12", "Pure Maths P2"), cd("WMA13", "Pure Maths P3"), cd("WMA14", "Pure Maths P4"), cd("WME01", "Mechanics M1"), cd("WME02", "Mechanics M2"), cd("WME03", "Mechanics M3"), cd("WST01", "Statistics S1"), cd("WST02", "Statistics S2"), cd("WST03", "Statistics S3"), cd("WFM01", "Further Pure F1"), cd("WFM02", "Further Pure F2"), cd("WFM03", "Further Pure F3"), cd("WDM11", "Decision D1")];
+const EDEXCEL_IAL = {
+  Math: {
+    as: [cd("XMA01", "Mathematics - International Advanced Subsidiary"), cd("XFM01", "Further Mathematics - International Advanced Subsidiary"), cd("XPM01", "Pure Mathematics - International Advanced Subsidiary"), ...IAL_MATH_UNITS],
+    a: [cd("YMA01", "Mathematics - International Advanced Level"), cd("YFM01", "Further Mathematics - International Advanced Level"), cd("YPM01", "Pure Mathematics - International Advanced Level"), ...IAL_MATH_UNITS]
+  },
+  Physics: ial("XPH11", "YPH11", "Physics", [cd("WPH11", "Unit 1: Mechanics and Materials"), cd("WPH12", "Unit 2: Waves and Electricity"), cd("WPH13", "Unit 3: Practical Skills in Physics I"), cd("WPH14", "Unit 4: Further Mechanics, Fields and Particles"), cd("WPH15", "Unit 5: Thermodynamics, Radiation, Oscillations and Cosmology"), cd("WPH16", "Unit 6: Practical Skills in Physics II")]),
+  Chemistry: ial("XCH11", "YCH11", "Chemistry", [cd("WCH11", "Unit 1: Structure, Bonding and Introduction to Organic Chemistry"), cd("WCH12", "Unit 2: Energetics, Group Chemistry, Halogenoalkanes and Alcohols"), cd("WCH13", "Unit 3: Practical Skills in Chemistry I"), cd("WCH14", "Unit 4: Rates, Equilibria and Further Organic Chemistry"), cd("WCH15", "Unit 5: Transition Metals and Organic Nitrogen Chemistry"), cd("WCH16", "Unit 6: Practical Skills in Chemistry II")]),
+  Biology: ial("XBI11", "YBI11", "Biology", [cd("WBI11", "Unit 1: Molecules, Diet, Transport and Health"), cd("WBI12", "Unit 2: Cells, Development, Biodiversity and Conservation"), cd("WBI13", "Unit 3: Practical Skills in Biology I"), cd("WBI14", "Unit 4: Energy, Environment, Microbiology and Immunity"), cd("WBI15", "Unit 5: Respiration, Internal Environment, Coordination and Gene Technology"), cd("WBI16", "Unit 6: Practical Skills in Biology II")]),
+  English: {
+    as: [cd("XEN01", "English Language - International Advanced Subsidiary"), cd("XET01", "English Literature - International Advanced Subsidiary"), cd("WEN01", "Language Unit 1: Context and Identity"), cd("WEN02", "Language Unit 2: Language in Transition"), cd("WET01", "Literature Unit 1: Post-2000 Poetry and Prose"), cd("WET02", "Literature Unit 2: Drama")],
+    a: [cd("YEN01", "English Language - International Advanced Level"), cd("YET01", "English Literature - International Advanced Level"), cd("WEN01", "Language Unit 1: Context and Identity"), cd("WEN02", "Language Unit 2: Language in Transition"), cd("WEN03", "Language Unit 3: Crafting Language (Writing)"), cd("WEN04", "Language Unit 4: Investigating Language"), cd("WET01", "Literature Unit 1: Post-2000 Poetry and Prose"), cd("WET02", "Literature Unit 2: Drama"), cd("WET03", "Literature Unit 3: Poetry and Prose"), cd("WET04", "Literature Unit 4: Shakespeare and Pre-1900 Poetry")]
+  },
+  History: ial("XHI01", "YHI01", "History", [cd("WHI01", "Unit 1"), cd("WHI02", "Unit 2"), cd("WHI03", "Unit 3"), cd("WHI04", "Unit 4")]),
+  // Edexcel has no International A Level in Computer Science; Information Technology is its closest.
+  "Computer Science": ial("XIT11", "YIT11", "Information Technology", [cd("WIT11", "Unit 1"), cd("WIT12", "Unit 2"), cd("WIT13", "Unit 3"), cd("WIT14", "Unit 4")]),
+  Economics: ial("XEC11", "YEC11", "Economics", [cd("WEC11", "Unit 1: Markets in action"), cd("WEC12", "Unit 2: Macroeconomic performance and policy"), cd("WEC13", "Unit 3: Business behaviour"), cd("WEC14", "Unit 4: Developments in the Global Economy")]),
+  Business: ial("XBS11", "YBS11", "Business", [cd("WBS11", "Unit 1: Marketing and people"), cd("WBS12", "Unit 2: Managing business activities"), cd("WBS13", "Unit 3: Business decisions and strategy"), cd("WBS14", "Unit 4: Global business")]),
+  French: ial("XFR01", "YFR01", "French", [cd("WFR01", "Unit 1: Spoken Expression and Response"), cd("WFR02", "Unit 2: Understanding and Written Response"), cd("WFR03", "Unit 3: Understanding and Spoken Response"), cd("WFR04", "Unit 4: Research, Understanding and Written Response")]),
+  Arabic: ial("XAA01", "YAA01", "Arabic", [cd("WAA01", "Unit 1: Understanding and Written Response"), cd("WAA02", "Unit 2: Research, Writing and Research")])
+  // Edexcel has no International A Level in Chinese / Mandarin.
+};
+const EDEXCEL_AS = Object.fromEntries(Object.entries(EDEXCEL_IAL).map(([k, v]) => [k, v.as]));
+const EDEXCEL_A = Object.fromEntries(Object.entries(EDEXCEL_IAL).map(([k, v]) => [k, v.a]));
+
+const SYLLABUS_CODES = {
+  Cambridge: { IGCSE: CAMBRIDGE_IGCSE, "AS Level": CAMBRIDGE_AS, "A Level": CAMBRIDGE_A },
+  Edexcel: { IGCSE: EDEXCEL_IGCSE, "AS Level": EDEXCEL_AS, "A Level": EDEXCEL_A }
+};
+
+function syllabusOptionsFor(board, examType, subject) {
+  const boards = board ? [board] : Object.keys(SYLLABUS_CODES);
+  const seen = new Map();
+  for (const b of boards) {
+    const byBoard = SYLLABUS_CODES[b];
+    if (!byBoard) continue;
+    const levels = examType ? [examType] : Object.keys(byBoard);
+    for (const lv of levels) {
+      const table = byBoard[lv] || {};
+      const subjects = subject ? [subject] : Object.keys(table);
+      for (const s of subjects) for (const item of table[s] || []) if (!seen.has(item.code)) seen.set(item.code, item);
+    }
+  }
+  return Array.from(seen.values());
+}
+
 const CURRENT_YEAR = new Date().getFullYear();
 const YEARS = Array.from({ length: 16 }, (_, i) => String(CURRENT_YEAR + 1 - i));
 const ACCESS_PASSWORD = "3147"; // gate for Teacher/Admin role — client-side only, not real security
@@ -243,10 +397,10 @@ function readPdfAsDataUrl(file) {
 function groupPapers(papers) {
   const map = new Map();
   for (const p of papers) {
-    const key = [p.subject, p.examType, p.syllabus, p.zone, p.variant, p.year || "", p.session || "", p.title].join("||");
+    const key = [p.board || "", p.subject, p.examType, p.syllabus || "", p.zone || "", p.variant || "", p.year || "", p.session || "", p.title].join("||");
     let g = map.get(key);
     if (!g) {
-      g = { id: key, title: p.title, subject: p.subject, examType: p.examType, syllabus: p.syllabus, zone: p.zone, variant: p.variant, year: p.year, session: p.session, uploadedByRole: p.uploadedByRole, createdAt: p.createdAt, qp: null, ms: null };
+      g = { id: key, title: p.title, board: p.board, subject: p.subject, examType: p.examType, syllabus: p.syllabus, zone: p.zone, variant: p.variant, year: p.year, session: p.session, uploadedByRole: p.uploadedByRole, createdAt: p.createdAt, qp: null, ms: null };
       map.set(key, g);
     }
     if (p.createdAt > g.createdAt) g.createdAt = p.createdAt;
@@ -454,19 +608,38 @@ function GradeSelect({ value, onChange, includeAll, label }) {
     </select>
   );
 }
-function ExamTypeSelect({ value, onChange, includeAll, label }) {
+function BoardSelect({ value, onChange, includeAll, label }) {
   return (
-    <select className="pp-select" aria-label={label || "Exam type"} style={{ padding: "9px 10px", fontSize: 14, width: "100%" }} value={value} onChange={(e) => onChange(e.target.value)}>
-      {includeAll ? <option value="">All exam types</option> : <option value="" disabled>Exam type…</option>}
-      {EXAM_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
+    <select className="pp-select" aria-label={label || "Exam board"} style={{ padding: "9px 10px", fontSize: 14, width: "100%" }} value={value} onChange={(e) => onChange(e.target.value)}>
+      {includeAll ? <option value="">All boards</option> : <option value="" disabled>Board…</option>}
+      {BOARDS.map((b) => <option key={b} value={b}>{b}</option>)}
     </select>
   );
 }
-function PaperSubjectSelect({ value, onChange, includeAll, label }) {
+function ExamTypeSelect({ value, onChange, includeAll, label, board }) {
+  const options = board ? EXAM_TYPES_BY_BOARD[board] : EXAM_TYPES;
+  return (
+    <select className="pp-select" aria-label={label || "Exam type"} style={{ padding: "9px 10px", fontSize: 14, width: "100%" }} value={value} onChange={(e) => onChange(e.target.value)}>
+      {includeAll ? <option value="">All exam types</option> : <option value="" disabled>Exam type…</option>}
+      {options.map((t) => <option key={t} value={t}>{t}</option>)}
+    </select>
+  );
+}
+function PaperSubjectSelect({ value, onChange, includeAll, label, board, examType }) {
+  const options = subjectsFor(board, examType);
   return (
     <select className="pp-select" aria-label={label || "Subject"} style={{ padding: "9px 10px", fontSize: 14, width: "100%" }} value={value} onChange={(e) => onChange(e.target.value)}>
-      {includeAll ? <option value="">All subjects</option> : <option value="" disabled>Subject…</option>}
-      {PAPER_SUBJECTS.map((s) => <option key={s} value={s}>{s}</option>)}
+      {includeAll ? <option value="">All subjects</option> : <option value="" disabled>{examType === "SAT" ? "Section…" : "Subject…"}</option>}
+      {options.map((s) => <option key={s} value={s}>{s}</option>)}
+    </select>
+  );
+}
+function SyllabusSelect({ value, onChange, includeAll, label, board, examType, subject }) {
+  const options = syllabusOptionsFor(board, examType, subject);
+  return (
+    <select className="pp-select" aria-label={label || "Syllabus code"} style={{ padding: "9px 10px", fontSize: 14, width: "100%" }} value={value} onChange={(e) => onChange(e.target.value)}>
+      {includeAll ? <option value="">All syllabus codes</option> : <option value="" disabled>Syllabus code…</option>}
+      {options.map((o) => <option key={o.code} value={o.code}>{o.code} — {o.label}</option>)}
     </select>
   );
 }
@@ -486,11 +659,12 @@ function VariantSelect({ value, onChange, includeAll, label }) {
     </select>
   );
 }
-function SessionSelect({ value, onChange, includeAll, label }) {
+function SessionSelect({ value, onChange, includeAll, label, board, examType }) {
+  const options = examType === "AP" ? ["May"] : board ? SESSIONS_BY_BOARD[board] : ALL_SESSIONS;
   return (
     <select className="pp-select" aria-label={label || "Session"} style={{ padding: "9px 10px", fontSize: 14, width: "100%" }} value={value} onChange={(e) => onChange(e.target.value)}>
       {includeAll ? <option value="">All sessions</option> : <option value="" disabled>Session…</option>}
-      {SESSIONS.map((s) => <option key={s} value={s}>{s}</option>)}
+      {options.map((s) => <option key={s} value={s}>{s}</option>)}
     </select>
   );
 }
@@ -994,6 +1168,7 @@ function PdfFilePicker({ label, value, onChange }) {
 function PapersView({ papers, user, onAddPaper, lastPaperId, setLastPaperId, savedPaperIds, onToggleSavedPaper }) {
   const [showForm, setShowForm] = useState(false);
   const [query, setQuery] = useState("");
+  const [board, setBoard] = useState("");
   const [subject, setSubject] = useState("");
   const [examType, setExamType] = useState("");
   const [syllabus, setSyllabus] = useState("");
@@ -1003,10 +1178,21 @@ function PapersView({ papers, user, onAddPaper, lastPaperId, setLastPaperId, sav
   const [variant, setVariant] = useState("");
   const canUpload = hasElevatedAccess(user);
 
-  const syllabusOptions = useMemo(() => Array.from(new Set(papers.map((p) => p.syllabus).filter(Boolean))).sort(), [papers]);
+  // Changing a higher-level filter clears lower ones that no longer make sense.
+  function changeBoard(b) {
+    setBoard(b);
+    if (b && examType && !EXAM_TYPES_BY_BOARD[b].includes(examType)) setExamType("");
+    setSubject(""); setSyllabus(""); setSession("");
+  }
+  function changeExamType(t) { setExamType(t); setSubject(""); setSyllabus(""); setSession(""); }
+  function changeSubject(s) { setSubject(s); setSyllabus(""); }
+
+  const syllabusApplies = board !== "College Board" && examType !== "SAT" && examType !== "AP";
+  const showCambridgeFields = !board || board === "Cambridge";
 
   const filtered = useMemo(() => {
     let list = papers;
+    if (board) list = list.filter((p) => p.board === board);
     if (subject) list = list.filter((p) => p.subject === subject);
     if (examType) list = list.filter((p) => p.examType === examType);
     if (syllabus) list = list.filter((p) => p.syllabus === syllabus);
@@ -1016,7 +1202,7 @@ function PapersView({ papers, user, onAddPaper, lastPaperId, setLastPaperId, sav
     if (variant) list = list.filter((p) => p.variant === variant);
     if (query.trim()) { const s = query.trim().toLowerCase(); list = list.filter((p) => p.title.toLowerCase().includes(s) || p.subject.toLowerCase().includes(s)); }
     return [...list].sort((a, b) => b.createdAt - a.createdAt);
-  }, [papers, query, subject, examType, syllabus, year, session, zone, variant]);
+  }, [papers, query, board, subject, examType, syllabus, year, session, zone, variant]);
 
   const lastPaper = papers.find((p) => p.id === lastPaperId);
 
@@ -1027,18 +1213,14 @@ function PapersView({ papers, user, onAddPaper, lastPaperId, setLastPaperId, sav
         <input className="pp-input" style={{ width: "100%", padding: "9px 12px 9px 34px", fontSize: 14 }} placeholder="Search past papers…" value={query} onChange={(e) => setQuery(e.target.value)} />
       </div>
       <div style={{ display: "flex", gap: 10, marginBottom: 16, flexWrap: "wrap", alignItems: "flex-start" }}>
-        <div style={{ width: 168 }}><PaperSubjectSelect value={subject} onChange={setSubject} includeAll /></div>
-        <div style={{ width: 140 }}><ExamTypeSelect value={examType} onChange={setExamType} includeAll /></div>
-        <div style={{ width: 140 }}>
-          <select className="pp-select" aria-label="Syllabus" style={{ padding: "9px 10px", fontSize: 14, width: "100%" }} value={syllabus} onChange={(e) => setSyllabus(e.target.value)}>
-            <option value="">All syllabuses</option>
-            {syllabusOptions.map((s) => <option key={s} value={s}>{s}</option>)}
-          </select>
-        </div>
-        <div style={{ width: 130 }}><SessionSelect value={session} onChange={setSession} includeAll /></div>
+        <div style={{ width: 140 }}><BoardSelect value={board} onChange={changeBoard} includeAll /></div>
+        <div style={{ width: 140 }}><ExamTypeSelect value={examType} onChange={changeExamType} includeAll board={board} /></div>
+        <div style={{ width: 190 }}><PaperSubjectSelect value={subject} onChange={changeSubject} includeAll board={board} examType={examType} /></div>
+        {syllabusApplies && <div style={{ width: 210 }}><SyllabusSelect value={syllabus} onChange={setSyllabus} includeAll board={board} examType={examType} subject={subject} /></div>}
+        <div style={{ width: 140 }}><SessionSelect value={session} onChange={setSession} includeAll board={board} examType={examType} /></div>
         <div style={{ width: 110 }}><YearSelect value={year} onChange={setYear} includeAll /></div>
-        <div style={{ width: 120 }}><ZoneSelect value={zone} onChange={setZone} includeAll /></div>
-        <div style={{ width: 140 }}><VariantSelect value={variant} onChange={setVariant} includeAll /></div>
+        {showCambridgeFields && <div style={{ width: 120 }}><ZoneSelect value={zone} onChange={setZone} includeAll /></div>}
+        {showCambridgeFields && <div style={{ width: 140 }}><VariantSelect value={variant} onChange={setVariant} includeAll /></div>}
         {canUpload && <button className="pp-btn pp-btn-primary" style={{ padding: "9px 14px", fontSize: 13.5, display: "flex", alignItems: "center", gap: 6 }} onClick={() => setShowForm(true)}><Plus size={15} /> Upload paper</button>}
       </div>
       {lastPaper && (
@@ -1055,9 +1237,9 @@ function PapersView({ papers, user, onAddPaper, lastPaperId, setLastPaperId, sav
               <div key={p.id} id={`paper-${p.id}`} className="pp-card" style={{ borderRadius: 10, padding: 14, transform: `rotate(${cardTilt(p.id) * 0.6}deg)`, outline: p.id === lastPaperId ? "2px solid var(--accent)" : "none", outlineOffset: 2 }}>
                 <div style={{ display: "flex", gap: 6, alignItems: "flex-start" }}>
                   <div style={{ display: "flex", gap: 6, flexWrap: "wrap", flex: 1 }}>
-                    <Tag text={p.subject} /><GradeTag text={p.examType} />{p.syllabus && <GradeTag text={p.syllabus} />}
+                    {p.board && <GradeTag text={p.board} />}<Tag text={p.subject} /><GradeTag text={p.examType} />{p.syllabus && <GradeTag text={p.syllabus} />}
                     {(p.session || p.year) && <GradeTag text={`${p.session || ""} ${p.year || ""}`.trim()} />}
-                    <GradeTag text={p.zone} /><GradeTag text={p.variant} />
+                    {p.zone && <GradeTag text={p.zone} />}{p.variant && <GradeTag text={p.variant} />}
                   </div>
                   <button className="pp-btn pp-btn-ghost" style={{ padding: 5, borderRadius: 999, flexShrink: 0 }} onClick={() => onToggleSavedPaper(p.id)} aria-label={isSaved ? "Remove bookmark" : "Add bookmark"}>
                     <Bookmark size={14} fill={isSaved ? "var(--accent)" : "none"} style={{ color: "var(--accent)" }} />
@@ -1091,8 +1273,9 @@ function PapersView({ papers, user, onAddPaper, lastPaperId, setLastPaperId, sav
 
 function AddPaperModal({ onClose, onSubmit }) {
   const [title, setTitle] = useState("");
-  const [subject, setSubject] = useState("");
+  const [board, setBoard] = useState("");
   const [examType, setExamType] = useState("");
+  const [subject, setSubject] = useState("");
   const [syllabus, setSyllabus] = useState("");
   const [year, setYear] = useState("");
   const [session, setSession] = useState("");
@@ -1100,33 +1283,54 @@ function AddPaperModal({ onClose, onSubmit }) {
   const [variant, setVariant] = useState("");
   const [qp, setQp] = useState(null);
   const [ms, setMs] = useState(null);
-  const canSubmit = title.trim() && subject && examType && syllabus.trim() && year && session && zone && variant && (qp || ms);
+
+  const isCollegeBoard = board === "College Board";
+  const isCambridge = board === "Cambridge";
+  const syllabusChoices = isCollegeBoard || !board || !examType || !subject ? [] : syllabusOptionsFor(board, examType, subject);
+  const needsSyllabus = syllabusChoices.length > 0;
+  const canSubmit = title.trim() && board && examType && subject && (!needsSyllabus || syllabus) && year && session
+    && (!isCambridge || (zone && variant)) && (qp || ms);
+
+  function pickBoard(b) { setBoard(b); setExamType(""); setSubject(""); setSyllabus(""); setSession(""); setZone(""); setVariant(""); }
+  function pickExamType(t) { setExamType(t); setSubject(""); setSyllabus(""); setSession(""); }
+  function pickSubject(s) { setSubject(s); setSyllabus(""); }
 
   return (
     <Modal title="Upload a past paper" onClose={onClose} wide>
       <Field label="Title"><input className="pp-input" style={{ width: "100%", padding: "9px 12px", fontSize: 14.5 }} value={title} onChange={(e) => setTitle(e.target.value)} placeholder="e.g. Paper 1" /></Field>
       <TwoUp>
-        <Field label="Subject"><PaperSubjectSelect value={subject} onChange={setSubject} /></Field>
-        <Field label="Exam type"><ExamTypeSelect value={examType} onChange={setExamType} /></Field>
+        <Field label="Exam board"><BoardSelect value={board} onChange={pickBoard} /></Field>
+        <Field label="Exam type"><ExamTypeSelect value={examType} onChange={pickExamType} board={board} /></Field>
       </TwoUp>
-      <Field label="Syllabus code">
-        <input className="pp-input" style={{ width: "100%", padding: "9px 12px", fontSize: 14.5 }} value={syllabus} onChange={(e) => setSyllabus(e.target.value)} placeholder="e.g. 0610 (check the front page of the paper)" />
+      <Field label={examType === "SAT" ? "Section" : "Subject"}>
+        <PaperSubjectSelect value={subject} onChange={pickSubject} board={board} examType={examType} />
       </Field>
+      {board && examType && subject && !isCollegeBoard && (
+        <Field label="Syllabus code">
+          {needsSyllabus ? (
+            <SyllabusSelect value={syllabus} onChange={setSyllabus} board={board} examType={examType} subject={subject} />
+          ) : (
+            <div style={{ fontSize: 12.5, color: "var(--muted)" }}>{board} doesn't list an official {examType} code for {subject}, so none is needed.</div>
+          )}
+        </Field>
+      )}
       <TwoUp>
-        <Field label="Session"><SessionSelect value={session} onChange={setSession} /></Field>
+        <Field label={isCollegeBoard ? "Month" : "Session"}><SessionSelect value={session} onChange={setSession} board={board} examType={examType} /></Field>
         <Field label="Year"><YearSelect value={year} onChange={setYear} /></Field>
       </TwoUp>
-      <TwoUp>
-        <Field label="Zone"><ZoneSelect value={zone} onChange={setZone} /></Field>
-        <Field label="Variant"><VariantSelect value={variant} onChange={setVariant} /></Field>
-      </TwoUp>
+      {isCambridge && (
+        <TwoUp>
+          <Field label="Zone"><ZoneSelect value={zone} onChange={setZone} /></Field>
+          <Field label="Variant"><VariantSelect value={variant} onChange={setVariant} /></Field>
+        </TwoUp>
+      )}
       <TwoUp>
         <PdfFilePicker label="Question paper PDF" value={qp} onChange={setQp} />
         <PdfFilePicker label="Mark scheme PDF" value={ms} onChange={setMs} />
       </TwoUp>
       <div style={{ fontSize: 12, color: "var(--muted)", marginTop: -6, marginBottom: 14 }}>Add at least one of the two — both together show up as one card with both buttons.</div>
       <button className="pp-btn pp-btn-primary" style={{ width: "100%", padding: "10px 0", opacity: canSubmit ? 1 : 0.5 }} disabled={!canSubmit}
-        onClick={() => onSubmit({ title: title.trim(), subject, examType, syllabus: syllabus.trim(), year, session, zone, variant, qp, ms })}>
+        onClick={() => onSubmit({ title: title.trim(), board, examType, subject, syllabus, year, session, zone, variant, qp, ms })}>
         Publish past paper
       </button>
     </Modal>

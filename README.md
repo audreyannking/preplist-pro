@@ -81,16 +81,20 @@ your behalf.
   you want to switch to Firebase Storage for larger files (needs the paid
   "Blaze" plan, which needs a card on file, though actual cost should stay
   $0 at this scale).
-- **Past Papers subjects.** The Past Papers tab has its own fixed subject
-  list (`PAPER_SUBJECTS` in `app.jsx`): Math, Physics, Chemistry, Biology,
-  English, History, Computer Science, Economics, Business, French, Arabic,
-  Mandarin Chinese — separate from the subject list used by Notes/Videos.
-  Each paper is also tagged with a Zone (1–3), a Variant (1–3), a Session
-  (Feb/March, May/June, Oct/Nov), a Year, and a free-text Syllabus code
-  (e.g. "0610" for Biology) — syllabus codes vary per subject and
-  curriculum, so instead of a fixed list, whoever uploads a paper types the
-  code straight off the paper's cover page, and the browse filter is built
-  from whatever codes have actually been uploaded so far.
+- **Past Papers: board, exam type, subject, and syllabus code.** Each paper
+  is tagged with an Exam board (Cambridge, Edexcel, or College Board), an Exam
+  type (IGCSE / AS Level / A Level for Cambridge and Edexcel; SAT / AP for
+  College Board), a Subject, and a Syllabus code picked from a dropdown that
+  narrows to the real official codes for that board + level + subject
+  (`SYLLABUS_CODES` in `app.jsx`, compiled from Cambridge's subject pages and
+  Pearson's 2025/26 information manuals, including Edexcel's regional "R"
+  papers used in the UAE and Oman and the Edexcel IAL unit codes). Subject
+  and Syllabus are separate dropdowns, and Session (e.g. May/June) and Year
+  are separate too. Zone and Variant apply to Cambridge papers only. SAT and
+  AP have no syllabus-code system, so they use Section (SAT) / course name
+  (AP) instead and the code field doesn't appear. Gaps are real: Edexcel has
+  no International A Level in Computer Science or Chinese, so those
+  combinations list no code.
 - **Question papers + mark schemes.** Each Past Papers upload can include a
   Question Paper PDF, a Mark Scheme PDF, or both. Under the hood each PDF is
   its own Firestore document (`kind: "qp"` or `"ms"`, see `groupPapers()` in
