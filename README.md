@@ -101,6 +101,13 @@ your behalf.
   `app.jsx`) so a pair never has to fit Firestore's 1&nbsp;MiB document
   limit together — the app groups matching ones back into a single card
   with "Question Paper" / "Mark Scheme" buttons for display.
+- **In-site PDF viewer with split screen.** Question papers and mark schemes
+  open inside the site (not a new tab). "Side by side" shows both at once
+  (stacked top/bottom on a phone); the header buttons show or hide either
+  one, and each pane has New tab / Download. Press Escape to close. Files
+  are turned into temporary blob URLs so the browser's built-in PDF viewer
+  can display them (iPhone Safari may show only the first page in a frame —
+  use New tab there).
 - **Revision checklist.** The Checklist tab lets Teachers and Admins lay out
   a list of topics per subject; anyone can tick items off as studied. The
   topic list itself is shared (Firestore, `checklistItems` collection) but

@@ -533,10 +533,12 @@ function GlobalStyle() {
       @media (prefers-reduced-motion: reduce) { .pp-stamp, .pp-pop, .pp-btn { animation: none !important; transition: none !important; } }
 
       .pp-twoup { display: flex; gap: 10px; }
+      .pp-split { display: flex; gap: 10px; }
       .katex { font-size: 1.05em; }
 
       @media (max-width: 480px) {
         .pp-twoup { flex-direction: column; gap: 14px; }
+        .pp-split { flex-direction: column; }
         .pp-tab { font-size: 13px; padding: 9px 1px !important; }
         header nav.pp-scrollbar { gap: 14px !important; }
         .pp-modal-card { padding: 16px !important; }
@@ -1165,6 +1167,71 @@ function PdfFilePicker({ label, value, onChange }) {
   );
 }
 
+function dataUrlToBlobUrl(dataUrl) {
+  const comma = dataUrl.indexOf(",");
+  const mime = /^data:([^;,]+)/.exec(dataUrl.slice(0, comma))?.[1] || "application/pdf";
+  const bin = atob(dataUrl.slice(comma + 1));
+  const bytes = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+  return URL.createObjectURL(new Blob([bytes], { type: mime }));
+}
+
+function PdfPane({ label, file, fallbackName }) {
+  const [url, setUrl] = useState(null);
+  useEffect(() => {
+    let made = null;
+    try { made = dataUrlToBlobUrl(file.fileData); setUrl(made); } catch { setUrl(null); }
+    return () => { if (made) URL.revokeObjectURL(made); };
+  }, [file.fileData]);
+  const name = file.fileName || fallbackName;
+  return (
+    <div style={{ flex: 1, minWidth: 0, minHeight: 0, display: "flex", flexDirection: "column", border: "1px solid var(--border)", borderRadius: 10, overflow: "hidden", background: "var(--surface)" }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 12px", borderBottom: "1px solid var(--border)" }}>
+        <FileText size={14} />
+        <span style={{ fontSize: 13, fontWeight: 700, flex: 1 }}>{label}</span>
+        {url && <a className="pp-btn pp-btn-ghost" href={url} target="_blank" rel="noopener noreferrer" style={{ padding: "4px 10px", fontSize: 12, textDecoration: "none" }}>New tab</a>}
+        {url && <a className="pp-btn pp-btn-ghost" href={url} download={name} style={{ padding: "4px 10px", fontSize: 12, textDecoration: "none" }}>Download</a>}
+      </div>
+      {url ? <iframe title={label} src={url} style={{ flex: 1, width: "100%", minHeight: 0, border: 0, background: "#fff" }} />
+        : <div style={{ padding: 16, fontSize: 13, color: "var(--muted)" }}>Couldn't open this file.</div>}
+    </div>
+  );
+}
+
+function PdfViewer({ paper, initialMode, onClose }) {
+  const [show, setShow] = useState({ qp: initialMode !== "ms", ms: initialMode !== "qp" });
+  useEffect(() => {
+    const onKey = (e) => { if (e.key === "Escape") onClose(); };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [onClose]);
+  const both = paper.qp && paper.ms;
+  const visible = [paper.qp && show.qp && { key: "qp", label: "Question Paper", file: paper.qp }, paper.ms && show.ms && { key: "ms", label: "Mark Scheme", file: paper.ms }].filter(Boolean);
+  function toggle(k) {
+    const next = { ...show, [k]: !show[k] };
+    if (!(paper.qp && next.qp) && !(paper.ms && next.ms)) return;
+    setShow(next);
+  }
+  const chip = (k, text) => (
+    <button className={`pp-btn ${show[k] ? "pp-btn-primary" : "pp-btn-ghost"}`} onClick={() => toggle(k)} style={{ padding: "5px 12px", fontSize: 12.5 }}>{text}</button>
+  );
+  return (
+    <div style={{ position: "fixed", inset: 0, zIndex: 80, background: "var(--bg)", display: "flex", flexDirection: "column" }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 14px", borderBottom: "1px solid var(--border)", flexWrap: "wrap" }}>
+        <div style={{ flex: 1, minWidth: 140 }}>
+          <div className="pp-serif" style={{ fontSize: 16, fontWeight: 700, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{paper.title}</div>
+          <div style={{ fontSize: 11.5, color: "var(--muted)" }}>{[paper.board, paper.subject, paper.examType, paper.syllabus, `${paper.session || ""} ${paper.year || ""}`.trim()].filter(Boolean).join(" · ")}</div>
+        </div>
+        {both && <div style={{ display: "flex", gap: 6 }}>{chip("qp", "Question Paper")}{chip("ms", "Mark Scheme")}</div>}
+        <button className="pp-btn pp-btn-ghost" style={{ padding: 7, borderRadius: 999 }} onClick={onClose} aria-label="Close viewer"><X size={16} /></button>
+      </div>
+      <div className="pp-split" style={{ flex: 1, minHeight: 0, padding: 10 }}>
+        {visible.map((v) => <PdfPane key={v.key} label={v.label} file={v.file} fallbackName={`${paper.title} ${v.key.toUpperCase()}.pdf`} />)}
+      </div>
+    </div>
+  );
+}
+
 function PapersView({ papers, user, onAddPaper, lastPaperId, setLastPaperId, savedPaperIds, onToggleSavedPaper }) {
   const [showForm, setShowForm] = useState(false);
   const [query, setQuery] = useState("");
@@ -1176,7 +1243,10 @@ function PapersView({ papers, user, onAddPaper, lastPaperId, setLastPaperId, sav
   const [session, setSession] = useState("");
   const [zone, setZone] = useState("");
   const [variant, setVariant] = useState("");
+  const [viewer, setViewer] = useState(null);
   const canUpload = hasElevatedAccess(user);
+
+  function openViewer(paper, mode) { setLastPaperId(paper.id); setViewer({ paper, mode }); }
 
   // Changing a higher-level filter clears lower ones that no longer make sense.
   function changeBoard(b) {
@@ -1248,16 +1318,22 @@ function PapersView({ papers, user, onAddPaper, lastPaperId, setLastPaperId, sav
                 <div className="pp-serif" style={{ fontSize: 15.5, fontWeight: 600, marginTop: 8 }}>{p.title}</div>
                 <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 10 }}>
                   {p.qp && (
-                    <a className="pp-btn pp-btn-ghost" href={p.qp.fileData} target="_blank" rel="noopener noreferrer" download={p.qp.fileName || `${p.title} QP.pdf`} onClick={() => setLastPaperId(p.id)}
-                      style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "6px 12px", fontSize: 12.5, textDecoration: "none" }}>
+                    <button className="pp-btn pp-btn-ghost" onClick={() => openViewer(p, "qp")}
+                      style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "6px 12px", fontSize: 12.5 }}>
                       <FileText size={13} /> Question Paper
-                    </a>
+                    </button>
                   )}
                   {p.ms && (
-                    <a className="pp-btn pp-btn-ghost" href={p.ms.fileData} target="_blank" rel="noopener noreferrer" download={p.ms.fileName || `${p.title} MS.pdf`} onClick={() => setLastPaperId(p.id)}
-                      style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "6px 12px", fontSize: 12.5, textDecoration: "none" }}>
+                    <button className="pp-btn pp-btn-ghost" onClick={() => openViewer(p, "ms")}
+                      style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "6px 12px", fontSize: 12.5 }}>
                       <FileText size={13} /> Mark Scheme
-                    </a>
+                    </button>
+                  )}
+                  {p.qp && p.ms && (
+                    <button className="pp-btn pp-btn-primary" onClick={() => openViewer(p, "both")}
+                      style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "6px 12px", fontSize: 12.5 }}>
+                      <LayoutGrid size={13} /> Side by side
+                    </button>
                   )}
                 </div>
                 <div style={{ fontSize: 11.5, color: "var(--muted)", marginTop: 10 }}>{roleLabel(p.uploadedByRole)} · {timeAgo(p.createdAt)}</div>
@@ -1266,6 +1342,7 @@ function PapersView({ papers, user, onAddPaper, lastPaperId, setLastPaperId, sav
           })}
         </div>
       )}
+      {viewer && <PdfViewer paper={viewer.paper} initialMode={viewer.mode} onClose={() => setViewer(null)} />}
       {showForm && <AddPaperModal onClose={() => setShowForm(false)} onSubmit={async (payload) => { const ok = await onAddPaper(payload); if (ok) setShowForm(false); }} />}
     </div>
   );
