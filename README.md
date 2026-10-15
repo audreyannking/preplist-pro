@@ -108,6 +108,17 @@ your behalf.
   are turned into temporary blob URLs so the browser's built-in PDF viewer
   can display them (iPhone Safari may show only the first page in a frame —
   use New tab there).
+- **Built to handle many visitors.** The site itself is static files on
+  GitHub Pages (served from a CDN), so page loads scale easily. The database
+  work is kept light: each tab only reads its own collection the first time
+  it's opened, big files (PDFs, scanned notes) sit in a separate `files`
+  collection and are fetched only when someone opens them, and Firestore's
+  local cache means returning visitors re-download only what changed.
+  `firestore.rules` allows reading without signing in (everything is public
+  study material), so a whole school on one network can't be blocked by
+  Firebase's limit on new anonymous sign-ins per IP. The real ceiling is
+  the free Firestore plan's 50,000 document reads/day — upgrade to the
+  pay-as-you-go Blaze plan if the site gets big.
 - **Resources tab (links, not copies).** Past papers belong to the exam
   boards — Cambridge says it can't permit them to be republished on any
   website, and Pearson only allows private centre use — so this tab links to

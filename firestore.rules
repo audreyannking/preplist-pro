@@ -1,25 +1,23 @@
 rules_version = '2';
 
-// PrepList Pro — Firestore security rules.
+// PrepList Pro - Firestore security rules.
 //
-// This app has no accounts and no visible login. Instead, every visitor is
-// silently signed in "anonymously" by Firebase the moment the page loads —
-// no fields, no prompt, nothing shown on screen — purely so these rules
-// have a real request.auth to check instead of being wide open to anyone
-// on the internet. It's a real improvement over "allow all", but it's not
-// a strong barrier: anyone who can load the page (i.e. anyone, since the
-// site is public) gets a valid anonymous session automatically, so a
-// technically determined visitor could still call Firestore directly and
-// write anything. The Teacher/Admin access password in index.html is a
-// separate, lighter deterrent — it lives in the page's own source code
-// and isn't enforced here at all. Real protection against a determined
-// bad actor would need actual accounts (Firebase Authentication with
-// real credentials) — worth it only if this ever needs to hold something
-// you'd be upset to lose.
+// Everything on this site is public study material, so READING is open to
+// everyone, signed in or not. That matters for scale: a whole school on one
+// network can't all be blocked by Firebase's limit on new anonymous sign-ins
+// per IP address, because students only reading never need to sign in.
+//
+// WRITING still requires the silent anonymous session the app creates (no
+// fields, nothing on screen). That's a speed bump, not real security: anyone
+// who loads the site gets a session, so a determined visitor could still
+// write directly. The Teacher/Admin password in the app is a separate, lighter
+// deterrent that isn't enforced here. Real protection would need real
+// accounts (Firebase Authentication with credentials).
 service cloud.firestore {
   match /databases/{database}/documents {
     match /{document=**} {
-      allow read, write: if request.auth != null;
+      allow read: if true;
+      allow write: if request.auth != null;
     }
   }
 }

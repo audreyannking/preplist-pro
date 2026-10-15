@@ -21,6 +21,8 @@ if (FIREBASE_READY) {
   firebase.initializeApp(firebaseConfig);
   auth = firebase.auth();
   db = firebase.firestore();
+  // Keep a local copy so returning visitors re-download (and are billed for) only what changed.
+  db.enablePersistence({ synchronizeTabs: true }).catch(() => {});
 }
 
 // Silently sign every visitor in "anonymously" — no fields, no prompt,
@@ -46,6 +48,7 @@ const ToastContext = createContext(() => {});
 function useToast() { return useContext(ToastContext); }
 function friendlyDbError(e) {
   if (e && e.code === "permission-denied") return "The database refused that — the site's Firebase setup may need a step finished (ask whoever set it up).";
+  if (e && e.code === "resource-exhausted") return "The site is very busy right now (its free daily limit was reached) — please try again later.";
   if (e && e.code === "unavailable") return "Couldn't reach the database — check your connection and try again.";
   return "Something went wrong saving that — try again.";
 }
@@ -309,10 +312,11 @@ const ACCESS_PASSWORD = "3147"; // gate for Teacher/Admin role — client-side o
 /* Firestore + local-storage helpers                                      */
 /* ---------------------------------------------------------------------- */
 
-function useCollection(path, opts) {
+function useCollection(path, opts, enabled = true) {
   const [docs, setDocs] = useState([]);
   const [ready, setReady] = useState(false);
   useEffect(() => {
+    if (!enabled) return;
     if (!db || !path) { setDocs([]); setReady(true); return; }
     setReady(false);
     let query = db.collection(path);
@@ -323,7 +327,7 @@ function useCollection(path, opts) {
     );
     return () => unsub();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [path, opts && opts.orderBy, opts && opts.dir]);
+  }, [path, enabled, opts && opts.orderBy, opts && opts.dir]);
   return [docs, ready];
 }
 
@@ -348,6 +352,32 @@ function useLocalState(key, fallback) {
     });
   }, [key]);
   return [value, update];
+}
+
+// Big files (PDFs, scanned notes) live in their own "files" documents and are
+// fetched only when someone opens them, so listing a collection stays light.
+const fileCache = new Map();
+async function saveFile(dataUrl) {
+  const ref = await db.collection("files").add({ data: dataUrl, createdAt: Date.now() });
+  fileCache.set(ref.id, dataUrl);
+  return ref.id;
+}
+function useFileData(inline, fileId, enabled = true) {
+  const [data, setData] = useState(inline || (fileId && fileCache.get(fileId)) || null);
+  const [failed, setFailed] = useState(false);
+  useEffect(() => {
+    if (inline) { setData(inline); return; }
+    if (!fileId || !enabled) return;
+    if (fileCache.has(fileId)) { setData(fileCache.get(fileId)); return; }
+    let live = true;
+    db.collection("files").doc(fileId).get().then((d) => {
+      const v = d.exists ? d.data().data : null;
+      if (v) fileCache.set(fileId, v);
+      if (live) { setData(v); setFailed(!v); }
+    }).catch(() => { if (live) setFailed(true); });
+    return () => { live = false; };
+  }, [inline, fileId, enabled]);
+  return [data, failed];
 }
 
 function resizeImageToDataUrl(file, maxW = 900, quality = 0.68) {
@@ -990,7 +1020,7 @@ function NotesView({ notes, user, onAddNote, lastNoteId, setLastNoteId, savedNot
                   </button>
                 </div>
                 <div className="pp-serif" style={{ fontSize: 15.5, fontWeight: 600, marginTop: 8 }}>{n.title}</div>
-                {n.type === "image" ? <img src={n.content} alt="" style={{ width: "100%", marginTop: 8, borderRadius: 6, border: "1px solid var(--border)" }} /> : <p style={{ fontSize: 13.5, marginTop: 8, lineHeight: 1.5, color: "var(--text)", whiteSpace: "pre-wrap" }}><MathText text={n.content} /></p>}
+                {n.type === "image" ? <NoteImage note={n} style={{ width: "100%", marginTop: 8, borderRadius: 6, border: "1px solid var(--border)" }} /> : <p style={{ fontSize: 13.5, marginTop: 8, lineHeight: 1.5, color: "var(--text)", whiteSpace: "pre-wrap" }}><MathText text={n.content} /></p>}
                 <div style={{ fontSize: 11.5, color: "var(--muted)", marginTop: 10 }}>{roleLabel(n.authorRole)} · {timeAgo(n.createdAt)}</div>
               </div>
             );
@@ -1179,13 +1209,34 @@ function dataUrlToBlobUrl(dataUrl) {
   return URL.createObjectURL(new Blob([bytes], { type: mime }));
 }
 
+function NoteImage({ note, style }) {
+  const boxRef = useRef(null);
+  const [visible, setVisible] = useState(!!note.content);
+  useEffect(() => {
+    if (visible) return;
+    const el = boxRef.current;
+    if (!el || !("IntersectionObserver" in window)) { setVisible(true); return; }
+    const io = new IntersectionObserver(([e]) => { if (e.isIntersecting) { setVisible(true); io.disconnect(); } }, { rootMargin: "300px" });
+    io.observe(el);
+    return () => io.disconnect();
+  }, [visible]);
+  const [src, failed] = useFileData(note.content, note.fileId, visible);
+  return (
+    <div ref={boxRef} style={{ minHeight: src ? 0 : 90 }}>
+      {src ? <img src={src} alt="" style={style} /> : <div style={{ fontSize: 12.5, color: "var(--muted)", paddingTop: 8 }}>{failed ? "Couldn't load this image." : "Loading image…"}</div>}
+    </div>
+  );
+}
+
 function PdfPane({ label, file, fallbackName }) {
   const [url, setUrl] = useState(null);
+  const [fileData, failed] = useFileData(file.fileData, file.fileId);
   useEffect(() => {
+    if (!fileData) return;
     let made = null;
-    try { made = dataUrlToBlobUrl(file.fileData); setUrl(made); } catch { setUrl(null); }
+    try { made = dataUrlToBlobUrl(fileData); setUrl(made); } catch { setUrl(null); }
     return () => { if (made) URL.revokeObjectURL(made); };
-  }, [file.fileData]);
+  }, [fileData]);
   const name = file.fileName || fallbackName;
   return (
     <div style={{ flex: 1, minWidth: 0, minHeight: 0, display: "flex", flexDirection: "column", border: "1px solid var(--border)", borderRadius: 10, overflow: "hidden", background: "var(--surface)" }}>
@@ -1196,7 +1247,7 @@ function PdfPane({ label, file, fallbackName }) {
         {url && <a className="pp-btn pp-btn-ghost" href={url} download={name} style={{ padding: "4px 10px", fontSize: 12, textDecoration: "none" }}>Download</a>}
       </div>
       {url ? <iframe title={label} src={url} style={{ flex: 1, width: "100%", minHeight: 0, border: 0, background: "#fff" }} />
-        : <div style={{ padding: 16, fontSize: 13, color: "var(--muted)" }}>Couldn't open this file.</div>}
+        : <div style={{ padding: 16, fontSize: 13, color: "var(--muted)" }}>{failed ? "Couldn't open this file." : "Loading…"}</div>}
     </div>
   );
 }
@@ -1760,16 +1811,16 @@ function QuizReference({ options, refIndex, setRefIndex }) {
       ) : opt.kind === "note" ? (
         <div className="pp-card" style={{ borderRadius: 10, padding: 14, overflowY: "auto", flex: 1 }}>
           <div className="pp-serif" style={{ fontSize: 15.5, fontWeight: 600, marginBottom: 8 }}>{opt.note.title}</div>
-          {opt.note.type === "image" ? <img src={opt.note.content} alt="" style={{ width: "100%", borderRadius: 6 }} /> : <p style={{ fontSize: 13.5, lineHeight: 1.55, whiteSpace: "pre-wrap" }}><MathText text={opt.note.content} /></p>}
+          {opt.note.type === "image" ? <NoteImage note={opt.note} style={{ width: "100%", borderRadius: 6 }} /> : <p style={{ fontSize: 13.5, lineHeight: 1.55, whiteSpace: "pre-wrap" }}><MathText text={opt.note.content} /></p>}
         </div>
       ) : (
-        <PdfPane key={opt.file.fileData.length + opt.label} label={opt.label} file={opt.file} fallbackName={`${opt.paper.title}.pdf`} />
+        <PdfPane key={opt.label + (opt.file.fileId || "")} label={opt.label} file={opt.file} fallbackName={`${opt.paper.title}.pdf`} />
       )}
     </div>
   );
 }
 
-function QuizView({ questions, user, notes, papers, onAddQuestion, onDeleteQuestion }) {
+function QuizView({ questions, user, notes, papers, onNeedRefs, onAddQuestion, onDeleteQuestion }) {
   const [phase, setPhase] = useState("setup");
   const [examType, setExamType] = useState("");
   const [subject, setSubject] = useState("");
@@ -1849,7 +1900,7 @@ function QuizView({ questions, user, notes, papers, onAddQuestion, onDeleteQuest
           <div style={{ fontSize: 13, fontWeight: 700 }}>Question {run.idx + 1} of {run.items.length}</div>
           {run.secondsLeft != null && <GradeTag text={`⏱ ${fmtClock(run.secondsLeft)}`} />}
           <div style={{ flex: 1 }} />
-          <button className={`pp-btn ${split ? "pp-btn-primary" : "pp-btn-ghost"}`} style={{ padding: "6px 12px", fontSize: 12.5 }} onClick={() => setSplit(!split)}><LayoutGrid size={13} style={{ marginRight: 5, display: "inline" }} />Split screen</button>
+          <button className={`pp-btn ${split ? "pp-btn-primary" : "pp-btn-ghost"}`} style={{ padding: "6px 12px", fontSize: 12.5 }} onClick={() => { if (!split && onNeedRefs) onNeedRefs(); setSplit(!split); }}><LayoutGrid size={13} style={{ marginRight: 5, display: "inline" }} />Split screen</button>
           <button className="pp-btn pp-btn-ghost" style={{ padding: "6px 12px", fontSize: 12.5 }} onClick={() => { setRun(null); setPhase("setup"); }}>Quit</button>
         </div>
         <div className="pp-split" style={{ alignItems: "flex-start" }}>
@@ -2238,15 +2289,22 @@ const TABS = [
 ];
 
 function MainApp({ user, onSwitchRole, theme, setTheme }) {
-  const [notes, notesReady] = useCollection("notes");
-  const [videos, videosReady] = useCollection("videos");
-  const [rawPapers, papersReady] = useCollection("pastPapers");
+  // Only subscribe to a collection once a tab that needs it is opened — keeps
+  // the number of database reads per visitor (and the free-plan quota) low.
+  const [wanted, setWanted] = useState(() => new Set(["notes"]));
+  const want = useCallback((...names) => setWanted((prev) => (names.every((n) => prev.has(n)) ? prev : new Set([...prev, ...names]))), []);
+  const [notes, notesReady] = useCollection("notes", undefined, wanted.has("notes"));
+  const [videos, videosReady] = useCollection("videos", undefined, wanted.has("videos"));
+  const [rawPapers, papersReady] = useCollection("pastPapers", undefined, wanted.has("papers"));
   const papers = useMemo(() => groupPapers(rawPapers), [rawPapers]);
-  const [checklistItems, checklistReady] = useCollection("checklistItems");
-  const [quizQuestions, quizReady] = useCollection("quizQuestions");
+  const [checklistItems, checklistReady] = useCollection("checklistItems", undefined, wanted.has("checklist"));
+  const [quizQuestions, quizReady] = useCollection("quizQuestions", undefined, wanted.has("quiz"));
 
   const [tab, setTab] = useState("notes");
   const [showSearch, setShowSearch] = useState(false);
+  const TAB_NEEDS = { notes: ["notes"], videos: ["videos"], papers: ["papers"], quiz: ["quiz"], checklist: ["checklist"], saved: ["notes", "videos", "papers"], resources: [], tools: [] };
+  useEffect(() => { want(...(TAB_NEEDS[tab] || [])); }, [tab, want]);
+  useEffect(() => { if (showSearch) want("notes", "videos", "papers", "checklist"); }, [showSearch, want]);
   const [toast, setToast] = useState(null);
   const notify = useCallback((t) => setToast(t), []);
   useEffect(() => {
@@ -2280,7 +2338,12 @@ function MainApp({ user, onSwitchRole, theme, setTheme }) {
   const jumpTo = useCallback((tabId, elId) => { setTab(tabId); setPendingScroll({ tab: tabId, elId }); }, []);
 
   async function addNote(payload) {
-    try { await db.collection("notes").add({ ...payload, authorRole: user.role, createdAt: Date.now() }); return true; }
+    try {
+      let doc = { ...payload };
+      if (payload.type === "image") { doc = { ...payload, fileId: await saveFile(payload.content) }; delete doc.content; }
+      await db.collection("notes").add({ ...doc, authorRole: user.role, createdAt: Date.now() });
+      return true;
+    }
     catch (e) { notify({ kind: "error", text: friendlyDbError(e) }); return false; }
   }
   async function addVideo(payload) {
@@ -2292,8 +2355,8 @@ function MainApp({ user, onSwitchRole, theme, setTheme }) {
     try {
       const now = Date.now();
       const writes = [];
-      if (qp) writes.push(db.collection("pastPapers").add({ ...meta, kind: "qp", fileData: qp.fileData, fileName: qp.fileName, uploadedByRole: user.role, createdAt: now }));
-      if (ms) writes.push(db.collection("pastPapers").add({ ...meta, kind: "ms", fileData: ms.fileData, fileName: ms.fileName, uploadedByRole: user.role, createdAt: now }));
+      if (qp) { const fileId = await saveFile(qp.fileData); writes.push(db.collection("pastPapers").add({ ...meta, kind: "qp", fileId, fileName: qp.fileName, uploadedByRole: user.role, createdAt: now })); }
+      if (ms) { const fileId = await saveFile(ms.fileData); writes.push(db.collection("pastPapers").add({ ...meta, kind: "ms", fileId, fileName: ms.fileName, uploadedByRole: user.role, createdAt: now })); }
       await Promise.all(writes);
       return true;
     } catch (e) { notify({ kind: "error", text: friendlyDbError(e) }); return false; }
@@ -2316,7 +2379,8 @@ function MainApp({ user, onSwitchRole, theme, setTheme }) {
     catch (e) { notify({ kind: "error", text: friendlyDbError(e) }); }
   }
 
-  const dataReady = notesReady && videosReady && papersReady && checklistReady && quizReady;
+  const READY = { notes: notesReady, videos: videosReady, papers: papersReady, checklist: checklistReady, quiz: quizReady };
+  const dataReady = (TAB_NEEDS[tab] || []).every((n) => READY[n]);
 
   return (
     <ToastContext.Provider value={notify}>
@@ -2349,7 +2413,7 @@ function MainApp({ user, onSwitchRole, theme, setTheme }) {
               {tab === "notes" && <NotesView notes={notes} user={user} onAddNote={addNote} lastNoteId={lastNoteId} setLastNoteId={setLastNoteId} savedNoteIds={savedNoteIds} onToggleSavedNote={onToggleSavedNote} />}
               {tab === "videos" && <VideosView videos={videos} user={user} onAddVideo={addVideo} lastVideoId={lastVideoId} setLastVideoId={setLastVideoId} savedVideoIds={savedVideoIds} onToggleSavedVideo={onToggleSavedVideo} />}
               {tab === "papers" && <PapersView papers={papers} user={user} onAddPaper={addPaper} lastPaperId={lastPaperId} setLastPaperId={setLastPaperId} savedPaperIds={savedPaperIds} onToggleSavedPaper={onToggleSavedPaper} />}
-              {tab === "quiz" && <QuizView questions={quizQuestions} user={user} notes={notes} papers={papers} onAddQuestion={addQuizQuestion} onDeleteQuestion={deleteQuizQuestion} />}
+              {tab === "quiz" && <QuizView questions={quizQuestions} user={user} notes={notes} papers={papers} onNeedRefs={() => want("notes", "papers")} onAddQuestion={addQuizQuestion} onDeleteQuestion={deleteQuizQuestion} />}
               {tab === "resources" && <ResourcesView />}
               {tab === "tools" && <ToolsView />}
               {tab === "checklist" && <ChecklistView items={checklistItems} user={user} onAddItem={addChecklistItem} onDeleteItem={deleteChecklistItem} checkedIds={checkedTopicIds} onToggleChecked={onToggleChecked} />}
