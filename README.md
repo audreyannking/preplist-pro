@@ -108,6 +108,28 @@ your behalf.
   are turned into temporary blob URLs so the browser's built-in PDF viewer
   can display them (iPhone Safari may show only the first page in a frame —
   use New tab there).
+- **Resources tab (links, not copies).** Past papers belong to the exam
+  boards — Cambridge says it can't permit them to be republished on any
+  website, and Pearson only allows private centre use — so this tab links to
+  the official sources instead: Cambridge's per-subject past-paper pages,
+  Pearson's past-paper finder, College Board's SAT practice and AP Central,
+  plus Save My Exams as a clearly-labelled third-party link (its terms ban
+  copying and scraping, so nothing of theirs is copied or embedded). Every
+  link has "Open" (new tab) and "Half screen" (a popup window sized to the
+  right half of the screen, so the site can sit on the left). Third-party
+  sites block being embedded in a frame, which is why half screen is a
+  window rather than an in-page pane.
+- **Quiz tab.** Original multiple-choice practice questions (written for
+  this site, not taken from any paper) with instant feedback and
+  explanations, topic/subject/exam-type filters, an optional timer (SAT pace
+  = ~71 s/question for Reading & Writing, ~95 s for Math), a results review,
+  "retry the ones I missed", and a recent-scores list. "Split screen" keeps
+  any note or uploaded paper open beside the question. Teachers/Admins can
+  add or delete questions (Firestore `quizQuestions`) — only questions they
+  wrote themselves.
+- **Tools tab.** Exam countdown (your own dates), a focus/break study timer
+  (the browser tab title shows the time left), and Digital SAT pacing
+  reference. All stored on-device.
 - **Revision checklist.** The Checklist tab lets Teachers and Admins lay out
   a list of topics per subject; anyone can tick items off as studied. The
   topic list itself is shared (Firestore, `checklistItems` collection) but

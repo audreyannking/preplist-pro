@@ -100,7 +100,9 @@ const ICON_PATHS = {
   users: <><circle cx="8.8" cy="8.3" r="3.1"/><path d="M3 19.8c0-3.4 2.6-5.3 5.8-5.3s5.8 1.9 5.8 5.3"/><circle cx="17" cy="9.2" r="2.5"/><path d="M14.6 14.4c2.5 0.4 4.1 2 4.4 5.1"/></>,
   megaphone: <><path d="M3 10.2v4.2h2.9l8.6 3.8V6.4Z"/><path d="M17.5 9a3.1 3.1 0 0 1 0 6.2"/></>,
   camera: <><path d="M4 8h3l1.4-1.9h7.2L17 8h3a1 1 0 0 1 1 1v10.2a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V9a1 1 0 0 1 1-1Z"/><circle cx="12" cy="13.3" r="3.4"/></>,
-  bookmark: <path d="M6.5 3.5h11a1 1 0 0 1 1 1V21l-6.5-4.2L5.5 21V4.5a1 1 0 0 1 1-1Z"/>
+  bookmark: <path d="M6.5 3.5h11a1 1 0 0 1 1 1V21l-6.5-4.2L5.5 21V4.5a1 1 0 0 1 1-1Z"/>,
+  helpcircle: <><circle cx="12" cy="12" r="9"/><path d="M9.4 9.3a2.7 2.7 0 0 1 5.2.9c0 1.8-2.6 2.2-2.6 4"/><line x1="12" y1="17.2" x2="12" y2="17.3"/></>,
+  link: <><path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1"/><path d="M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1"/></>
 };
 
 function Icon({ name, size = 16, style, className, fill = "none", stroke = "currentColor", strokeWidth = 1.9, ...rest }) {
@@ -122,7 +124,8 @@ const Sun = makeIcon("sun"), Moon = makeIcon("moon"), Plus = makeIcon("plus"), X
   GraduationCap = makeIcon("graduationcap"), ListChecks = makeIcon("listchecks"), Clock = makeIcon("clock"),
   Briefcase = makeIcon("briefcase"), ShieldCheck = makeIcon("shieldcheck"), LayoutGrid = makeIcon("layoutgrid"),
   ChevronRight = makeIcon("chevronright"), Calendar = makeIcon("calendar"), Users = makeIcon("users"),
-  Megaphone = makeIcon("megaphone"), Camera = makeIcon("camera"), Bookmark = makeIcon("bookmark");
+  Megaphone = makeIcon("megaphone"), Camera = makeIcon("camera"), Bookmark = makeIcon("bookmark"),
+  HelpCircle = makeIcon("helpcircle"), LinkIcon = makeIcon("link");
 
 /* ---------------------------------------------------------------------- */
 /* Constants                                                              */
@@ -1405,7 +1408,8 @@ function AddPaperModal({ onClose, onSubmit }) {
         <PdfFilePicker label="Question paper PDF" value={qp} onChange={setQp} />
         <PdfFilePicker label="Mark scheme PDF" value={ms} onChange={setMs} />
       </TwoUp>
-      <div style={{ fontSize: 12, color: "var(--muted)", marginTop: -6, marginBottom: 14 }}>Add at least one of the two — both together show up as one card with both buttons.</div>
+      <div style={{ fontSize: 12, color: "var(--muted)", marginTop: -6, marginBottom: 6 }}>Only upload papers you have permission to share — exam boards such as Cambridge don't allow their papers to be republished publicly. The Resources tab links to the official sources.</div>
+      <div style={{ fontSize: 12, color: "var(--muted)", marginBottom: 14 }}>Add at least one of the two — both together show up as one card with both buttons.</div>
       <button className="pp-btn pp-btn-primary" style={{ width: "100%", padding: "10px 0", opacity: canSubmit ? 1 : 0.5 }} disabled={!canSubmit}
         onClick={() => onSubmit({ title: title.trim(), board, examType, subject, syllabus, year, session, zone, variant, qp, ms })}>
         Publish past paper
@@ -1573,6 +1577,526 @@ function SavedView({ notes, videos, papers, lastNoteId, lastVideoId, lastPaperId
 }
 
 /* ---------------------------------------------------------------------- */
+/* Resources — links to the official places past papers and practice      */
+/* material live. Nothing is copied or embedded; "Half screen" just opens */
+/* the link in a window covering the right half of the screen.            */
+/* ---------------------------------------------------------------------- */
+
+const CAMBRIDGE_BASE = "https://www.cambridgeinternational.org/programmes-and-qualifications";
+const cambridgeLink = (label, slug) => ({ label, url: `${CAMBRIDGE_BASE}/${slug}/past-papers/` });
+const RESOURCE_GROUPS = [
+  {
+    title: "Cambridge IGCSE", official: true, note: "Official Cambridge past-paper pages, one per subject.",
+    links: [
+      cambridgeLink("Mathematics (0580)", "cambridge-igcse-mathematics-0580"),
+      cambridgeLink("Physics (0625)", "cambridge-igcse-physics-0625"),
+      cambridgeLink("Chemistry (0620)", "cambridge-igcse-chemistry-0620"),
+      cambridgeLink("Biology (0610)", "cambridge-igcse-biology-0610"),
+      cambridgeLink("English - First Language (0500)", "cambridge-igcse-english-first-language-0500"),
+      cambridgeLink("History (0470)", "cambridge-igcse-history-0470"),
+      cambridgeLink("Computer Science (0478)", "cambridge-igcse-computer-science-0478"),
+      cambridgeLink("Economics (0455)", "cambridge-igcse-economics-0455"),
+      cambridgeLink("Business Studies (0450)", "cambridge-igcse-business-studies-0450"),
+      cambridgeLink("French - Foreign Language (0520)", "cambridge-igcse-french-foreign-language-0520"),
+      cambridgeLink("Arabic - Foreign Language (0544)", "cambridge-igcse-arabic-foreign-language-0544"),
+      cambridgeLink("Chinese (Mandarin) - Foreign Language (0547)", "cambridge-igcse-chinese-mandarin-foreign-language-0547")
+    ]
+  },
+  {
+    title: "Cambridge AS & A Level", official: true, note: "Official Cambridge past-paper pages, one per subject.",
+    links: [
+      cambridgeLink("Mathematics (9709)", "cambridge-international-as-and-a-level-mathematics-9709"),
+      cambridgeLink("Physics (9702)", "cambridge-international-as-and-a-level-physics-9702"),
+      cambridgeLink("Chemistry (9701)", "cambridge-international-as-and-a-level-chemistry-9701"),
+      cambridgeLink("Biology (9700)", "cambridge-international-as-and-a-level-biology-9700"),
+      cambridgeLink("English Language (9093)", "cambridge-international-as-and-a-level-english-language-9093"),
+      cambridgeLink("History (9489)", "cambridge-international-as-and-a-level-history-9489"),
+      cambridgeLink("Computer Science (9618)", "cambridge-international-as-and-a-level-computer-science-9618"),
+      cambridgeLink("Economics (9708)", "cambridge-international-as-and-a-level-economics-9708"),
+      cambridgeLink("Business (9609)", "cambridge-international-as-and-a-level-business-9609"),
+      cambridgeLink("French Language & Literature (9898)", "cambridge-international-as-and-a-level-french-language-literature-9898"),
+      cambridgeLink("Arabic (9680)", "cambridge-international-as-and-a-level-arabic-9680"),
+      cambridgeLink("Chinese Language & Literature (9868)", "cambridge-international-as-and-a-level-chinese-language-and-literature-9868")
+    ]
+  },
+  {
+    title: "Edexcel (Pearson)", official: true, note: "Pearson's official past-paper finder — choose International GCSE or International Advanced Level, then your subject.",
+    links: [{ label: "Pearson past papers", url: "https://qualifications.pearson.com/en/support/support-topics/exams/past-papers.html" }]
+  },
+  {
+    title: "SAT (College Board)", official: true, note: "Free official practice for the digital SAT.",
+    links: [
+      { label: "Official SAT practice tests", url: "https://satsuite.collegeboard.org/practice/practice-tests" },
+      { label: "Bluebook (the SAT testing app)", url: "https://bluebook.collegeboard.org/" },
+      { label: "Khan Academy - Official Digital SAT Prep", url: "https://www.khanacademy.org/test-prep/sat" }
+    ]
+  },
+  {
+    title: "AP (College Board)", official: true, note: "Each AP course page on AP Central has its official past exam questions and scoring guidelines.",
+    links: [
+      { label: "AP Central - all courses & past exam questions", url: "https://apcentral.collegeboard.org/courses" }
+    ]
+  },
+  {
+    title: "Save My Exams (third-party)", official: false,
+    note: "Revision notes and past papers by topic. Some content needs a free or paid account. We only link to it — nothing from the site is copied or embedded here.",
+    links: [
+      { label: "Save My Exams - IGCSE", url: "https://www.savemyexams.com/igcse/" },
+      { label: "Save My Exams - AS Level", url: "https://www.savemyexams.com/as/" },
+      { label: "Save My Exams - A Level", url: "https://www.savemyexams.com/a-level/" },
+      { label: "Save My Exams - AP", url: "https://www.savemyexams.com/ap/" }
+    ]
+  }
+];
+
+function openHalfScreen(url) {
+  const w = Math.floor((window.screen.availWidth || 1200) / 2);
+  const h = window.screen.availHeight || 800;
+  const left = (window.screen.availLeft || 0) + w;
+  const top = window.screen.availTop || 0;
+  window.open(url, "_blank", `noopener,noreferrer,popup=yes,width=${w},height=${h},left=${left},top=${top}`);
+}
+
+function ResourcesView() {
+  return (
+    <div>
+      <div className="pp-card" style={{ borderRadius: 10, padding: 14, marginBottom: 18, fontSize: 13, lineHeight: 1.55 }}>
+        <div className="pp-serif" style={{ fontSize: 15.5, fontWeight: 700, marginBottom: 6 }}>Where to find real past papers</div>
+        Past papers belong to the exam boards, and Cambridge doesn't allow them to be republished on other websites — so this page links to the official sources instead of copying them.
+        <b> Open</b> uses a new tab. <b>Half screen</b> opens the page in a window covering the right half of your screen, so you can keep PrepList Pro on the left half (on a phone it opens as a normal tab).
+      </div>
+      {RESOURCE_GROUPS.map((g) => (
+        <div key={g.title} style={{ marginBottom: 22 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
+            <div className="pp-serif" style={{ fontSize: 16, fontWeight: 700 }}>{g.title}</div>
+            <GradeTag text={g.official ? "Official" : "Third-party"} />
+          </div>
+          {g.note && <div style={{ fontSize: 12.5, color: "var(--muted)", marginBottom: 8 }}>{g.note}</div>}
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))", gap: 8 }}>
+            {g.links.map((l) => (
+              <div key={l.url} className="pp-card" style={{ display: "flex", alignItems: "center", gap: 8, padding: "9px 12px", borderRadius: 8 }}>
+                <div style={{ flex: 1, minWidth: 0, fontSize: 13.5, fontWeight: 600 }}>{l.label}</div>
+                <a className="pp-btn pp-btn-ghost" href={l.url} target="_blank" rel="noopener noreferrer" style={{ padding: "5px 10px", fontSize: 12, textDecoration: "none", flexShrink: 0 }}>Open</a>
+                <button className="pp-btn pp-btn-primary" onClick={() => openHalfScreen(l.url)} style={{ padding: "5px 10px", fontSize: 12, flexShrink: 0 }}>Half screen</button>
+              </div>
+            ))}
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+/* ---------------------------------------------------------------------- */
+/* Quiz — original practice questions (written for this site, not taken   */
+/* from past papers). Teachers/Admins can add more.                       */
+/* ---------------------------------------------------------------------- */
+
+function shuffled(list) {
+  const a = [...list];
+  for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; }
+  return a;
+}
+// Digital SAT pacing: Reading & Writing 64 min / 54 questions, Math 70 min / 44 questions.
+function secondsPerQuestion(examType, subject) {
+  if (examType === "SAT") return subject === "Math" ? 95 : 71;
+  return 60;
+}
+function fmtClock(total) {
+  const s = Math.max(0, Math.round(total));
+  return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
+}
+
+function AddQuestionModal({ onClose, onSubmit }) {
+  const [examType, setExamType] = useState("");
+  const [subject, setSubject] = useState("");
+  const [topic, setTopic] = useState("");
+  const [question, setQuestion] = useState("");
+  const [options, setOptions] = useState(["", "", "", ""]);
+  const [answer, setAnswer] = useState(0);
+  const [explanation, setExplanation] = useState("");
+  const qRef = useRef(null);
+  const canSubmit = examType && subject && question.trim() && options.every((o) => o.trim());
+  const setOpt = (i, v) => setOptions((prev) => prev.map((o, k) => (k === i ? v : o)));
+  return (
+    <Modal title="Add a quiz question" onClose={onClose} wide>
+      <TwoUp>
+        <Field label="Exam type"><ExamTypeSelect value={examType} onChange={(t) => { setExamType(t); setSubject(""); }} /></Field>
+        <Field label={examType === "SAT" ? "Section" : "Subject"}><PaperSubjectSelect value={subject} onChange={setSubject} examType={examType} /></Field>
+      </TwoUp>
+      <Field label="Topic (optional)"><input className="pp-input" style={{ width: "100%", padding: "9px 12px", fontSize: 14.5 }} value={topic} onChange={(e) => setTopic(e.target.value)} placeholder="e.g. Cells, Algebra, Grammar" /></Field>
+      <Field label="Question">
+        <MathToolbar textareaRef={qRef} value={question} setValue={setQuestion} />
+        <textarea ref={qRef} className="pp-input" style={{ width: "100%", padding: "9px 12px", fontSize: 14, minHeight: 70, resize: "vertical", fontFamily: "inherit" }} value={question} onChange={(e) => setQuestion(e.target.value)} placeholder="Write your own question — use $...$ for maths" />
+      </Field>
+      <Field label="Answer options (tick the correct one)">
+        {options.map((o, i) => (
+          <div key={i} style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
+            <input type="radio" name="correct" checked={answer === i} onChange={() => setAnswer(i)} aria-label={`Option ${i + 1} is correct`} style={{ accentColor: "var(--accent)" }} />
+            <input className="pp-input" style={{ flex: 1, padding: "8px 10px", fontSize: 14 }} value={o} onChange={(e) => setOpt(i, e.target.value)} placeholder={`Option ${i + 1}`} />
+          </div>
+        ))}
+      </Field>
+      <Field label="Explanation (shown after answering)"><textarea className="pp-input" style={{ width: "100%", padding: "9px 12px", fontSize: 14, minHeight: 56, resize: "vertical", fontFamily: "inherit" }} value={explanation} onChange={(e) => setExplanation(e.target.value)} /></Field>
+      <div style={{ fontSize: 12, color: "var(--muted)", marginBottom: 12 }}>Only add questions you wrote yourself — please don't copy questions from exam papers or books.</div>
+      <button className="pp-btn pp-btn-primary" style={{ width: "100%", padding: "10px 0", opacity: canSubmit ? 1 : 0.5 }} disabled={!canSubmit}
+        onClick={() => onSubmit({ examType, subject, topic: topic.trim(), question: question.trim(), options: options.map((o) => o.trim()), answer, explanation: explanation.trim() })}>
+        Add question
+      </button>
+    </Modal>
+  );
+}
+
+function QuizReference({ options, refIndex, setRefIndex }) {
+  const opt = options[Number(refIndex)];
+  return (
+    <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", height: "calc(100dvh - 190px)", minHeight: 380 }}>
+      <select className="pp-select" aria-label="Reference material" style={{ padding: "8px 10px", fontSize: 13.5, width: "100%", marginBottom: 8 }} value={refIndex} onChange={(e) => setRefIndex(e.target.value)}>
+        <option value="">Choose a note or past paper to read alongside…</option>
+        {options.map((o, i) => <option key={i} value={i}>{o.label}</option>)}
+      </select>
+      {!opt ? (
+        <div className="pp-card" style={{ borderRadius: 10, padding: 16, fontSize: 13, color: "var(--muted)" }}>Pick something above and it stays on this side while you answer questions on the other.</div>
+      ) : opt.kind === "note" ? (
+        <div className="pp-card" style={{ borderRadius: 10, padding: 14, overflowY: "auto", flex: 1 }}>
+          <div className="pp-serif" style={{ fontSize: 15.5, fontWeight: 600, marginBottom: 8 }}>{opt.note.title}</div>
+          {opt.note.type === "image" ? <img src={opt.note.content} alt="" style={{ width: "100%", borderRadius: 6 }} /> : <p style={{ fontSize: 13.5, lineHeight: 1.55, whiteSpace: "pre-wrap" }}><MathText text={opt.note.content} /></p>}
+        </div>
+      ) : (
+        <PdfPane key={opt.file.fileData.length + opt.label} label={opt.label} file={opt.file} fallbackName={`${opt.paper.title}.pdf`} />
+      )}
+    </div>
+  );
+}
+
+function QuizView({ questions, user, notes, papers, onAddQuestion, onDeleteQuestion }) {
+  const [phase, setPhase] = useState("setup");
+  const [examType, setExamType] = useState("");
+  const [subject, setSubject] = useState("");
+  const [topic, setTopic] = useState("");
+  const [count, setCount] = useState(10);
+  const [timed, setTimed] = useState(false);
+  const [history, setHistory] = useLocalState("preplist:quizHistory", []);
+  const [showAdd, setShowAdd] = useState(false);
+  const [run, setRun] = useState(null);
+  const [split, setSplit] = useState(false);
+  const [refIndex, setRefIndex] = useState("");
+  const canManage = hasElevatedAccess(user);
+
+  const scoped = useMemo(() => questions.filter((q) => !examType || q.examType === examType), [questions, examType]);
+  const subjectOptions = useMemo(() => Array.from(new Set(scoped.map((q) => q.subject))).sort(), [scoped]);
+  const topicOptions = useMemo(() => Array.from(new Set(scoped.filter((q) => !subject || q.subject === subject).map((q) => q.topic).filter(Boolean))).sort(), [scoped, subject]);
+  const pool = useMemo(() => scoped.filter((q) => (!subject || q.subject === subject) && (!topic || q.topic === topic)), [scoped, subject, topic]);
+
+  const refOptions = useMemo(() => {
+    const out = [];
+    notes.filter((n) => !subject || n.subject === subject).forEach((n) => out.push({ kind: "note", label: `Note: ${n.title}`, note: n }));
+    papers.filter((p) => !subject || p.subject === subject).forEach((p) => {
+      if (p.qp) out.push({ kind: "pdf", label: `Paper: ${p.title} (Question Paper)`, paper: p, file: p.qp });
+      if (p.ms) out.push({ kind: "pdf", label: `Paper: ${p.title} (Mark Scheme)`, paper: p, file: p.ms });
+    });
+    return out;
+  }, [notes, papers, subject]);
+
+  function begin(items, secs) {
+    setRun({ items, idx: 0, picked: null, answers: [], secondsLeft: secs });
+    setPhase("run");
+  }
+  function start() {
+    const items = shuffled(pool).slice(0, Math.min(Number(count) || 10, pool.length));
+    if (items.length === 0) return;
+    begin(items, timed ? items.length * secondsPerQuestion(examType, subject) : null);
+  }
+  function finish(finalRun) {
+    const correct = finalRun.answers.filter((a) => a.correct).length;
+    setHistory((h) => [{ at: Date.now(), examType: examType || "Mixed", subject: subject || "All subjects", total: finalRun.items.length, correct, timed: finalRun.secondsLeft != null }, ...(h || [])].slice(0, 10));
+    setRun(finalRun);
+    setPhase("done");
+  }
+  function choose(i) {
+    if (!run || run.picked !== null) return;
+    const q = run.items[run.idx];
+    setRun({ ...run, picked: i, answers: [...run.answers, { id: q.id, picked: i, correct: i === q.answer }] });
+  }
+  function next() {
+    if (run.idx + 1 >= run.items.length) finish(run);
+    else setRun({ ...run, idx: run.idx + 1, picked: null });
+  }
+
+  useEffect(() => {
+    if (phase !== "run" || run?.secondsLeft == null) return;
+    const t = setInterval(() => {
+      setRun((r) => {
+        if (!r || r.secondsLeft == null) return r;
+        return { ...r, secondsLeft: r.secondsLeft - 1 };
+      });
+    }, 1000);
+    return () => clearInterval(t);
+  }, [phase, run?.secondsLeft == null]);
+  useEffect(() => {
+    if (phase === "run" && run && run.secondsLeft != null && run.secondsLeft <= 0) finish(run);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [run?.secondsLeft, phase]);
+
+  const sel = { padding: "9px 10px", fontSize: 14, width: "100%" };
+
+  if (phase === "run" && run) {
+    const q = run.items[run.idx];
+    const answered = run.picked !== null;
+    return (
+      <div>
+        <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 12, flexWrap: "wrap" }}>
+          <div style={{ fontSize: 13, fontWeight: 700 }}>Question {run.idx + 1} of {run.items.length}</div>
+          {run.secondsLeft != null && <GradeTag text={`⏱ ${fmtClock(run.secondsLeft)}`} />}
+          <div style={{ flex: 1 }} />
+          <button className={`pp-btn ${split ? "pp-btn-primary" : "pp-btn-ghost"}`} style={{ padding: "6px 12px", fontSize: 12.5 }} onClick={() => setSplit(!split)}><LayoutGrid size={13} style={{ marginRight: 5, display: "inline" }} />Split screen</button>
+          <button className="pp-btn pp-btn-ghost" style={{ padding: "6px 12px", fontSize: 12.5 }} onClick={() => { setRun(null); setPhase("setup"); }}>Quit</button>
+        </div>
+        <div className="pp-split" style={{ alignItems: "flex-start" }}>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div className="pp-card" style={{ borderRadius: 10, padding: 16 }}>
+              <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 8 }}><GradeTag text={q.examType} /><Tag text={q.subject} />{q.topic && <GradeTag text={q.topic} />}</div>
+              <div style={{ fontSize: 15.5, fontWeight: 600, lineHeight: 1.5, marginBottom: 12 }}><MathText text={q.question} /></div>
+              {q.options.map((o, i) => {
+                const isRight = answered && i === q.answer;
+                const isWrong = answered && i === run.picked && i !== q.answer;
+                return (
+                  <button key={i} className="pp-btn pp-btn-ghost" disabled={answered} onClick={() => choose(i)}
+                    style={{ display: "block", width: "100%", textAlign: "left", padding: "10px 12px", marginBottom: 8, fontSize: 14, opacity: 1,
+                      borderColor: isRight ? "#2E7D4F" : isWrong ? "#B3402F" : "var(--border)", background: isRight ? "rgba(46,125,79,0.14)" : isWrong ? "rgba(179,64,47,0.14)" : "transparent" }}>
+                    <b style={{ marginRight: 8 }}>{String.fromCharCode(65 + i)}</b><MathText text={o} />{isRight ? "  ✓" : isWrong ? "  ✗" : ""}
+                  </button>
+                );
+              })}
+              {answered && (
+                <div style={{ marginTop: 6 }}>
+                  <div style={{ fontSize: 13.5, fontWeight: 700, color: run.picked === q.answer ? "#2E7D4F" : "#B3402F" }}>{run.picked === q.answer ? "Correct" : "Not quite"}</div>
+                  {q.explanation && <div style={{ fontSize: 13, marginTop: 4, lineHeight: 1.5 }}><MathText text={q.explanation} /></div>}
+                  <button className="pp-btn pp-btn-primary" style={{ marginTop: 12, padding: "9px 18px" }} onClick={next}>{run.idx + 1 >= run.items.length ? "See results" : "Next question"}</button>
+                </div>
+              )}
+            </div>
+          </div>
+          {split && <QuizReference options={refOptions} refIndex={refIndex} setRefIndex={setRefIndex} />}
+        </div>
+      </div>
+    );
+  }
+
+  if (phase === "done" && run) {
+    const correct = run.answers.filter((a) => a.correct).length;
+    const total = run.items.length;
+    const missed = run.items.filter((q) => !run.answers.find((a) => a.id === q.id && a.correct));
+    return (
+      <div>
+        <div className="pp-card" style={{ borderRadius: 10, padding: 18, textAlign: "center", marginBottom: 16 }}>
+          <div className="pp-serif" style={{ fontSize: 30, fontWeight: 700 }}>{correct} / {total}</div>
+          <div style={{ fontSize: 14, color: "var(--muted)" }}>{Math.round((correct / total) * 100)}% correct</div>
+          <div style={{ display: "flex", gap: 10, justifyContent: "center", marginTop: 14, flexWrap: "wrap" }}>
+            {missed.length > 0 && <button className="pp-btn pp-btn-primary" style={{ padding: "9px 16px" }} onClick={() => begin(shuffled(missed), null)}>Retry the {missed.length} I missed</button>}
+            <button className="pp-btn pp-btn-ghost" style={{ padding: "9px 16px" }} onClick={() => { setRun(null); setPhase("setup"); }}>New quiz</button>
+          </div>
+        </div>
+        {missed.length > 0 && <div className="pp-serif" style={{ fontSize: 15.5, fontWeight: 700, marginBottom: 8 }}>Review</div>}
+        {missed.map((q) => {
+          const a = run.answers.find((x) => x.id === q.id);
+          return (
+            <div key={q.id} className="pp-card" style={{ borderRadius: 10, padding: 14, marginBottom: 10 }}>
+              <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 6 }}><MathText text={q.question} /></div>
+              <div style={{ fontSize: 13, color: "#B3402F" }}>Your answer: {a ? <MathText text={q.options[a.picked]} /> : "No answer (ran out of time)"}</div>
+              <div style={{ fontSize: 13, color: "#2E7D4F" }}>Correct answer: <MathText text={q.options[q.answer]} /></div>
+              {q.explanation && <div style={{ fontSize: 12.5, marginTop: 4 }}><MathText text={q.explanation} /></div>}
+            </div>
+          );
+        })}
+      </div>
+    );
+  }
+
+  return (
+    <div>
+      <div className="pp-card" style={{ borderRadius: 10, padding: 14, marginBottom: 16, fontSize: 13, lineHeight: 1.55 }}>
+        <div className="pp-serif" style={{ fontSize: 15.5, fontWeight: 700, marginBottom: 4 }}>Practice quiz</div>
+        Original practice questions written for this site (they are not copied from past papers — real papers are on the Resources tab). Get instant feedback with an explanation after each question, then retry the ones you missed.
+      </div>
+      <div style={{ display: "flex", gap: 10, marginBottom: 12, flexWrap: "wrap", alignItems: "flex-end" }}>
+        <div style={{ width: 150 }}><ExamTypeSelect value={examType} onChange={(t) => { setExamType(t); setSubject(""); setTopic(""); }} includeAll /></div>
+        <div style={{ width: 200 }}>
+          <select className="pp-select" aria-label="Subject" style={sel} value={subject} onChange={(e) => { setSubject(e.target.value); setTopic(""); }}>
+            <option value="">All subjects</option>
+            {subjectOptions.map((s) => <option key={s} value={s}>{s}</option>)}
+          </select>
+        </div>
+        <div style={{ width: 170 }}>
+          <select className="pp-select" aria-label="Topic" style={sel} value={topic} onChange={(e) => setTopic(e.target.value)}>
+            <option value="">All topics</option>
+            {topicOptions.map((s) => <option key={s} value={s}>{s}</option>)}
+          </select>
+        </div>
+        <div style={{ width: 120 }}>
+          <select className="pp-select" aria-label="Number of questions" style={sel} value={count} onChange={(e) => setCount(e.target.value)}>
+            {[5, 10, 20, 50].map((n) => <option key={n} value={n}>{n} questions</option>)}
+          </select>
+        </div>
+        <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 13.5, paddingBottom: 9 }}>
+          <input type="checkbox" checked={timed} onChange={(e) => setTimed(e.target.checked)} style={{ accentColor: "var(--accent)" }} />
+          Timed{examType === "SAT" ? " (SAT pace)" : ""}
+        </label>
+      </div>
+      <div style={{ display: "flex", gap: 10, alignItems: "center", marginBottom: 20, flexWrap: "wrap" }}>
+        <button className="pp-btn pp-btn-primary" style={{ padding: "10px 20px", opacity: pool.length ? 1 : 0.5 }} disabled={!pool.length} onClick={start}>Start quiz</button>
+        <span style={{ fontSize: 12.5, color: "var(--muted)" }}>{pool.length} question{pool.length === 1 ? "" : "s"} available</span>
+        {canManage && <button className="pp-btn pp-btn-ghost" style={{ padding: "9px 14px", fontSize: 13, marginLeft: "auto" }} onClick={() => setShowAdd(true)}><Plus size={14} style={{ marginRight: 5, display: "inline" }} />Add question</button>}
+      </div>
+      {history.length > 0 && (
+        <div style={{ marginBottom: 20 }}>
+          <div className="pp-serif" style={{ fontSize: 15, fontWeight: 700, marginBottom: 6 }}>Your recent results</div>
+          {history.map((h) => (
+            <div key={h.at} style={{ fontSize: 13, display: "flex", gap: 8, padding: "4px 0", borderBottom: "1px solid var(--border)" }}>
+              <span style={{ flex: 1 }}>{h.examType} · {h.subject}{h.timed ? " · timed" : ""}</span>
+              <b>{h.correct}/{h.total}</b>
+              <span style={{ color: "var(--muted)", width: 70, textAlign: "right" }}>{timeAgo(h.at)}</span>
+            </div>
+          ))}
+        </div>
+      )}
+      {canManage && pool.length > 0 && (
+        <div>
+          <div className="pp-serif" style={{ fontSize: 15, fontWeight: 700, marginBottom: 6 }}>Manage questions</div>
+          {pool.slice(0, 40).map((q) => (
+            <div key={q.id} style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 0", borderBottom: "1px solid var(--border)", fontSize: 13 }}>
+              <span style={{ flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{q.subject}: {q.question}</span>
+              <button className="pp-btn pp-btn-ghost" style={{ padding: 5, borderRadius: 999 }} onClick={() => onDeleteQuestion(q.id)} aria-label="Delete question"><X size={13} /></button>
+            </div>
+          ))}
+        </div>
+      )}
+      {showAdd && <AddQuestionModal onClose={() => setShowAdd(false)} onSubmit={async (payload) => { const ok = await onAddQuestion(payload); if (ok) setShowAdd(false); }} />}
+    </div>
+  );
+}
+
+/* ---------------------------------------------------------------------- */
+/* Tools — exam countdown, study timer, and SAT pacing. Everything here   */
+/* is personal and stored on this device.                                 */
+/* ---------------------------------------------------------------------- */
+
+function daysUntil(dateStr) {
+  const today = new Date(); today.setHours(0, 0, 0, 0);
+  const target = new Date(`${dateStr}T00:00:00`);
+  return Math.round((target - today) / 86400000);
+}
+
+function CountdownCard() {
+  const [items, setItems] = useLocalState("preplist:countdowns", []);
+  const [name, setName] = useState("");
+  const [date, setDate] = useState("");
+  const sorted = [...items].sort((a, b) => a.date.localeCompare(b.date));
+  function add() {
+    if (!name.trim() || !date) return;
+    setItems((prev) => [...(prev || []), { id: uid(), name: name.trim(), date }]);
+    setName(""); setDate("");
+  }
+  return (
+    <div className="pp-card" style={{ borderRadius: 10, padding: 16, marginBottom: 16 }}>
+      <div className="pp-serif" style={{ fontSize: 16, fontWeight: 700, marginBottom: 4 }}>Exam countdown</div>
+      <div style={{ fontSize: 12.5, color: "var(--muted)", marginBottom: 10 }}>Add your own exam or test dates (check them with your school or the exam board).</div>
+      <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 10 }}>
+        <input className="pp-input" style={{ flex: 1, minWidth: 150, padding: "8px 10px", fontSize: 14 }} placeholder="e.g. IGCSE Physics Paper 4, SAT" value={name} onChange={(e) => setName(e.target.value)} />
+        <input className="pp-input" type="date" aria-label="Exam date" style={{ padding: "8px 10px", fontSize: 14 }} value={date} onChange={(e) => setDate(e.target.value)} />
+        <button className="pp-btn pp-btn-primary" style={{ padding: "8px 16px", opacity: name.trim() && date ? 1 : 0.5 }} disabled={!(name.trim() && date)} onClick={add}>Add</button>
+      </div>
+      {sorted.length === 0 ? <div style={{ fontSize: 13, color: "var(--muted)" }}>No exams added yet.</div> : sorted.map((it) => {
+        const d = daysUntil(it.date);
+        return (
+          <div key={it.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "7px 0", borderTop: "1px solid var(--border)" }}>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontSize: 14, fontWeight: 600 }}>{it.name}</div>
+              <div style={{ fontSize: 12, color: "var(--muted)" }}>{it.date}</div>
+            </div>
+            <div className="pp-serif" style={{ fontSize: 17, fontWeight: 700, color: d < 0 ? "var(--muted)" : "var(--text)" }}>{d < 0 ? "Passed" : d === 0 ? "Today" : `${d} day${d === 1 ? "" : "s"}`}</div>
+            <button className="pp-btn pp-btn-ghost" style={{ padding: 5, borderRadius: 999 }} onClick={() => setItems((prev) => prev.filter((x) => x.id !== it.id))} aria-label="Remove exam"><X size={13} /></button>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function StudyTimerCard() {
+  const [focusMin, setFocusMin] = useState(25);
+  const [breakMin, setBreakMin] = useState(5);
+  const [mode, setMode] = useState("focus");
+  const [secondsLeft, setSecondsLeft] = useState(25 * 60);
+  const [running, setRunning] = useState(false);
+  const [sessions, setSessions] = useState(0);
+  const endRef = useRef(0);
+
+  useEffect(() => {
+    if (!running) return;
+    const t = setInterval(() => {
+      const left = Math.round((endRef.current - Date.now()) / 1000);
+      if (left > 0) { setSecondsLeft(left); return; }
+      try { navigator.vibrate && navigator.vibrate(300); } catch { /* optional */ }
+      setRunning(false);
+      if (mode === "focus") { setSessions((n) => n + 1); setMode("break"); setSecondsLeft(breakMin * 60); }
+      else { setMode("focus"); setSecondsLeft(focusMin * 60); }
+    }, 500);
+    return () => clearInterval(t);
+  }, [running, mode, focusMin, breakMin]);
+
+  useEffect(() => {
+    if (!running) return;
+    const old = document.title;
+    document.title = `${fmtClock(secondsLeft)} · ${mode === "focus" ? "Focus" : "Break"} — PrepList Pro`;
+    return () => { document.title = old; };
+  }, [running, secondsLeft, mode]);
+
+  function toggle() {
+    if (running) { setRunning(false); return; }
+    endRef.current = Date.now() + secondsLeft * 1000;
+    setRunning(true);
+  }
+  function reset() { setRunning(false); setMode("focus"); setSecondsLeft(focusMin * 60); }
+  function changeFocus(v) { const n = Math.max(1, Math.min(120, Number(v) || 25)); setFocusMin(n); if (!running && mode === "focus") setSecondsLeft(n * 60); }
+  function changeBreak(v) { const n = Math.max(1, Math.min(60, Number(v) || 5)); setBreakMin(n); if (!running && mode === "break") setSecondsLeft(n * 60); }
+
+  return (
+    <div className="pp-card" style={{ borderRadius: 10, padding: 16, marginBottom: 16 }}>
+      <div className="pp-serif" style={{ fontSize: 16, fontWeight: 700, marginBottom: 4 }}>Study timer</div>
+      <div style={{ fontSize: 12.5, color: "var(--muted)", marginBottom: 10 }}>Focus in short blocks with breaks in between. When a block ends it pauses so you choose when to carry on.</div>
+      <div style={{ display: "flex", alignItems: "center", gap: 14, flexWrap: "wrap" }}>
+        <div style={{ textAlign: "center" }}>
+          <div className="pp-serif" style={{ fontSize: 40, fontWeight: 700, lineHeight: 1 }}>{fmtClock(secondsLeft)}</div>
+          <div style={{ fontSize: 12, color: "var(--muted)" }}>{mode === "focus" ? "Focus" : "Break"} · {sessions} block{sessions === 1 ? "" : "s"} done</div>
+        </div>
+        <button className="pp-btn pp-btn-primary" style={{ padding: "9px 20px" }} onClick={toggle}>{running ? "Pause" : "Start"}</button>
+        <button className="pp-btn pp-btn-ghost" style={{ padding: "9px 14px" }} onClick={reset}>Reset</button>
+        <label style={{ fontSize: 12.5 }}>Focus min <input className="pp-input" type="number" min="1" max="120" value={focusMin} onChange={(e) => changeFocus(e.target.value)} style={{ width: 60, padding: "6px 8px", fontSize: 13 }} /></label>
+        <label style={{ fontSize: 12.5 }}>Break min <input className="pp-input" type="number" min="1" max="60" value={breakMin} onChange={(e) => changeBreak(e.target.value)} style={{ width: 60, padding: "6px 8px", fontSize: 13 }} /></label>
+      </div>
+    </div>
+  );
+}
+
+function ToolsView() {
+  return (
+    <div>
+      <CountdownCard />
+      <StudyTimerCard />
+      <div className="pp-card" style={{ borderRadius: 10, padding: 16 }}>
+        <div className="pp-serif" style={{ fontSize: 16, fontWeight: 700, marginBottom: 4 }}>Digital SAT pacing</div>
+        <div style={{ fontSize: 13, lineHeight: 1.6 }}>
+          <b>Reading and Writing:</b> 2 modules, 54 questions, 64 minutes — about 71 seconds a question.<br />
+          <b>Math:</b> 2 modules, 44 questions, 70 minutes — about 95 seconds a question.<br />
+          The Quiz tab's "Timed (SAT pace)" option uses these per-question times. Always check College Board for the latest format and test dates.
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ---------------------------------------------------------------------- */
 /* Global search — one search box that looks across Notes, Videos, Past   */
 /* Papers, and the Checklist at once.                                     */
 /* ---------------------------------------------------------------------- */
@@ -1640,7 +2164,10 @@ const TABS = [
   { id: "notes", label: "Notes", icon: BookOpen },
   { id: "videos", label: "Videos", icon: VideoIcon },
   { id: "papers", label: "Past Papers", icon: FileText },
+  { id: "quiz", label: "Quiz", icon: HelpCircle },
+  { id: "resources", label: "Resources", icon: LinkIcon },
   { id: "checklist", label: "Checklist", icon: ListChecks },
+  { id: "tools", label: "Tools", icon: Clock },
   { id: "saved", label: "Saved", icon: Bookmark }
 ];
 
@@ -1650,6 +2177,7 @@ function MainApp({ user, onSwitchRole, theme, setTheme }) {
   const [rawPapers, papersReady] = useCollection("pastPapers");
   const papers = useMemo(() => groupPapers(rawPapers), [rawPapers]);
   const [checklistItems, checklistReady] = useCollection("checklistItems");
+  const [quizQuestions, quizReady] = useCollection("quizQuestions");
 
   const [tab, setTab] = useState("notes");
   const [showSearch, setShowSearch] = useState(false);
@@ -1713,7 +2241,16 @@ function MainApp({ user, onSwitchRole, theme, setTheme }) {
     catch (e) { notify({ kind: "error", text: friendlyDbError(e) }); }
   }
 
-  const dataReady = notesReady && videosReady && papersReady && checklistReady;
+  async function addQuizQuestion(payload) {
+    try { await db.collection("quizQuestions").add({ ...payload, addedByRole: user.role, createdAt: Date.now() }); return true; }
+    catch (e) { notify({ kind: "error", text: friendlyDbError(e) }); return false; }
+  }
+  async function deleteQuizQuestion(id) {
+    try { await db.collection("quizQuestions").doc(id).delete(); }
+    catch (e) { notify({ kind: "error", text: friendlyDbError(e) }); }
+  }
+
+  const dataReady = notesReady && videosReady && papersReady && checklistReady && quizReady;
 
   return (
     <ToastContext.Provider value={notify}>
@@ -1746,6 +2283,9 @@ function MainApp({ user, onSwitchRole, theme, setTheme }) {
               {tab === "notes" && <NotesView notes={notes} user={user} onAddNote={addNote} lastNoteId={lastNoteId} setLastNoteId={setLastNoteId} savedNoteIds={savedNoteIds} onToggleSavedNote={onToggleSavedNote} />}
               {tab === "videos" && <VideosView videos={videos} user={user} onAddVideo={addVideo} lastVideoId={lastVideoId} setLastVideoId={setLastVideoId} savedVideoIds={savedVideoIds} onToggleSavedVideo={onToggleSavedVideo} />}
               {tab === "papers" && <PapersView papers={papers} user={user} onAddPaper={addPaper} lastPaperId={lastPaperId} setLastPaperId={setLastPaperId} savedPaperIds={savedPaperIds} onToggleSavedPaper={onToggleSavedPaper} />}
+              {tab === "quiz" && <QuizView questions={quizQuestions} user={user} notes={notes} papers={papers} onAddQuestion={addQuizQuestion} onDeleteQuestion={deleteQuizQuestion} />}
+              {tab === "resources" && <ResourcesView />}
+              {tab === "tools" && <ToolsView />}
               {tab === "checklist" && <ChecklistView items={checklistItems} user={user} onAddItem={addChecklistItem} onDeleteItem={deleteChecklistItem} checkedIds={checkedTopicIds} onToggleChecked={onToggleChecked} />}
               {tab === "saved" && <SavedView notes={notes} videos={videos} papers={papers}
                 lastNoteId={lastNoteId} lastVideoId={lastVideoId} lastPaperId={lastPaperId}
