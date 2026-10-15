@@ -2079,9 +2079,75 @@ function StudyTimerCard() {
   );
 }
 
+function GradeTrackerCard() {
+  const [items, setItems] = useLocalState("preplist:grades", []);
+  const [subject, setSubject] = useState("");
+  const [name, setName] = useState("");
+  const [score, setScore] = useState("");
+  const [max, setMax] = useState("100");
+  const [weight, setWeight] = useState("1");
+  const [target, setTarget] = useLocalState("preplist:gradeTarget", 85);
+  const [nextWeight, setNextWeight] = useState("1");
+  const subjects = Array.from(new Set(items.map((i) => i.subject))).sort();
+  const canAdd = subject.trim() && name.trim() && score !== "" && Number(max) > 0 && Number(weight) > 0;
+  function add() {
+    if (!canAdd) return;
+    setItems((prev) => [...(prev || []), { id: uid(), subject: subject.trim(), name: name.trim(), score: Number(score), max: Number(max), weight: Number(weight) }]);
+    setName(""); setScore("");
+  }
+  function stats(list) {
+    const totalW = list.reduce((a, i) => a + i.weight, 0);
+    const sum = list.reduce((a, i) => a + (i.score / i.max) * i.weight, 0);
+    return { totalW, sum, avg: totalW ? (sum / totalW) * 100 : 0 };
+  }
+  const nw = Number(nextWeight) > 0 ? Number(nextWeight) : 1;
+  return (
+    <div className="pp-card" style={{ borderRadius: 10, padding: 16, marginBottom: 16 }}>
+      <div className="pp-serif" style={{ fontSize: 16, fontWeight: 700, marginBottom: 4 }}>Grade tracker</div>
+      <div style={{ fontSize: 12.5, color: "var(--muted)", marginBottom: 10 }}>Log your quiz, monthly and term exam marks. Weight says how much each counts (e.g. 1 for a quiz, 3 for a term exam) — use your school's own weights. This is your own estimate, not an official grade.</div>
+      <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 10 }}>
+        <input className="pp-input" list="pp-grade-subjects" style={{ width: 130, padding: "8px 10px", fontSize: 14 }} placeholder="Subject" value={subject} onChange={(e) => setSubject(e.target.value)} />
+        <datalist id="pp-grade-subjects">{[...subjects, ...PAPER_SUBJECTS].map((s) => <option key={s} value={s} />)}</datalist>
+        <input className="pp-input" style={{ flex: 1, minWidth: 130, padding: "8px 10px", fontSize: 14 }} placeholder="e.g. Monthly exam 2" value={name} onChange={(e) => setName(e.target.value)} />
+        <input className="pp-input" type="number" aria-label="Score" style={{ width: 70, padding: "8px 10px", fontSize: 14 }} placeholder="Score" value={score} onChange={(e) => setScore(e.target.value)} />
+        <input className="pp-input" type="number" aria-label="Out of" style={{ width: 70, padding: "8px 10px", fontSize: 14 }} placeholder="Out of" value={max} onChange={(e) => setMax(e.target.value)} />
+        <input className="pp-input" type="number" aria-label="Weight" style={{ width: 70, padding: "8px 10px", fontSize: 14 }} placeholder="Weight" value={weight} onChange={(e) => setWeight(e.target.value)} />
+        <button className="pp-btn pp-btn-primary" style={{ padding: "8px 16px", opacity: canAdd ? 1 : 0.5 }} disabled={!canAdd} onClick={add}>Add</button>
+      </div>
+      <div style={{ display: "flex", gap: 12, flexWrap: "wrap", alignItems: "center", marginBottom: 8, fontSize: 13 }}>
+        <label>Target average % <input className="pp-input" type="number" value={target} onChange={(e) => setTarget(Number(e.target.value) || 0)} style={{ width: 65, padding: "6px 8px", fontSize: 13 }} /></label>
+        <label>Next assessment weight <input className="pp-input" type="number" value={nextWeight} onChange={(e) => setNextWeight(e.target.value)} style={{ width: 65, padding: "6px 8px", fontSize: 13 }} /></label>
+      </div>
+      {subjects.length === 0 ? <div style={{ fontSize: 13, color: "var(--muted)" }}>No marks logged yet.</div> : subjects.map((sub) => {
+        const list = items.filter((i) => i.subject === sub);
+        const st = stats(list);
+        const need = ((target / 100) * (st.totalW + nw) - st.sum) / nw * 100;
+        const needText = need > 100 ? "Above 100% — out of reach with one assessment" : need <= 0 ? "You're already above target" : `${Math.ceil(need)}%`;
+        return (
+          <div key={sub} style={{ borderTop: "1px solid var(--border)", padding: "8px 0" }}>
+            <div style={{ display: "flex", alignItems: "baseline", gap: 10, flexWrap: "wrap" }}>
+              <b style={{ fontSize: 14 }}>{sub}</b>
+              <span className="pp-serif" style={{ fontSize: 18, fontWeight: 700 }}>{st.avg.toFixed(1)}%</span>
+              <span style={{ fontSize: 12.5, color: "var(--muted)" }}>Needed next for {target}%: <b>{needText}</b></span>
+            </div>
+            {list.map((i) => (
+              <div key={i.id} style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12.5, padding: "2px 0" }}>
+                <span style={{ flex: 1 }}>{i.name}</span>
+                <span>{i.score}/{i.max} ({Math.round((i.score / i.max) * 100)}%) · wt {i.weight}</span>
+                <button className="pp-btn pp-btn-ghost" style={{ padding: 4, borderRadius: 999 }} onClick={() => setItems((prev) => prev.filter((x) => x.id !== i.id))} aria-label="Remove mark"><X size={12} /></button>
+              </div>
+            ))}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 function ToolsView() {
   return (
     <div>
+      <GradeTrackerCard />
       <CountdownCard />
       <StudyTimerCard />
       <div className="pp-card" style={{ borderRadius: 10, padding: 16 }}>

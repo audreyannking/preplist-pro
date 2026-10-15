@@ -127,6 +127,11 @@ your behalf.
   any note or uploaded paper open beside the question. Teachers/Admins can
   add or delete questions (Firestore `quizQuestions`) — only questions they
   wrote themselves.
+- **Grade tracker (Tools tab).** For SABIS students and anyone else: log
+  quiz / monthly / term marks with your own weights, see a running average
+  per subject, and see what you need on the next assessment to hit a target.
+  It's an estimate stored on-device, not an official grade or SABIS's own
+  point system.
 - **Tools tab.** Exam countdown (your own dates), a focus/break study timer
   (the browser tab title shows the time left), and Digital SAT pacing
   reference. All stored on-device.
