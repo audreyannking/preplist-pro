@@ -127,10 +127,12 @@ your behalf.
   Pearson's past-paper finder, College Board's SAT practice and AP Central,
   plus Save My Exams as a clearly-labelled third-party link (its terms ban
   copying and scraping, so nothing of theirs is copied or embedded). Every
-  link has "Open" (new tab) and "Left half" / "Right half" (popup windows sized to that half of the
-  screen, so you can read two papers side by side, or keep the site on one side). Third-party
-  sites block being embedded in a frame, which is why half screen is a
-  window rather than an in-page pane.
+  link has "Open" (new tab). Cambridge and Khan Academy pages also have
+  "Split view": two pages shown side by side inside this site (it only shows
+  their own pages and PDFs from their servers; nothing is copied). Pearson,
+  College Board and the IB refuse to be shown inside other sites, so those
+  links get "Left half" / "Right half" popup windows instead, which depend
+  on the browser allowing sized windows.
 - **Quiz tab.** Original multiple-choice practice questions (written for
   this site, not taken from any paper) with instant feedback and
   explanations, topic/subject/exam-type filters, an optional timer (SAT pace

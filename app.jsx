@@ -1673,7 +1673,7 @@ function SavedView({ notes, videos, papers, lastNoteId, lastVideoId, lastPaperId
 /* ---------------------------------------------------------------------- */
 
 const CAMBRIDGE_BASE = "https://www.cambridgeinternational.org/programmes-and-qualifications";
-const cambridgeLink = (label, slug) => ({ label: label + " — papers & mark schemes", url: `${CAMBRIDGE_BASE}/${slug}/past-papers/` });
+const cambridgeLink = (label, slug) => ({ embed: true, label: label + " — papers & mark schemes", url: `${CAMBRIDGE_BASE}/${slug}/past-papers/` });
 const RESOURCE_GROUPS = [
   {
     title: "Cambridge IGCSE", official: true, note: "Official Cambridge pages with question papers and mark schemes, one per subject.",
@@ -1723,7 +1723,7 @@ const RESOURCE_GROUPS = [
     links: [
       { label: "Official SAT practice tests", url: "https://satsuite.collegeboard.org/practice/practice-tests" },
       { label: "Bluebook (the SAT testing app)", url: "https://bluebook.collegeboard.org/" },
-      { label: "Khan Academy - Official Digital SAT Prep", url: "https://www.khanacademy.org/test-prep/sat" }
+      { embed: true, label: "Khan Academy - Official Digital SAT Prep", url: "https://www.khanacademy.org/test-prep/sat" }
     ]
   },
   {
@@ -1758,15 +1758,62 @@ function openHalfScreen(url, side) {
   return !!win;
 }
 
+function EmbedPane({ item, items, onPick, label }) {
+  return (
+    <div style={{ flex: 1, minWidth: 0, minHeight: 0, display: "flex", flexDirection: "column", border: "1px solid var(--border)", borderRadius: 10, overflow: "hidden", background: "var(--surface)" }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 12px", borderBottom: "1px solid var(--border)" }}>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <select className="pp-select" aria-label={label} style={{ padding: "5px 8px", fontSize: 12.5, width: "100%" }} value={item ? item.url : ""} onChange={(e) => onPick(e.target.value)}>
+            {!item && <option value="">Choose a page…</option>}
+            {items.map((i) => <option key={i.url} value={i.url}>{i.group}: {i.label}</option>)}
+          </select>
+        </div>
+        {item && <a className="pp-btn pp-btn-ghost" href={item.url} target="_blank" rel="noopener noreferrer" style={{ padding: "4px 10px", fontSize: 12, textDecoration: "none", flexShrink: 0 }}>New tab</a>}
+      </div>
+      {item ? <iframe key={item.url} title={item.label} src={item.url} style={{ flex: 1, width: "100%", minHeight: 0, border: 0, background: "#fff" }} />
+        : <div style={{ padding: 16, fontSize: 13, color: "var(--muted)" }}>Pick a page to show on this side.</div>}
+    </div>
+  );
+}
+
+function EmbedSplitViewer({ items, startUrl, onClose }) {
+  const [left, setLeft] = useState(startUrl);
+  const [right, setRight] = useState(null);
+  useEffect(() => {
+    const onKey = (e) => { if (e.key === "Escape") onClose(); };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [onClose]);
+  const find = (u) => items.find((i) => i.url === u) || null;
+  return (
+    <div style={{ position: "fixed", inset: 0, zIndex: 80, background: "var(--bg)", display: "flex", flexDirection: "column" }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 14px", borderBottom: "1px solid var(--border)", flexWrap: "wrap" }}>
+        <div style={{ flex: 1, minWidth: 160 }}>
+          <div className="pp-serif" style={{ fontSize: 16, fontWeight: 700 }}>Split view</div>
+          <div style={{ fontSize: 11.5, color: "var(--muted)" }}>Two official pages side by side. Click a paper or mark scheme inside either side to open it there. If a side stays blank, use New tab.</div>
+        </div>
+        <button className="pp-btn pp-btn-ghost" style={{ padding: "6px 14px", fontSize: 12.5 }} onClick={() => { setLeft(right); setRight(left); }}>Swap sides</button>
+        <button className="pp-btn pp-btn-ghost" style={{ padding: 7, borderRadius: 999 }} onClick={onClose} aria-label="Close split view"><X size={16} /></button>
+      </div>
+      <div className="pp-split" style={{ flex: 1, minHeight: 0, padding: 10 }}>
+        <EmbedPane item={find(left)} items={items} onPick={setLeft} label="Left page" />
+        <EmbedPane item={find(right)} items={items} onPick={setRight} label="Right page" />
+      </div>
+    </div>
+  );
+}
+
 function ResourcesView() {
   const notify = useToast();
+  const [splitStart, setSplitStart] = useState(null);
+  const embedItems = RESOURCE_GROUPS.flatMap((g) => g.links.filter((l) => l.embed).map((l) => ({ ...l, group: g.title })));
   const half = (url, side) => { if (!openHalfScreen(url, side)) notify({ kind: "error", text: "Your browser blocked the pop-up. Allow pop-ups for this site, then try again." }); };
   return (
     <div>
       <div className="pp-card" style={{ borderRadius: 10, padding: 14, marginBottom: 18, fontSize: 13, lineHeight: 1.55 }}>
         <div className="pp-serif" style={{ fontSize: 15.5, fontWeight: 700, marginBottom: 6 }}>Where to find real past papers</div>
         Past papers belong to the exam boards, and Cambridge doesn't allow them to be republished on other websites — so this page links to the official sources instead of copying them.
-        Each Cambridge and Pearson page below lists the <b>question papers and the mark schemes</b> together. <b>Open</b> uses a new tab. <b>Left half</b> and <b>Right half</b> open the page in a window covering that half of your screen — click Left half on one paper and Right half on another to read two papers side by side. If it opens full screen anyway, your browser or phone doesn't allow sized windows (phones never do); use the <b>Split screen</b> viewer on the Past Papers tab for papers uploaded to this site instead.
+        Each Cambridge and Pearson page below lists the <b>question papers and the mark schemes</b> together. <b>Open</b> uses a new tab. <b>Split view</b> (Cambridge and Khan Academy) shows two pages side by side right here inside PrepList Pro — it works in any browser. Pearson, College Board and the IB don't allow their pages to be shown inside other websites, so those only get <b>Left half</b> / <b>Right half</b>, which try to open a window on that half of your screen (your browser may open a full tab instead).
       </div>
       {RESOURCE_GROUPS.map((g) => (
         <div key={g.title} style={{ marginBottom: 22 }}>
@@ -1780,13 +1827,20 @@ function ResourcesView() {
               <div key={l.url} className="pp-card" style={{ display: "flex", alignItems: "center", gap: 8, padding: "9px 12px", borderRadius: 8 }}>
                 <div style={{ flex: 1, minWidth: 0, fontSize: 13.5, fontWeight: 600 }}>{l.label}</div>
                 <a className="pp-btn pp-btn-ghost" href={l.url} target="_blank" rel="noopener noreferrer" style={{ padding: "5px 10px", fontSize: 12, textDecoration: "none", flexShrink: 0 }}>Open</a>
-                <button className="pp-btn pp-btn-primary" onClick={() => half(l.url, "left")} style={{ padding: "5px 8px", fontSize: 12, flexShrink: 0 }} title="Open on the left half of your screen">Left half</button>
-                <button className="pp-btn pp-btn-primary" onClick={() => half(l.url, "right")} style={{ padding: "5px 8px", fontSize: 12, flexShrink: 0 }} title="Open on the right half of your screen">Right half</button>
+                {l.embed ? (
+                  <button className="pp-btn pp-btn-primary" onClick={() => setSplitStart(l.url)} style={{ padding: "5px 10px", fontSize: 12, flexShrink: 0 }} title="Show this beside another page, inside this site">Split view</button>
+                ) : (
+                  <>
+                    <button className="pp-btn pp-btn-ghost" onClick={() => half(l.url, "left")} style={{ padding: "5px 8px", fontSize: 12, flexShrink: 0 }} title="This site can't be shown inside other pages, so this tries a window on the left half of your screen">Left half</button>
+                    <button className="pp-btn pp-btn-ghost" onClick={() => half(l.url, "right")} style={{ padding: "5px 8px", fontSize: 12, flexShrink: 0 }} title="This site can't be shown inside other pages, so this tries a window on the right half of your screen">Right half</button>
+                  </>
+                )}
               </div>
             ))}
           </div>
         </div>
       ))}
+      {splitStart && <EmbedSplitViewer items={embedItems} startUrl={splitStart} onClose={() => setSplitStart(null)} />}
     </div>
   );
 }
