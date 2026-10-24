@@ -2123,7 +2123,7 @@ const TABS = [
   { id: "papers", label: "Past Papers", icon: FileText },
   { id: "quiz", label: "Quiz", icon: HelpCircle },
   { id: "flashcards", label: "Flashcards", icon: Star },
-  { id: "tools", label: "Tools", icon: Clock },
+  { id: "tools", label: "Tracker", icon: Clock },
   { id: "saved", label: "Saved", icon: Bookmark }
 ];
 
@@ -2237,6 +2237,7 @@ function MainApp({ user, onSwitchRole, theme, setTheme }) {
         </main>
 
         {showSearch && <GlobalSearchModal notes={notes} videos={videos} onClose={() => setShowSearch(false)} onJump={jumpTo} />}
+        {window.__ppVersion && <div style={{ textAlign: "center", fontSize: 11, color: "var(--muted)", padding: "0 0 18px" }}>PrepList Pro · updated {window.__ppVersion}</div>}
         <Toast toast={toast} onClose={() => setToast(null)} />
       </div>
     </ToastContext.Provider>

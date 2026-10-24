@@ -30,6 +30,21 @@
 <!-- KaTeX — renders math typed as $...$ (fractions, integrals, square roots, etc.) -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.11/katex.min.js"></script>
 
-<script src="app.js"></script>
+<!-- Loads the newest app.js every visit (the tiny version.txt is always fetched
+     fresh), so a browser can never get stuck showing an old copy of the site. -->
+<script>
+  (function () {
+    function load(v) {
+      var s = document.createElement("script");
+      window.__ppVersion = v || "";
+      s.src = "app.js" + (v ? "?v=" + encodeURIComponent(v) : "");
+      document.body.appendChild(s);
+    }
+    fetch("version.txt", { cache: "no-store" })
+      .then(function (r) { return r.ok ? r.text() : ""; })
+      .then(function (t) { load((t || "").trim()); })
+      .catch(function () { load(""); });
+  })();
+</script>
 </body>
 </html>

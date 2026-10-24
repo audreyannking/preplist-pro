@@ -107,7 +107,7 @@ your behalf.
   any note or uploaded paper open beside the question. Teachers/Admins can
   add or delete questions (Firestore `quizQuestions`) — only questions they
   wrote themselves.
-- **Grade tracker (Tools tab).** For SABIS students and anyone else: log
+- **Grade tracker (Tracker tab).** For SABIS students and anyone else: log
   quiz / monthly / term marks with your own weights, see a running average
   per subject, and see what you need on the next assessment to hit a target.
   It's an estimate stored on-device, not an official grade or SABIS's own
@@ -118,9 +118,9 @@ your behalf.
   official SABIS numbers.
 - **Flashcards and study streak.** Flashcards lets you make your own decks
   (device-only) with a simple box system — right answers show less often,
-  misses come back sooner. A study streak on the Tools tab counts days you
+  misses come back sooner. A study streak on the Tracker tab counts days you
   finish a quiz, a flashcard round or a focus block.
-- **Tools tab.** Exam countdown (your own dates), a focus/break study timer
+- **Tracker tab.** Exam countdown (your own dates), a focus/break study timer
   (the browser tab title shows the time left), and Digital SAT pacing
   reference. All stored on-device.
 - **Cambridge paper picker (Past Papers tab).** Pick a level, subject and series,
@@ -154,3 +154,7 @@ your behalf.
   is read on the device with Tesseract.js (loaded from a CDN), then lines
   like "Term: definition", question/answer pairs and "X is Y" sentences are
   suggested as cards for you to check. It's pattern matching, not AI.
+- **Always the newest version.** `index.html` fetches `version.txt` fresh on
+  every visit and loads `app.js?v=<that value>`, so browsers can't get stuck on
+  a cached old copy. When you deploy, put a new value in `version.txt` (the
+  last line of the deploy steps) — it is also shown at the bottom of the site.
