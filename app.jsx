@@ -1236,7 +1236,7 @@ function NoteImage({ note, style }) {
   );
 }
 
-function PdfPane({ label, file, fallbackName }) {
+function PdfPane({ label, file, fallbackName, selector }) {
   const [url, setUrl] = useState(null);
   const [fileData, failed] = useFileData(file.fileData, file.fileId);
   useEffect(() => {
@@ -1249,8 +1249,8 @@ function PdfPane({ label, file, fallbackName }) {
   return (
     <div style={{ flex: 1, minWidth: 0, minHeight: 0, display: "flex", flexDirection: "column", border: "1px solid var(--border)", borderRadius: 10, overflow: "hidden", background: "var(--surface)" }}>
       <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 12px", borderBottom: "1px solid var(--border)" }}>
-        <FileText size={14} />
-        <span style={{ fontSize: 13, fontWeight: 700, flex: 1 }}>{label}</span>
+        <FileText size={14} style={{ flexShrink: 0 }} />
+        {selector ? <div style={{ flex: 1, minWidth: 0 }}>{selector}</div> : <span style={{ fontSize: 13, fontWeight: 700, flex: 1 }}>{label}</span>}
         {url && <a className="pp-btn pp-btn-ghost" href={url} target="_blank" rel="noopener noreferrer" style={{ padding: "4px 10px", fontSize: 12, textDecoration: "none" }}>New tab</a>}
         {url && <a className="pp-btn pp-btn-ghost" href={url} download={name} style={{ padding: "4px 10px", fontSize: 12, textDecoration: "none" }}>Download</a>}
       </div>
@@ -1260,35 +1260,66 @@ function PdfPane({ label, file, fallbackName }) {
   );
 }
 
-function PdfViewer({ paper, initialMode, onClose }) {
-  const [show, setShow] = useState({ qp: initialMode !== "ms", ms: initialMode !== "qp" });
+function PdfViewer({ papers, paper, initialMode, onClose }) {
+  const docs = useMemo(() => {
+    const out = [];
+    papers.forEach((p) => {
+      const meta = [p.subject, p.examType, `${p.session || ""} ${p.year || ""}`.trim()].filter(Boolean).join(" · ");
+      if (p.qp) out.push({ key: `${p.id}@@qp`, label: `${p.title} - Question Paper (${meta})`, file: p.qp, name: `${p.title} QP.pdf` });
+      if (p.ms) out.push({ key: `${p.id}@@ms`, label: `${p.title} - Mark Scheme (${meta})`, file: p.ms, name: `${p.title} MS.pdf` });
+    });
+    return out;
+  }, [papers]);
+  const byKey = (k) => docs.find((d) => d.key === k);
+  const counterpart = (k) => {
+    if (!k) return null;
+    const [id, kind] = k.split("@@");
+    return byKey(`${id}@@${kind === "qp" ? "ms" : "qp"}`) ? `${id}@@${kind === "qp" ? "ms" : "qp"}` : null;
+  };
+  const startKind = initialMode === "ms" ? "ms" : paper.qp ? "qp" : "ms";
+  const [left, setLeft] = useState(`${paper.id}@@${startKind}`);
+  const [right, setRight] = useState(initialMode === "both" ? counterpart(`${paper.id}@@${startKind}`) : null);
+  const [split, setSplit] = useState(initialMode === "both" && !!counterpart(`${paper.id}@@${startKind}`));
+
   useEffect(() => {
     const onKey = (e) => { if (e.key === "Escape") onClose(); };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [onClose]);
-  const both = paper.qp && paper.ms;
-  const visible = [paper.qp && show.qp && { key: "qp", label: "Question Paper", file: paper.qp }, paper.ms && show.ms && { key: "ms", label: "Mark Scheme", file: paper.ms }].filter(Boolean);
-  function toggle(k) {
-    const next = { ...show, [k]: !show[k] };
-    if (!(paper.qp && next.qp) && !(paper.ms && next.ms)) return;
-    setShow(next);
+
+  function toggleSplit() {
+    if (!split && !byKey(right)) setRight(counterpart(left) || (docs.find((d) => d.key !== left) || {}).key || null);
+    setSplit(!split);
   }
-  const chip = (k, text) => (
-    <button className={`pp-btn ${show[k] ? "pp-btn-primary" : "pp-btn-ghost"}`} onClick={() => toggle(k)} style={{ padding: "5px 12px", fontSize: 12.5 }}>{text}</button>
+  function swap() { setLeft(right); setRight(left); }
+
+  const picker = (value, onChange, label) => (
+    <select className="pp-select" aria-label={label} style={{ padding: "5px 8px", fontSize: 12.5, width: "100%" }} value={value || ""} onChange={(e) => onChange(e.target.value)}>
+      {!value && <option value="">Choose a document…</option>}
+      {docs.map((d) => <option key={d.key} value={d.key}>{d.label}</option>)}
+    </select>
   );
+  const panel = (key, onChange, label) => {
+    const d = byKey(key);
+    return d
+      ? <PdfPane key={d.key} label={d.label} file={d.file} fallbackName={d.name} selector={picker(key, onChange, label)} />
+      : <div className="pp-card" style={{ flex: 1, borderRadius: 10, padding: 14 }}>{picker(key, onChange, label)}<div style={{ fontSize: 13, color: "var(--muted)", marginTop: 10 }}>Pick a paper or mark scheme to show here.</div></div>;
+  };
+
   return (
     <div style={{ position: "fixed", inset: 0, zIndex: 80, background: "var(--bg)", display: "flex", flexDirection: "column" }}>
       <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 14px", borderBottom: "1px solid var(--border)", flexWrap: "wrap" }}>
         <div style={{ flex: 1, minWidth: 140 }}>
-          <div className="pp-serif" style={{ fontSize: 16, fontWeight: 700, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{paper.title}</div>
-          <div style={{ fontSize: 11.5, color: "var(--muted)" }}>{[paper.board, paper.subject, paper.examType, paper.syllabus, `${paper.session || ""} ${paper.year || ""}`.trim()].filter(Boolean).join(" · ")}</div>
+          <div className="pp-serif" style={{ fontSize: 16, fontWeight: 700 }}>Past paper viewer</div>
+          <div style={{ fontSize: 11.5, color: "var(--muted)" }}>{split ? "Each side has its own picker — show any two papers, or a paper and its mark scheme." : "Turn on Split screen to open a second document beside this one."}</div>
         </div>
-        {both && <div style={{ display: "flex", gap: 6 }}>{chip("qp", "Question Paper")}{chip("ms", "Mark Scheme")}</div>}
+        <button className={`pp-btn ${split ? "pp-btn-primary" : "pp-btn-ghost"}`} style={{ padding: "6px 14px", fontSize: 12.5 }} onClick={toggleSplit}><LayoutGrid size={13} style={{ marginRight: 5, display: "inline" }} />Split screen</button>
+        {split && <button className="pp-btn pp-btn-ghost" style={{ padding: "6px 14px", fontSize: 12.5 }} onClick={swap}>Swap sides</button>}
         <button className="pp-btn pp-btn-ghost" style={{ padding: 7, borderRadius: 999 }} onClick={onClose} aria-label="Close viewer"><X size={16} /></button>
       </div>
       <div className="pp-split" style={{ flex: 1, minHeight: 0, padding: 10 }}>
-        {visible.map((v) => <PdfPane key={v.key} label={v.label} file={v.file} fallbackName={`${paper.title} ${v.key.toUpperCase()}.pdf`} />)}
+        {panel(left, setLeft, "Left document")}
+        {split && panel(right, setRight, "Right document")}
       </div>
     </div>
   );
@@ -1404,7 +1435,7 @@ function PapersView({ papers, user, onAddPaper, lastPaperId, setLastPaperId, sav
           })}
         </div>
       )}
-      {viewer && <PdfViewer paper={viewer.paper} initialMode={viewer.mode} onClose={() => setViewer(null)} />}
+      {viewer && <PdfViewer papers={papers} paper={viewer.paper} initialMode={viewer.mode} onClose={() => setViewer(null)} />}
       {showForm && <AddPaperModal onClose={() => setShowForm(false)} onSubmit={async (payload) => { const ok = await onAddPaper(payload); if (ok) setShowForm(false); }} />}
     </div>
   );
