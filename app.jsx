@@ -146,14 +146,7 @@ const PAPER_SUBJECTS = [
   "Math", "Physics", "Chemistry", "Biology", "English", "History",
   "Computer Science", "Economics", "Business", "French", "Arabic", "Mandarin Chinese"
 ];
-const BOARDS = ["Cambridge", "Edexcel", "College Board", "IB"];
 const EXAM_TYPES = ["IGCSE", "AS Level", "A Level", "SAT", "AP", "IB Diploma"];
-const EXAM_TYPES_BY_BOARD = {
-  Cambridge: ["IGCSE", "AS Level", "A Level"],
-  Edexcel: ["IGCSE", "AS Level", "A Level"],
-  "College Board": ["SAT", "AP"],
-  IB: ["IB Diploma"]
-};
 const IB_SUBJECTS = [
   "Mathematics: Analysis and Approaches", "Mathematics: Applications and Interpretation", "Physics", "Chemistry", "Biology",
   "English A: Language and Literature", "English A: Literature", "History", "Economics", "Business Management",
@@ -171,16 +164,6 @@ const AP_COURSES = [
   "Precalculus", "Psychology", "Research", "Seminar", "Spanish Language and Culture", "Spanish Literature and Culture",
   "Statistics", "United States Government and Politics", "United States History", "World History: Modern"
 ];
-const ZONES = ["Zone 1", "Zone 2", "Zone 3"];
-const VARIANTS = ["Variant 1", "Variant 2", "Variant 3"];
-const SESSIONS_BY_BOARD = {
-  Cambridge: ["Feb/March", "May/June", "Oct/Nov"],
-  Edexcel: ["January", "May/June", "October/November"],
-  "College Board": ["March", "May", "June", "August", "October", "November", "December"],
-  IB: ["May", "November"]
-};
-const ALL_SESSIONS = Array.from(new Set(Object.values(SESSIONS_BY_BOARD).flat()));
-
 function subjectsFor(board, examType) {
   if (examType === "IB Diploma" || (!examType && board === "IB")) return IB_SUBJECTS;
   if (examType === "SAT") return SAT_SECTIONS;
@@ -191,129 +174,6 @@ function subjectsFor(board, examType) {
   return Array.from(new Set([...PAPER_SUBJECTS, ...SAT_SECTIONS, ...AP_COURSES, ...IB_SUBJECTS]));
 }
 
-/* ---------------------------------------------------------------------- */
-/* Official syllabus / specification codes, compiled from Cambridge's     */
-/* published subject lists and Pearson's 2025/26 information manuals.     */
-/* SAT and AP have no syllabus-code system, so they aren't listed here.   */
-/* ---------------------------------------------------------------------- */
-
-const cd = (code, label) => ({ code, label });
-const mergeCodes = (base, extra) => {
-  const out = { ...base };
-  for (const k of Object.keys(extra)) out[k] = [...(base[k] || []), ...extra[k]];
-  return out;
-};
-
-const CAMBRIDGE_IGCSE = {
-  Math: [cd("0580", "Mathematics"), cd("0980", "Mathematics (9-1)"), cd("0606", "Additional Mathematics"), cd("0607", "International Mathematics"), cd("0444", "Mathematics (US)")],
-  Physics: [cd("0625", "Physics"), cd("0972", "Physics (9-1)")],
-  Chemistry: [cd("0620", "Chemistry"), cd("0971", "Chemistry (9-1)")],
-  Biology: [cd("0610", "Biology"), cd("0970", "Biology (9-1)")],
-  English: [cd("0500", "English - First Language"), cd("0990", "English - First Language (9-1)"), cd("0524", "English - First Language (US)"), cd("0475", "English - Literature in English"), cd("0992", "English - Literature in English (9-1)"), cd("0472", "English (as an Additional Language)"), cd("0772", "English (as an Additional Language) (9-1)"), cd("0510", "English as a Second Language (Speaking endorsement)"), cd("0993", "English as a Second Language (Speaking endorsement) (9-1)"), cd("0511", "English as a Second Language (Count-in speaking)"), cd("0991", "English as a Second Language (Count-in speaking) (9-1)")],
-  History: [cd("0470", "History"), cd("0977", "History (9-1)"), cd("0409", "History - American (US)")],
-  "Computer Science": [cd("0478", "Computer Science"), cd("0984", "Computer Science (9-1)"), cd("0265", "Computer Science (new)")],
-  Economics: [cd("0455", "Economics"), cd("0987", "Economics (9-1)")],
-  Business: [cd("0450", "Business Studies"), cd("0986", "Business Studies (9-1)"), cd("0264", "Business"), cd("0774", "Business (9-1)")],
-  French: [cd("0520", "French - Foreign Language"), cd("0501", "French - First Language"), cd("7156", "French (9-1)")],
-  Arabic: [cd("0544", "Arabic - Foreign Language"), cd("0508", "Arabic - First Language"), cd("7184", "Arabic - First Language (9-1)"), cd("7180", "Arabic (9-1)")],
-  "Mandarin Chinese": [cd("0547", "Chinese (Mandarin) - Foreign Language"), cd("0523", "Chinese - Second Language"), cd("0509", "Chinese - First Language")]
-};
-const CAMBRIDGE_ASA_SHARED = {
-  Math: [cd("9709", "Mathematics"), cd("9231", "Mathematics - Further")],
-  Physics: [cd("9702", "Physics")],
-  Chemistry: [cd("9701", "Chemistry")],
-  Biology: [cd("9700", "Biology")],
-  English: [cd("9093", "English Language"), cd("9695", "English - Literature")],
-  History: [cd("9489", "History"), cd("9981", "European History (new)"), cd("9982", "International History (new)")],
-  "Computer Science": [cd("9618", "Computer Science"), cd("9626", "Information Technology")],
-  Economics: [cd("9708", "Economics")],
-  Business: [cd("9609", "Business")],
-  French: [],
-  Arabic: [cd("9680", "Arabic"), cd("9865", "Arabic (new)")],
-  "Mandarin Chinese": []
-};
-const CAMBRIDGE_AS = mergeCodes(CAMBRIDGE_ASA_SHARED, {
-  English: [cd("8021", "English General Paper (AS only)"), cd("8695", "English - Language and Literature (AS only)")],
-  History: [cd("8101", "US History to 1877 (AS only)"), cd("8102", "US History since 1877 (AS only)")],
-  French: [cd("8028", "French Language (AS only)")],
-  Arabic: [cd("8680", "Arabic - Language (AS only)")],
-  "Mandarin Chinese": [cd("8238", "Chinese Language (AS only)")]
-});
-const CAMBRIDGE_A = mergeCodes(CAMBRIDGE_ASA_SHARED, {
-  French: [cd("9898", "French Language & Literature (A Level only)")],
-  "Mandarin Chinese": [cd("9868", "Chinese - Language & Literature (A Level only)")]
-});
-
-// "R" = the regional papers that Pearson requires centres in the UAE, Oman,
-// and several other countries to sit.
-const EDEXCEL_IGCSE = {
-  Math: [cd("4MA1", "Mathematics A"), cd("4MA1 R", "Mathematics A - regional (R) papers"), cd("4MB1", "Mathematics B"), cd("4MB1 R", "Mathematics B - regional (R) papers"), cd("4PM1", "Further Pure Mathematics"), cd("4PM1 R", "Further Pure Mathematics - regional (R) papers")],
-  Physics: [cd("4PH1", "Physics"), cd("4PH1 R", "Physics - regional (R) papers")],
-  Chemistry: [cd("4CH1", "Chemistry"), cd("4CH1 R", "Chemistry - regional (R) papers")],
-  Biology: [cd("4BI1", "Biology"), cd("4BI1 R", "Biology - regional (R) papers"), cd("4HB1", "Human Biology"), cd("4HB1 R", "Human Biology - regional (R) papers")],
-  English: [cd("4EA1", "English Language A"), cd("4EA1 R", "English Language A - regional (R) papers"), cd("4EB1", "English Language B"), cd("4EB1 R", "English Language B - regional (R) papers"), cd("4ET1", "English Literature"), cd("4ET1 R", "English Literature - regional (R) papers")],
-  History: [cd("4HI1", "History"), cd("4HI1 R", "History - regional (R) papers")],
-  "Computer Science": [cd("4CP0", "Computer Science")],
-  Economics: [cd("4EC1", "Economics"), cd("4EC1 R", "Economics - regional (R) papers")],
-  Business: [cd("4BS1", "Business"), cd("4BS1 R", "Business - regional (R) papers")],
-  French: [cd("4FR1", "French"), cd("4FR1 R", "French - regional (R) papers")],
-  Arabic: [cd("4AA1", "Arabic (First Language)")],
-  "Mandarin Chinese": [cd("4CN1", "Chinese (Mandarin / Cantonese speaking)"), cd("4CN1 R", "Chinese - regional (R) papers")]
-};
-// Edexcel International AS/A Level: X.../Y... are the AS / full A Level
-// award codes, W... are the individual unit (paper) codes.
-const ial = (asCode, aCode, name, units) => ({
-  as: [cd(asCode, `${name} - International Advanced Subsidiary`), ...units],
-  a: [cd(aCode, `${name} - International Advanced Level`), ...units]
-});
-const IAL_MATH_UNITS = [cd("WMA11", "Pure Maths P1"), cd("WMA12", "Pure Maths P2"), cd("WMA13", "Pure Maths P3"), cd("WMA14", "Pure Maths P4"), cd("WME01", "Mechanics M1"), cd("WME02", "Mechanics M2"), cd("WME03", "Mechanics M3"), cd("WST01", "Statistics S1"), cd("WST02", "Statistics S2"), cd("WST03", "Statistics S3"), cd("WFM01", "Further Pure F1"), cd("WFM02", "Further Pure F2"), cd("WFM03", "Further Pure F3"), cd("WDM11", "Decision D1")];
-const EDEXCEL_IAL = {
-  Math: {
-    as: [cd("XMA01", "Mathematics - International Advanced Subsidiary"), cd("XFM01", "Further Mathematics - International Advanced Subsidiary"), cd("XPM01", "Pure Mathematics - International Advanced Subsidiary"), ...IAL_MATH_UNITS],
-    a: [cd("YMA01", "Mathematics - International Advanced Level"), cd("YFM01", "Further Mathematics - International Advanced Level"), cd("YPM01", "Pure Mathematics - International Advanced Level"), ...IAL_MATH_UNITS]
-  },
-  Physics: ial("XPH11", "YPH11", "Physics", [cd("WPH11", "Unit 1: Mechanics and Materials"), cd("WPH12", "Unit 2: Waves and Electricity"), cd("WPH13", "Unit 3: Practical Skills in Physics I"), cd("WPH14", "Unit 4: Further Mechanics, Fields and Particles"), cd("WPH15", "Unit 5: Thermodynamics, Radiation, Oscillations and Cosmology"), cd("WPH16", "Unit 6: Practical Skills in Physics II")]),
-  Chemistry: ial("XCH11", "YCH11", "Chemistry", [cd("WCH11", "Unit 1: Structure, Bonding and Introduction to Organic Chemistry"), cd("WCH12", "Unit 2: Energetics, Group Chemistry, Halogenoalkanes and Alcohols"), cd("WCH13", "Unit 3: Practical Skills in Chemistry I"), cd("WCH14", "Unit 4: Rates, Equilibria and Further Organic Chemistry"), cd("WCH15", "Unit 5: Transition Metals and Organic Nitrogen Chemistry"), cd("WCH16", "Unit 6: Practical Skills in Chemistry II")]),
-  Biology: ial("XBI11", "YBI11", "Biology", [cd("WBI11", "Unit 1: Molecules, Diet, Transport and Health"), cd("WBI12", "Unit 2: Cells, Development, Biodiversity and Conservation"), cd("WBI13", "Unit 3: Practical Skills in Biology I"), cd("WBI14", "Unit 4: Energy, Environment, Microbiology and Immunity"), cd("WBI15", "Unit 5: Respiration, Internal Environment, Coordination and Gene Technology"), cd("WBI16", "Unit 6: Practical Skills in Biology II")]),
-  English: {
-    as: [cd("XEN01", "English Language - International Advanced Subsidiary"), cd("XET01", "English Literature - International Advanced Subsidiary"), cd("WEN01", "Language Unit 1: Context and Identity"), cd("WEN02", "Language Unit 2: Language in Transition"), cd("WET01", "Literature Unit 1: Post-2000 Poetry and Prose"), cd("WET02", "Literature Unit 2: Drama")],
-    a: [cd("YEN01", "English Language - International Advanced Level"), cd("YET01", "English Literature - International Advanced Level"), cd("WEN01", "Language Unit 1: Context and Identity"), cd("WEN02", "Language Unit 2: Language in Transition"), cd("WEN03", "Language Unit 3: Crafting Language (Writing)"), cd("WEN04", "Language Unit 4: Investigating Language"), cd("WET01", "Literature Unit 1: Post-2000 Poetry and Prose"), cd("WET02", "Literature Unit 2: Drama"), cd("WET03", "Literature Unit 3: Poetry and Prose"), cd("WET04", "Literature Unit 4: Shakespeare and Pre-1900 Poetry")]
-  },
-  History: ial("XHI01", "YHI01", "History", [cd("WHI01", "Unit 1"), cd("WHI02", "Unit 2"), cd("WHI03", "Unit 3"), cd("WHI04", "Unit 4")]),
-  // Edexcel has no International A Level in Computer Science; Information Technology is its closest.
-  "Computer Science": ial("XIT11", "YIT11", "Information Technology", [cd("WIT11", "Unit 1"), cd("WIT12", "Unit 2"), cd("WIT13", "Unit 3"), cd("WIT14", "Unit 4")]),
-  Economics: ial("XEC11", "YEC11", "Economics", [cd("WEC11", "Unit 1: Markets in action"), cd("WEC12", "Unit 2: Macroeconomic performance and policy"), cd("WEC13", "Unit 3: Business behaviour"), cd("WEC14", "Unit 4: Developments in the Global Economy")]),
-  Business: ial("XBS11", "YBS11", "Business", [cd("WBS11", "Unit 1: Marketing and people"), cd("WBS12", "Unit 2: Managing business activities"), cd("WBS13", "Unit 3: Business decisions and strategy"), cd("WBS14", "Unit 4: Global business")]),
-  French: ial("XFR01", "YFR01", "French", [cd("WFR01", "Unit 1: Spoken Expression and Response"), cd("WFR02", "Unit 2: Understanding and Written Response"), cd("WFR03", "Unit 3: Understanding and Spoken Response"), cd("WFR04", "Unit 4: Research, Understanding and Written Response")]),
-  Arabic: ial("XAA01", "YAA01", "Arabic", [cd("WAA01", "Unit 1: Understanding and Written Response"), cd("WAA02", "Unit 2: Research, Writing and Research")])
-  // Edexcel has no International A Level in Chinese / Mandarin.
-};
-const EDEXCEL_AS = Object.fromEntries(Object.entries(EDEXCEL_IAL).map(([k, v]) => [k, v.as]));
-const EDEXCEL_A = Object.fromEntries(Object.entries(EDEXCEL_IAL).map(([k, v]) => [k, v.a]));
-
-const SYLLABUS_CODES = {
-  Cambridge: { IGCSE: CAMBRIDGE_IGCSE, "AS Level": CAMBRIDGE_AS, "A Level": CAMBRIDGE_A },
-  Edexcel: { IGCSE: EDEXCEL_IGCSE, "AS Level": EDEXCEL_AS, "A Level": EDEXCEL_A }
-};
-
-function syllabusOptionsFor(board, examType, subject) {
-  const boards = board ? [board] : Object.keys(SYLLABUS_CODES);
-  const seen = new Map();
-  for (const b of boards) {
-    const byBoard = SYLLABUS_CODES[b];
-    if (!byBoard) continue;
-    const levels = examType ? [examType] : Object.keys(byBoard);
-    for (const lv of levels) {
-      const table = byBoard[lv] || {};
-      const subjects = subject ? [subject] : Object.keys(table);
-      for (const s of subjects) for (const item of table[s] || []) if (!seen.has(item.code)) seen.set(item.code, item);
-    }
-  }
-  return Array.from(seen.values());
-}
-
-const CURRENT_YEAR = new Date().getFullYear();
-const YEARS = Array.from({ length: 16 }, (_, i) => String(CURRENT_YEAR + 1 - i));
 const ACCESS_PASSWORD = "3147"; // gate for Teacher/Admin role — client-side only, not real security
 
 /* ---------------------------------------------------------------------- */
@@ -410,44 +270,6 @@ function resizeImageToDataUrl(file, maxW = 900, quality = 0.68) {
     reader.onerror = reject;
     reader.readAsDataURL(file);
   });
-}
-
-// Past-paper PDFs are stored as base64 directly in Firestore (no paid
-// storage plan needed), so they're capped well under the 1 MiB per-document
-// limit — fine for text-based papers, tight for heavily scanned ones.
-const MAX_PDF_BYTES = 700 * 1024;
-function readPdfAsDataUrl(file) {
-  return new Promise((resolve, reject) => {
-    if (file.size > MAX_PDF_BYTES) {
-      reject(new Error(`That PDF is too large (${Math.round(file.size / 1024)}KB) — the free plan this site uses caps past papers at about ${Math.round(MAX_PDF_BYTES / 1024)}KB. Try a smaller/lower-resolution scan.`));
-      return;
-    }
-    const reader = new FileReader();
-    reader.onload = () => resolve(reader.result);
-    reader.onerror = reject;
-    reader.readAsDataURL(file);
-  });
-}
-
-/* ---------------------------------------------------------------------- */
-/* Past papers are stored one Firestore doc per PDF (kind: "qp" or "ms")  */
-/* so a question paper + mark scheme pair never has to fit in one doc.    */
-/* This groups matching docs back into one card for display.             */
-/* ---------------------------------------------------------------------- */
-
-function groupPapers(papers) {
-  const map = new Map();
-  for (const p of papers) {
-    const key = [p.board || "", p.subject, p.examType, p.syllabus || "", p.zone || "", p.variant || "", p.year || "", p.session || "", p.title].join("||");
-    let g = map.get(key);
-    if (!g) {
-      g = { id: key, title: p.title, board: p.board, subject: p.subject, examType: p.examType, syllabus: p.syllabus, zone: p.zone, variant: p.variant, year: p.year, session: p.session, uploadedByRole: p.uploadedByRole, createdAt: p.createdAt, qp: null, ms: null };
-      map.set(key, g);
-    }
-    if (p.createdAt > g.createdAt) g.createdAt = p.createdAt;
-    if (p.kind === "ms") g.ms = p; else g.qp = p;
-  }
-  return Array.from(map.values());
 }
 
 /* ---------------------------------------------------------------------- */
@@ -651,16 +473,8 @@ function GradeSelect({ value, onChange, includeAll, label }) {
     </select>
   );
 }
-function BoardSelect({ value, onChange, includeAll, label }) {
-  return (
-    <select className="pp-select" aria-label={label || "Exam board"} style={{ padding: "9px 10px", fontSize: 14, width: "100%" }} value={value} onChange={(e) => onChange(e.target.value)}>
-      {includeAll ? <option value="">All boards</option> : <option value="" disabled>Board…</option>}
-      {BOARDS.map((b) => <option key={b} value={b}>{b}</option>)}
-    </select>
-  );
-}
-function ExamTypeSelect({ value, onChange, includeAll, label, board }) {
-  const options = board ? EXAM_TYPES_BY_BOARD[board] : EXAM_TYPES;
+function ExamTypeSelect({ value, onChange, includeAll, label }) {
+  const options = EXAM_TYPES;
   return (
     <select className="pp-select" aria-label={label || "Exam type"} style={{ padding: "9px 10px", fontSize: 14, width: "100%" }} value={value} onChange={(e) => onChange(e.target.value)}>
       {includeAll ? <option value="">All exam types</option> : <option value="" disabled>Exam type…</option>}
@@ -674,48 +488,6 @@ function PaperSubjectSelect({ value, onChange, includeAll, label, board, examTyp
     <select className="pp-select" aria-label={label || "Subject"} style={{ padding: "9px 10px", fontSize: 14, width: "100%" }} value={value} onChange={(e) => onChange(e.target.value)}>
       {includeAll ? <option value="">All subjects</option> : <option value="" disabled>{examType === "SAT" ? "Section…" : "Subject…"}</option>}
       {options.map((s) => <option key={s} value={s}>{s}</option>)}
-    </select>
-  );
-}
-function SyllabusSelect({ value, onChange, includeAll, label, board, examType, subject }) {
-  const options = syllabusOptionsFor(board, examType, subject);
-  return (
-    <select className="pp-select" aria-label={label || "Syllabus code"} style={{ padding: "9px 10px", fontSize: 14, width: "100%" }} value={value} onChange={(e) => onChange(e.target.value)}>
-      {includeAll ? <option value="">All syllabus codes</option> : <option value="" disabled>Syllabus code…</option>}
-      {options.map((o) => <option key={o.code} value={o.code}>{o.code} — {o.label}</option>)}
-    </select>
-  );
-}
-function ZoneSelect({ value, onChange, includeAll, label }) {
-  return (
-    <select className="pp-select" aria-label={label || "Zone"} style={{ padding: "9px 10px", fontSize: 14, width: "100%" }} value={value} onChange={(e) => onChange(e.target.value)}>
-      {includeAll ? <option value="">All zones</option> : <option value="" disabled>Zone…</option>}
-      {ZONES.map((z) => <option key={z} value={z}>{z}</option>)}
-    </select>
-  );
-}
-function VariantSelect({ value, onChange, includeAll, label }) {
-  return (
-    <select className="pp-select" aria-label={label || "Variant"} style={{ padding: "9px 10px", fontSize: 14, width: "100%" }} value={value} onChange={(e) => onChange(e.target.value)}>
-      {includeAll ? <option value="">All variants</option> : <option value="" disabled>Variant…</option>}
-      {VARIANTS.map((v) => <option key={v} value={v}>{v}</option>)}
-    </select>
-  );
-}
-function SessionSelect({ value, onChange, includeAll, label, board, examType }) {
-  const options = examType === "AP" ? ["May"] : board ? SESSIONS_BY_BOARD[board] : ALL_SESSIONS;
-  return (
-    <select className="pp-select" aria-label={label || "Session"} style={{ padding: "9px 10px", fontSize: 14, width: "100%" }} value={value} onChange={(e) => onChange(e.target.value)}>
-      {includeAll ? <option value="">All sessions</option> : <option value="" disabled>Session…</option>}
-      {options.map((s) => <option key={s} value={s}>{s}</option>)}
-    </select>
-  );
-}
-function YearSelect({ value, onChange, includeAll, label }) {
-  return (
-    <select className="pp-select" aria-label={label || "Year"} style={{ padding: "9px 10px", fontSize: 14, width: "100%" }} value={value} onChange={(e) => onChange(e.target.value)}>
-      {includeAll ? <option value="">All years</option> : <option value="" disabled>Year…</option>}
-      {YEARS.map((y) => <option key={y} value={y}>{y}</option>)}
     </select>
   );
 }
@@ -1163,60 +935,6 @@ function AddVideoModal({ onClose, onSubmit }) {
   );
 }
 
-/* ---------------------------------------------------------------------- */
-/* Past Papers                                                            */
-/* ---------------------------------------------------------------------- */
-
-function PdfFilePicker({ label, value, onChange }) {
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState("");
-
-  async function handleFile(e) {
-    const file = e.target.files?.[0];
-    e.target.value = "";
-    if (!file) return;
-    setError("");
-    setBusy(true);
-    try {
-      const data = await readPdfAsDataUrl(file);
-      onChange({ fileData: data, fileName: file.name });
-    } catch (err) {
-      onChange(null);
-      setError(err.message || "Couldn't read that file.");
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  return (
-    <Field label={label}>
-      {value ? (
-        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-          <span className="pp-file-slot" style={{ fontSize: 13, display: "flex", alignItems: "center", gap: 6 }}><FileText size={13} /> {value.fileName}</span>
-          <button type="button" className="pp-btn pp-btn-ghost" style={{ padding: 6, borderRadius: 999 }} onClick={() => onChange(null)} aria-label="Remove file"><X size={13} /></button>
-        </div>
-      ) : busy ? (
-        <div className="pp-btn pp-btn-ghost" style={{ display: "inline-flex", alignItems: "center", gap: 8, padding: "9px 14px", fontSize: 13.5 }}><Loader2 size={15} style={{ animation: "pp-spin 0.9s linear infinite" }} /> Reading file…</div>
-      ) : (
-        <div className="pp-file-slot" style={{ display: "inline-block" }}>
-          <div style={{ fontSize: 11.5, fontWeight: 600, color: "var(--muted)", marginBottom: 5 }}>Choose a PDF (max ~{Math.round(MAX_PDF_BYTES / 1024)}KB)</div>
-          <input type="file" accept="application/pdf" onChange={handleFile} className="pp-file-input" />
-        </div>
-      )}
-      {error && <div style={{ fontSize: 12, color: "#8A3434", marginTop: 6 }}>{error}</div>}
-    </Field>
-  );
-}
-
-function dataUrlToBlobUrl(dataUrl) {
-  const comma = dataUrl.indexOf(",");
-  const mime = /^data:([^;,]+)/.exec(dataUrl.slice(0, comma))?.[1] || "application/pdf";
-  const bin = atob(dataUrl.slice(comma + 1));
-  const bytes = new Uint8Array(bin.length);
-  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
-  return URL.createObjectURL(new Blob([bytes], { type: mime }));
-}
-
 function NoteImage({ note, style }) {
   const boxRef = useRef(null);
   const [visible, setVisible] = useState(!!note.content);
@@ -1236,350 +954,10 @@ function NoteImage({ note, style }) {
   );
 }
 
-function PdfPane({ label, file, fallbackName, selector }) {
-  const [url, setUrl] = useState(null);
-  const [fileData, failed] = useFileData(file.fileData, file.fileId);
-  useEffect(() => {
-    if (!fileData) return;
-    let made = null;
-    try { made = dataUrlToBlobUrl(fileData); setUrl(made); } catch { setUrl(null); }
-    return () => { if (made) URL.revokeObjectURL(made); };
-  }, [fileData]);
-  const name = file.fileName || fallbackName;
-  return (
-    <div style={{ flex: 1, minWidth: 0, minHeight: 0, display: "flex", flexDirection: "column", border: "1px solid var(--border)", borderRadius: 10, overflow: "hidden", background: "var(--surface)" }}>
-      <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 12px", borderBottom: "1px solid var(--border)" }}>
-        <FileText size={14} style={{ flexShrink: 0 }} />
-        {selector ? <div style={{ flex: 1, minWidth: 0 }}>{selector}</div> : <span style={{ fontSize: 13, fontWeight: 700, flex: 1 }}>{label}</span>}
-        {url && <a className="pp-btn pp-btn-ghost" href={url} target="_blank" rel="noopener noreferrer" style={{ padding: "4px 10px", fontSize: 12, textDecoration: "none" }}>New tab</a>}
-        {url && <a className="pp-btn pp-btn-ghost" href={url} download={name} style={{ padding: "4px 10px", fontSize: 12, textDecoration: "none" }}>Download</a>}
-      </div>
-      {url ? <iframe title={label} src={url} style={{ flex: 1, width: "100%", minHeight: 0, border: 0, background: "#fff" }} />
-        : <div style={{ padding: 16, fontSize: 13, color: "var(--muted)" }}>{failed ? "Couldn't open this file." : "Loading…"}</div>}
-    </div>
-  );
-}
-
-function PdfViewer({ papers, paper, initialMode, onClose }) {
-  const docs = useMemo(() => {
-    const out = [];
-    papers.forEach((p) => {
-      const meta = [p.subject, p.examType, `${p.session || ""} ${p.year || ""}`.trim()].filter(Boolean).join(" · ");
-      if (p.qp) out.push({ key: `${p.id}@@qp`, label: `${p.title} - Question Paper (${meta})`, file: p.qp, name: `${p.title} QP.pdf` });
-      if (p.ms) out.push({ key: `${p.id}@@ms`, label: `${p.title} - Mark Scheme (${meta})`, file: p.ms, name: `${p.title} MS.pdf` });
-    });
-    return out;
-  }, [papers]);
-  const byKey = (k) => docs.find((d) => d.key === k);
-  const counterpart = (k) => {
-    if (!k) return null;
-    const [id, kind] = k.split("@@");
-    return byKey(`${id}@@${kind === "qp" ? "ms" : "qp"}`) ? `${id}@@${kind === "qp" ? "ms" : "qp"}` : null;
-  };
-  const startKind = initialMode === "ms" ? "ms" : paper.qp ? "qp" : "ms";
-  const [left, setLeft] = useState(`${paper.id}@@${startKind}`);
-  const [right, setRight] = useState(initialMode === "both" ? counterpart(`${paper.id}@@${startKind}`) : null);
-  const [split, setSplit] = useState(initialMode === "both" && !!counterpart(`${paper.id}@@${startKind}`));
-
-  useEffect(() => {
-    const onKey = (e) => { if (e.key === "Escape") onClose(); };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [onClose]);
-
-  function toggleSplit() {
-    if (!split && !byKey(right)) setRight(counterpart(left) || (docs.find((d) => d.key !== left) || {}).key || null);
-    setSplit(!split);
-  }
-  function swap() { setLeft(right); setRight(left); }
-
-  const picker = (value, onChange, label) => (
-    <select className="pp-select" aria-label={label} style={{ padding: "5px 8px", fontSize: 12.5, width: "100%" }} value={value || ""} onChange={(e) => onChange(e.target.value)}>
-      {!value && <option value="">Choose a document…</option>}
-      {docs.map((d) => <option key={d.key} value={d.key}>{d.label}</option>)}
-    </select>
-  );
-  const panel = (key, onChange, label) => {
-    const d = byKey(key);
-    return d
-      ? <PdfPane key={d.key} label={d.label} file={d.file} fallbackName={d.name} selector={picker(key, onChange, label)} />
-      : <div className="pp-card" style={{ flex: 1, borderRadius: 10, padding: 14 }}>{picker(key, onChange, label)}<div style={{ fontSize: 13, color: "var(--muted)", marginTop: 10 }}>Pick a paper or mark scheme to show here.</div></div>;
-  };
-
-  return (
-    <div style={{ position: "fixed", inset: 0, zIndex: 80, background: "var(--bg)", display: "flex", flexDirection: "column" }}>
-      <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 14px", borderBottom: "1px solid var(--border)", flexWrap: "wrap" }}>
-        <div style={{ flex: 1, minWidth: 140 }}>
-          <div className="pp-serif" style={{ fontSize: 16, fontWeight: 700 }}>Past paper viewer</div>
-          <div style={{ fontSize: 11.5, color: "var(--muted)" }}>{split ? "Each side has its own picker — show any two papers, or a paper and its mark scheme." : "Turn on Split screen to open a second document beside this one."}</div>
-        </div>
-        <button className={`pp-btn ${split ? "pp-btn-primary" : "pp-btn-ghost"}`} style={{ padding: "6px 14px", fontSize: 12.5 }} onClick={toggleSplit}><LayoutGrid size={13} style={{ marginRight: 5, display: "inline" }} />Split screen</button>
-        {split && <button className="pp-btn pp-btn-ghost" style={{ padding: "6px 14px", fontSize: 12.5 }} onClick={swap}>Swap sides</button>}
-        <button className="pp-btn pp-btn-ghost" style={{ padding: 7, borderRadius: 999 }} onClick={onClose} aria-label="Close viewer"><X size={16} /></button>
-      </div>
-      <div className="pp-split" style={{ flex: 1, minHeight: 0, padding: 10 }}>
-        {panel(left, setLeft, "Left document")}
-        {split && panel(right, setRight, "Right document")}
-      </div>
-    </div>
-  );
-}
-
-function PapersView({ papers, user, onAddPaper, lastPaperId, setLastPaperId, savedPaperIds, onToggleSavedPaper }) {
-  const [showForm, setShowForm] = useState(false);
-  const [query, setQuery] = useState("");
-  const [board, setBoard] = useState("");
-  const [subject, setSubject] = useState("");
-  const [examType, setExamType] = useState("");
-  const [syllabus, setSyllabus] = useState("");
-  const [year, setYear] = useState("");
-  const [session, setSession] = useState("");
-  const [zone, setZone] = useState("");
-  const [variant, setVariant] = useState("");
-  const [viewer, setViewer] = useState(null);
-  const canUpload = hasElevatedAccess(user);
-
-  function openViewer(paper, mode) { setLastPaperId(paper.id); setViewer({ paper, mode }); }
-
-  // Changing a higher-level filter clears lower ones that no longer make sense.
-  function changeBoard(b) {
-    setBoard(b);
-    if (b && examType && !EXAM_TYPES_BY_BOARD[b].includes(examType)) setExamType("");
-    setSubject(""); setSyllabus(""); setSession("");
-  }
-  function changeExamType(t) { setExamType(t); setSubject(""); setSyllabus(""); setSession(""); }
-  function changeSubject(s) { setSubject(s); setSyllabus(""); }
-
-  const syllabusApplies = (!board || board === "Cambridge" || board === "Edexcel") && !["SAT", "AP", "IB Diploma"].includes(examType);
-  const showCambridgeFields = !board || board === "Cambridge";
-
-  const filtered = useMemo(() => {
-    let list = papers;
-    if (board) list = list.filter((p) => p.board === board);
-    if (subject) list = list.filter((p) => p.subject === subject);
-    if (examType) list = list.filter((p) => p.examType === examType);
-    if (syllabus) list = list.filter((p) => p.syllabus === syllabus);
-    if (year) list = list.filter((p) => p.year === year);
-    if (session) list = list.filter((p) => p.session === session);
-    if (zone) list = list.filter((p) => p.zone === zone);
-    if (variant) list = list.filter((p) => p.variant === variant);
-    if (query.trim()) { const s = query.trim().toLowerCase(); list = list.filter((p) => p.title.toLowerCase().includes(s) || p.subject.toLowerCase().includes(s)); }
-    return [...list].sort((a, b) => b.createdAt - a.createdAt);
-  }, [papers, query, board, subject, examType, syllabus, year, session, zone, variant]);
-
-  const lastPaper = papers.find((p) => p.id === lastPaperId);
-
-  return (
-    <div>
-      <div style={{ position: "relative", marginBottom: 10 }}>
-        <Search size={15} style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)", color: "var(--muted)" }} />
-        <input className="pp-input" style={{ width: "100%", padding: "9px 12px 9px 34px", fontSize: 14 }} placeholder="Search past papers…" value={query} onChange={(e) => setQuery(e.target.value)} />
-      </div>
-      <div style={{ display: "flex", gap: 10, marginBottom: 16, flexWrap: "wrap", alignItems: "flex-start" }}>
-        <div style={{ width: 140 }}><BoardSelect value={board} onChange={changeBoard} includeAll /></div>
-        <div style={{ width: 140 }}><ExamTypeSelect value={examType} onChange={changeExamType} includeAll board={board} /></div>
-        <div style={{ width: 190 }}><PaperSubjectSelect value={subject} onChange={changeSubject} includeAll board={board} examType={examType} /></div>
-        {syllabusApplies && <div style={{ width: 210 }}><SyllabusSelect value={syllabus} onChange={setSyllabus} includeAll board={board} examType={examType} subject={subject} /></div>}
-        <div style={{ width: 140 }}><SessionSelect value={session} onChange={setSession} includeAll board={board} examType={examType} /></div>
-        <div style={{ width: 110 }}><YearSelect value={year} onChange={setYear} includeAll /></div>
-        {showCambridgeFields && <div style={{ width: 120 }}><ZoneSelect value={zone} onChange={setZone} includeAll /></div>}
-        {showCambridgeFields && <div style={{ width: 140 }}><VariantSelect value={variant} onChange={setVariant} includeAll /></div>}
-        {canUpload && <button className="pp-btn pp-btn-primary" style={{ padding: "9px 14px", fontSize: 13.5, display: "flex", alignItems: "center", gap: 6 }} onClick={() => setShowForm(true)}><Plus size={15} /> Upload paper</button>}
-      </div>
-      {lastPaper && (
-        <ContinueBanner title={lastPaper.title} subtitle={`${lastPaper.subject} · ${lastPaper.examType}${lastPaper.syllabus ? ` · ${lastPaper.syllabus}` : ""}`}
-          onClick={() => { const el = document.getElementById(`paper-${lastPaper.id}`); el?.scrollIntoView({ behavior: "smooth", block: "center" }); }} />
-      )}
-      {filtered.length === 0 ? (
-        <EmptyState icon={FileText} title="No past papers yet" body={canUpload ? "Upload the first past paper as a PDF." : "Only admins and teachers can upload past papers — check back soon."} />
-      ) : (
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(230px, 1fr))", gap: 14 }}>
-          {filtered.map((p) => {
-            const isSaved = savedPaperIds.includes(p.id);
-            return (
-              <div key={p.id} id={`paper-${p.id}`} className="pp-card" style={{ borderRadius: 10, padding: 14, transform: `rotate(${cardTilt(p.id) * 0.6}deg)`, outline: p.id === lastPaperId ? "2px solid var(--accent)" : "none", outlineOffset: 2 }}>
-                <div style={{ display: "flex", gap: 6, alignItems: "flex-start" }}>
-                  <div style={{ display: "flex", gap: 6, flexWrap: "wrap", flex: 1 }}>
-                    {p.board && <GradeTag text={p.board} />}<Tag text={p.subject} /><GradeTag text={p.examType} />{p.syllabus && <GradeTag text={p.syllabus} />}
-                    {(p.session || p.year) && <GradeTag text={`${p.session || ""} ${p.year || ""}`.trim()} />}
-                    {p.zone && <GradeTag text={p.zone} />}{p.variant && <GradeTag text={p.variant} />}
-                  </div>
-                  <button className="pp-btn pp-btn-ghost" style={{ padding: 5, borderRadius: 999, flexShrink: 0 }} onClick={() => onToggleSavedPaper(p.id)} aria-label={isSaved ? "Remove bookmark" : "Add bookmark"}>
-                    <Bookmark size={14} fill={isSaved ? "var(--accent)" : "none"} style={{ color: "var(--accent)" }} />
-                  </button>
-                </div>
-                <div className="pp-serif" style={{ fontSize: 15.5, fontWeight: 600, marginTop: 8 }}>{p.title}</div>
-                <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 10 }}>
-                  {p.qp && (
-                    <button className="pp-btn pp-btn-ghost" onClick={() => openViewer(p, "qp")}
-                      style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "6px 12px", fontSize: 12.5 }}>
-                      <FileText size={13} /> Question Paper
-                    </button>
-                  )}
-                  {p.ms && (
-                    <button className="pp-btn pp-btn-ghost" onClick={() => openViewer(p, "ms")}
-                      style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "6px 12px", fontSize: 12.5 }}>
-                      <FileText size={13} /> Mark Scheme
-                    </button>
-                  )}
-                  {p.qp && p.ms && (
-                    <button className="pp-btn pp-btn-primary" onClick={() => openViewer(p, "both")}
-                      style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "6px 12px", fontSize: 12.5 }}>
-                      <LayoutGrid size={13} /> Side by side
-                    </button>
-                  )}
-                </div>
-                <div style={{ fontSize: 11.5, color: "var(--muted)", marginTop: 10 }}>{roleLabel(p.uploadedByRole)} · {timeAgo(p.createdAt)}</div>
-              </div>
-            );
-          })}
-        </div>
-      )}
-      {viewer && <PdfViewer papers={papers} paper={viewer.paper} initialMode={viewer.mode} onClose={() => setViewer(null)} />}
-      {showForm && <AddPaperModal onClose={() => setShowForm(false)} onSubmit={async (payload) => { const ok = await onAddPaper(payload); if (ok) setShowForm(false); }} />}
-    </div>
-  );
-}
-
-function AddPaperModal({ onClose, onSubmit }) {
-  const [title, setTitle] = useState("");
-  const [board, setBoard] = useState("");
-  const [examType, setExamType] = useState("");
-  const [subject, setSubject] = useState("");
-  const [syllabus, setSyllabus] = useState("");
-  const [year, setYear] = useState("");
-  const [session, setSession] = useState("");
-  const [zone, setZone] = useState("");
-  const [variant, setVariant] = useState("");
-  const [qp, setQp] = useState(null);
-  const [ms, setMs] = useState(null);
-
-  const isCollegeBoard = board === "College Board" || board === "IB";
-  const isCambridge = board === "Cambridge";
-  const syllabusChoices = isCollegeBoard || !board || !examType || !subject ? [] : syllabusOptionsFor(board, examType, subject);
-  const needsSyllabus = syllabusChoices.length > 0;
-  const canSubmit = title.trim() && board && examType && subject && (!needsSyllabus || syllabus) && year && session
-    && (!isCambridge || (zone && variant)) && (qp || ms);
-
-  function pickBoard(b) { setBoard(b); setExamType(""); setSubject(""); setSyllabus(""); setSession(""); setZone(""); setVariant(""); }
-  function pickExamType(t) { setExamType(t); setSubject(""); setSyllabus(""); setSession(""); }
-  function pickSubject(s) { setSubject(s); setSyllabus(""); }
-
-  return (
-    <Modal title="Upload a past paper" onClose={onClose} wide>
-      <Field label="Title"><input className="pp-input" style={{ width: "100%", padding: "9px 12px", fontSize: 14.5 }} value={title} onChange={(e) => setTitle(e.target.value)} placeholder="e.g. Paper 1" /></Field>
-      <TwoUp>
-        <Field label="Exam board"><BoardSelect value={board} onChange={pickBoard} /></Field>
-        <Field label="Exam type"><ExamTypeSelect value={examType} onChange={pickExamType} board={board} /></Field>
-      </TwoUp>
-      <Field label={examType === "SAT" ? "Section" : "Subject"}>
-        <PaperSubjectSelect value={subject} onChange={pickSubject} board={board} examType={examType} />
-      </Field>
-      {board && examType && subject && !isCollegeBoard && (
-        <Field label="Syllabus code">
-          {needsSyllabus ? (
-            <SyllabusSelect value={syllabus} onChange={setSyllabus} board={board} examType={examType} subject={subject} />
-          ) : (
-            <div style={{ fontSize: 12.5, color: "var(--muted)" }}>{board} doesn't list an official {examType} code for {subject}, so none is needed.</div>
-          )}
-        </Field>
-      )}
-      <TwoUp>
-        <Field label={isCollegeBoard ? "Month" : "Session"}><SessionSelect value={session} onChange={setSession} board={board} examType={examType} /></Field>
-        <Field label="Year"><YearSelect value={year} onChange={setYear} /></Field>
-      </TwoUp>
-      {isCambridge && (
-        <TwoUp>
-          <Field label="Zone"><ZoneSelect value={zone} onChange={setZone} /></Field>
-          <Field label="Variant"><VariantSelect value={variant} onChange={setVariant} /></Field>
-        </TwoUp>
-      )}
-      <TwoUp>
-        <PdfFilePicker label="Question paper PDF" value={qp} onChange={setQp} />
-        <PdfFilePicker label="Mark scheme PDF" value={ms} onChange={setMs} />
-      </TwoUp>
-      <div style={{ fontSize: 12, color: "var(--muted)", marginTop: -6, marginBottom: 6 }}>Only upload papers you have permission to share — exam boards such as Cambridge don't allow their papers to be republished publicly. The Resources tab links to the official sources.</div>
-      <div style={{ fontSize: 12, color: "var(--muted)", marginBottom: 14 }}>Add at least one of the two — both together show up as one card with both buttons.</div>
-      <button className="pp-btn pp-btn-primary" style={{ width: "100%", padding: "10px 0", opacity: canSubmit ? 1 : 0.5 }} disabled={!canSubmit}
-        onClick={() => onSubmit({ title: title.trim(), board, examType, subject, syllabus, year, session, zone, variant, qp, ms })}>
-        Publish past paper
-      </button>
-    </Modal>
-  );
-}
-
 /* ---------------------------------------------------------------------- */
 /* Checklist — teachers/admins lay out topics per subject, everyone can   */
 /* tick them off as studied (personal, stored on-device).                 */
 /* ---------------------------------------------------------------------- */
-
-function ChecklistView({ items, user, onAddItem, onDeleteItem, checkedIds, onToggleChecked }) {
-  const [subject, setSubject] = useState("");
-  const [newText, setNewText] = useState("");
-  const [busy, setBusy] = useState(false);
-  const canManage = hasElevatedAccess(user);
-
-  const filtered = subject ? items.filter((i) => i.subject === subject) : items;
-  const grouped = useMemo(() => {
-    const map = new Map();
-    for (const it of filtered) {
-      if (!map.has(it.subject)) map.set(it.subject, []);
-      map.get(it.subject).push(it);
-    }
-    return Array.from(map.entries()).sort((a, b) => a[0].localeCompare(b[0]));
-  }, [filtered]);
-
-  async function handleAdd() {
-    if (!newText.trim() || !subject || busy) return;
-    setBusy(true);
-    const ok = await onAddItem({ subject, text: newText.trim() });
-    setBusy(false);
-    if (ok) setNewText("");
-  }
-
-  return (
-    <div>
-      <div style={{ display: "flex", gap: 10, marginBottom: 16, flexWrap: "wrap", alignItems: "flex-start" }}>
-        <div style={{ width: 200 }}><SubjectSelect value={subject} onChange={setSubject} includeAll /></div>
-      </div>
-      {canManage && (
-        <div style={{ display: "flex", gap: 8, marginBottom: 22, flexWrap: "wrap" }}>
-          <input className="pp-input" style={{ flex: 1, minWidth: 180, padding: "9px 12px", fontSize: 14 }}
-            placeholder={subject ? `Add a topic to ${subject}…` : "Pick a subject above first…"} value={newText}
-            onChange={(e) => setNewText(e.target.value)} disabled={!subject}
-            onKeyDown={(e) => { if (e.key === "Enter") handleAdd(); }} />
-          <button className="pp-btn pp-btn-primary" style={{ padding: "9px 16px", fontSize: 13.5, opacity: (newText.trim() && subject && !busy) ? 1 : 0.5 }}
-            disabled={!(newText.trim() && subject) || busy} onClick={handleAdd}>Add</button>
-        </div>
-      )}
-      {grouped.length === 0 ? (
-        <EmptyState icon={ListChecks} title="No checklist items yet" body={canManage ? "Pick a subject above and add the first topic." : "Ask a teacher or admin to add topics here — check back soon."} />
-      ) : grouped.map(([subj, list]) => {
-        const doneCount = list.filter((i) => checkedIds.includes(i.id)).length;
-        return (
-          <div key={subj} style={{ marginBottom: 24 }}>
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
-              <div className="pp-serif" style={{ fontSize: 15.5, fontWeight: 700 }}>{subj}</div>
-              <div style={{ fontSize: 12, color: "var(--muted)" }}>{doneCount}/{list.length} studied</div>
-            </div>
-            <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-              {list.map((it) => {
-                const checked = checkedIds.includes(it.id);
-                return (
-                  <label key={it.id} id={`topic-${it.id}`} className="pp-card" style={{ display: "flex", alignItems: "center", gap: 10, padding: "9px 12px", borderRadius: 8, cursor: "pointer" }}>
-                    <input type="checkbox" checked={checked} onChange={() => onToggleChecked(it.id)} style={{ width: 16, height: 16, accentColor: "var(--accent)", flexShrink: 0 }} />
-                    <span style={{ flex: 1, fontSize: 13.5, textDecoration: checked ? "line-through" : "none", color: checked ? "var(--muted)" : "var(--text)" }}>{it.text}</span>
-                    {canManage && <button type="button" className="pp-btn pp-btn-ghost" style={{ padding: 5, borderRadius: 999, flexShrink: 0 }} onClick={(e) => { e.preventDefault(); onDeleteItem(it.id); }} aria-label="Delete topic"><X size={13} /></button>}
-                  </label>
-                );
-              })}
-            </div>
-          </div>
-        );
-      })}
-    </div>
-  );
-}
 
 /* ---------------------------------------------------------------------- */
 /* Saved — everything bookmarked, plus what you were last reading/       */
@@ -1611,26 +989,23 @@ function BookmarkSection({ label, icon: SectionIcon, items, children }) {
   );
 }
 
-function SavedView({ notes, videos, papers, lastNoteId, lastVideoId, lastPaperId, savedNoteIds, savedVideoIds, savedPaperIds, onToggleSavedNote, onToggleSavedVideo, onToggleSavedPaper, onJump }) {
+function SavedView({ notes, videos, lastNoteId, lastVideoId, savedNoteIds, savedVideoIds, onToggleSavedNote, onToggleSavedVideo, onJump }) {
   const lastNote = notes.find((n) => n.id === lastNoteId);
   const lastVideo = videos.find((v) => v.id === lastVideoId);
-  const lastPaper = papers.find((p) => p.id === lastPaperId);
   const recents = [
     lastNote && { tab: "notes", elId: `note-${lastNote.id}`, title: lastNote.title, subtitle: lastNote.subject },
-    lastVideo && { tab: "videos", elId: `video-${lastVideo.id}`, title: lastVideo.title, subtitle: lastVideo.subject },
-    lastPaper && { tab: "papers", elId: `paper-${lastPaper.id}`, title: lastPaper.title, subtitle: `${lastPaper.subject} · ${lastPaper.examType}` }
+    lastVideo && { tab: "videos", elId: `video-${lastVideo.id}`, title: lastVideo.title, subtitle: lastVideo.subject }
   ].filter(Boolean);
 
   const savedNotes = notes.filter((n) => savedNoteIds.includes(n.id));
   const savedVideos = videos.filter((v) => savedVideoIds.includes(v.id));
-  const savedPapers = papers.filter((p) => savedPaperIds.includes(p.id));
-  const hasSaved = savedNotes.length || savedVideos.length || savedPapers.length;
+  const hasSaved = savedNotes.length || savedVideos.length;
 
   return (
     <div>
       <div className="pp-serif" style={{ fontSize: 16.5, fontWeight: 700, marginBottom: 10 }}>Continue where you left off</div>
       {recents.length === 0 ? (
-        <div style={{ fontSize: 13, color: "var(--muted)", marginBottom: 24 }}>Nothing opened yet — browse Notes, Videos, or Past Papers to get started.</div>
+        <div style={{ fontSize: 13, color: "var(--muted)", marginBottom: 24 }}>Nothing opened yet — browse Notes or Videos to get started.</div>
       ) : (
         <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 24 }}>
           {recents.map((r) => <ContinueBanner key={r.tab} title={r.title} subtitle={r.subtitle} onClick={() => onJump(r.tab, r.elId)} />)}
@@ -1639,7 +1014,7 @@ function SavedView({ notes, videos, papers, lastNoteId, lastVideoId, lastPaperId
 
       <div className="pp-serif" style={{ fontSize: 16.5, fontWeight: 700, marginBottom: 10 }}>Bookmarked</div>
       {!hasSaved ? (
-        <EmptyState icon={Bookmark} title="Nothing bookmarked yet" body="Tap the bookmark icon on any note, video, or past paper to save it here." />
+        <EmptyState icon={Bookmark} title="Nothing bookmarked yet" body="Tap the bookmark icon on any note or video to save it here." />
       ) : (
         <>
           <BookmarkSection label="Notes" icon={BookOpen} items={savedNotes}>
@@ -1654,12 +1029,6 @@ function SavedView({ notes, videos, papers, lastNoteId, lastVideoId, lastPaperId
                 onOpen={() => onJump("videos", `video-${v.id}`)} onRemove={() => onToggleSavedVideo(v.id)} />
             ))}
           </BookmarkSection>
-          <BookmarkSection label="Past Papers" icon={FileText} items={savedPapers}>
-            {savedPapers.map((p) => (
-              <BookmarkRow key={p.id} title={p.title} tags={<><Tag text={p.subject} /><GradeTag text={p.examType} /></>}
-                onOpen={() => onJump("papers", `paper-${p.id}`)} onRemove={() => onToggleSavedPaper(p.id)} />
-            ))}
-          </BookmarkSection>
         </>
       )}
     </div>
@@ -1667,7 +1036,7 @@ function SavedView({ notes, videos, papers, lastNoteId, lastVideoId, lastPaperId
 }
 
 /* ---------------------------------------------------------------------- */
-/* Resources — links to the official places past papers and practice      */
+/* Past Papers — links to the official places past papers and practice   */
 /* material live. Nothing is copied or embedded; "Half screen" just opens */
 /* the link in a window covering the right half of the screen.            */
 /* ---------------------------------------------------------------------- */
@@ -1676,7 +1045,7 @@ const CAMBRIDGE_BASE = "https://www.cambridgeinternational.org/programmes-and-qu
 const cambridgeLink = (label, slug) => ({ embed: true, label: label + " — papers & mark schemes", url: `${CAMBRIDGE_BASE}/${slug}/past-papers/` });
 const RESOURCE_GROUPS = [
   {
-    title: "Cambridge IGCSE", official: true, note: "Official Cambridge pages with question papers and mark schemes, one per subject.",
+    title: "Cambridge IGCSE", source: "cambridge", official: true, note: "Official Cambridge pages with question papers and mark schemes, one per subject.",
     links: [
       cambridgeLink("Mathematics (0580)", "cambridge-igcse-mathematics-0580"),
       cambridgeLink("Physics (0625)", "cambridge-igcse-physics-0625"),
@@ -1693,7 +1062,7 @@ const RESOURCE_GROUPS = [
     ]
   },
   {
-    title: "Cambridge AS & A Level", official: true, note: "Official Cambridge pages with question papers and mark schemes, one per subject.",
+    title: "Cambridge AS & A Level", source: "cambridge", official: true, note: "Official Cambridge pages with question papers and mark schemes, one per subject.",
     links: [
       cambridgeLink("Mathematics (9709)", "cambridge-international-as-and-a-level-mathematics-9709"),
       cambridgeLink("Physics (9702)", "cambridge-international-as-and-a-level-physics-9702"),
@@ -1710,30 +1079,31 @@ const RESOURCE_GROUPS = [
     ]
   },
   {
-    title: "Edexcel (Pearson)", official: true, note: "Pearson's official finder for past papers and mark schemes — choose International GCSE or International Advanced Level, then your subject.",
+    title: "Edexcel (Pearson)", source: "edexcel", official: true, note: "Pearson's official finder for past papers and mark schemes — choose International GCSE or International Advanced Level, then your subject.",
     links: [{ label: "Pearson past papers", url: "https://qualifications.pearson.com/en/support/support-topics/exams/past-papers.html" }]
   },
   {
-    title: "IB Diploma", official: true,
+    title: "IB Diploma", source: "ib", official: true,
     note: "IB past papers are sold by the IB itself rather than published free, so they can't be shared here. Ask your school's IB coordinator how to get them; this is the IB's official programme page.",
     links: [{ label: "IB Diploma Programme (official)", url: "https://www.ibo.org/programmes/diploma-programme/" }]
   },
   {
-    title: "SAT (College Board)", official: true, note: "Free official practice for the digital SAT.",
+    title: "SAT (College Board)", source: "sat", official: true, note: "The SAT doesn't publish past papers the way Cambridge and Pearson do. College Board instead releases free official full-length practice tests, plus a question bank you can filter by topic and difficulty — that's the real thing to practise with.",
     links: [
       { label: "Official SAT practice tests", url: "https://satsuite.collegeboard.org/practice/practice-tests" },
+      { label: "Official SAT question bank (filter by topic)", url: "https://satsuite.collegeboard.org/practice/student-question-bank" },
       { label: "Bluebook (the SAT testing app)", url: "https://bluebook.collegeboard.org/" },
       { embed: true, label: "Khan Academy - Official Digital SAT Prep", url: "https://www.khanacademy.org/test-prep/sat" }
     ]
   },
   {
-    title: "AP (College Board)", official: true, note: "Each AP course page on AP Central has its official past exam questions and scoring guidelines.",
+    title: "AP (College Board)", source: "ap", official: true, note: "Each AP course page on AP Central has its official past exam questions and scoring guidelines.",
     links: [
       { label: "AP Central - all courses & past exam questions", url: "https://apcentral.collegeboard.org/courses" }
     ]
   },
   {
-    title: "Save My Exams (third-party)", official: false,
+    title: "Save My Exams (third-party)", source: "sme", official: false,
     note: "Revision notes and past papers by topic. Some content needs a free or paid account. We only link to it — nothing from the site is copied or embedded here.",
     links: [
       { label: "Save My Exams - IGCSE", url: "https://www.savemyexams.com/igcse/" },
@@ -1874,20 +1244,35 @@ function CambridgePapers({ onOpen }) {
   );
 }
 
-function ResourcesView() {
+const PAPER_SOURCES = [
+  { id: "cambridge", label: "Cambridge" },
+  { id: "edexcel", label: "Edexcel" },
+  { id: "sat", label: "SAT" },
+  { id: "ap", label: "AP" },
+  { id: "ib", label: "IB" },
+  { id: "sme", label: "Save My Exams" }
+];
+
+function PastPapersView() {
   const notify = useToast();
+  const [source, setSource] = useLocalState("preplist:paperSource", "cambridge");
   const [split, setSplit] = useState(null);
   const embedItems = RESOURCE_GROUPS.flatMap((g) => g.links.filter((l) => l.embed).map((l) => ({ ...l, group: g.title })));
   const half = (url, side) => { if (!openHalfScreen(url, side)) notify({ kind: "error", text: "Your browser blocked the pop-up. Allow pop-ups for this site, then try again." }); };
   return (
     <div>
       <div className="pp-card" style={{ borderRadius: 10, padding: 14, marginBottom: 18, fontSize: 13, lineHeight: 1.55 }}>
-        <div className="pp-serif" style={{ fontSize: 15.5, fontWeight: 700, marginBottom: 6 }}>Where to find real past papers</div>
+        <div className="pp-serif" style={{ fontSize: 15.5, fontWeight: 700, marginBottom: 6 }}>Past papers — pick your exam board</div>
         Past papers belong to the exam boards, and Cambridge doesn't allow them to be republished on other websites — so this page links to the official sources instead of copying them.
         Each Cambridge and Pearson page below lists the <b>question papers and the mark schemes</b> together. <b>Open</b> uses a new tab. <b>Split view</b> (Cambridge and Khan Academy) shows two pages side by side right here inside PrepList Pro — it works in any browser. Pearson, College Board and the IB don't allow their pages to be shown inside other websites, so those only get <b>Left half</b> / <b>Right half</b>, which try to open a window on that half of your screen (your browser may open a full tab instead).
       </div>
-      <CambridgePapers onOpen={(items, left, right) => setSplit({ items, left, right })} />
-      {RESOURCE_GROUPS.map((g) => (
+      <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 18 }} role="tablist" aria-label="Past paper source">
+        {PAPER_SOURCES.map((p) => (
+          <button key={p.id} role="tab" aria-selected={source === p.id} className={`pp-btn ${source === p.id ? "pp-btn-primary" : "pp-btn-ghost"}`} style={{ padding: "7px 16px", fontSize: 13.5 }} onClick={() => setSource(p.id)}>{p.label}</button>
+        ))}
+      </div>
+      {source === "cambridge" && <CambridgePapers onOpen={(items, left, right) => setSplit({ items, left, right })} />}
+      {RESOURCE_GROUPS.filter((g) => g.source === source).map((g) => (
         <div key={g.title} style={{ marginBottom: 22 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
             <div className="pp-serif" style={{ fontSize: 16, fontWeight: 700 }}>{g.title}</div>
@@ -1982,24 +1367,22 @@ function QuizReference({ options, refIndex, setRefIndex }) {
   return (
     <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", height: "calc(100dvh - 190px)", minHeight: 380 }}>
       <select className="pp-select" aria-label="Reference material" style={{ padding: "8px 10px", fontSize: 13.5, width: "100%", marginBottom: 8 }} value={refIndex} onChange={(e) => setRefIndex(e.target.value)}>
-        <option value="">Choose a note or past paper to read alongside…</option>
+        <option value="">Choose a note to read alongside…</option>
         {options.map((o, i) => <option key={i} value={i}>{o.label}</option>)}
       </select>
       {!opt ? (
         <div className="pp-card" style={{ borderRadius: 10, padding: 16, fontSize: 13, color: "var(--muted)" }}>Pick something above and it stays on this side while you answer questions on the other.</div>
-      ) : opt.kind === "note" ? (
+      ) : (
         <div className="pp-card" style={{ borderRadius: 10, padding: 14, overflowY: "auto", flex: 1 }}>
           <div className="pp-serif" style={{ fontSize: 15.5, fontWeight: 600, marginBottom: 8 }}>{opt.note.title}</div>
           {opt.note.type === "image" ? <NoteImage note={opt.note} style={{ width: "100%", borderRadius: 6 }} /> : <p style={{ fontSize: 13.5, lineHeight: 1.55, whiteSpace: "pre-wrap" }}><MathText text={opt.note.content} /></p>}
         </div>
-      ) : (
-        <PdfPane key={opt.label + (opt.file.fileId || "")} label={opt.label} file={opt.file} fallbackName={`${opt.paper.title}.pdf`} />
       )}
     </div>
   );
 }
 
-function QuizView({ questions, user, notes, papers, onNeedRefs, onAddQuestion, onDeleteQuestion }) {
+function QuizView({ questions, user, notes, onNeedRefs, onAddQuestion, onDeleteQuestion }) {
   const [phase, setPhase] = useState("setup");
   const [examType, setExamType] = useState("");
   const [subject, setSubject] = useState("");
@@ -2021,12 +1404,8 @@ function QuizView({ questions, user, notes, papers, onNeedRefs, onAddQuestion, o
   const refOptions = useMemo(() => {
     const out = [];
     notes.filter((n) => !subject || n.subject === subject).forEach((n) => out.push({ kind: "note", label: `Note: ${n.title}`, note: n }));
-    papers.filter((p) => !subject || p.subject === subject).forEach((p) => {
-      if (p.qp) out.push({ kind: "pdf", label: `Paper: ${p.title} (Question Paper)`, paper: p, file: p.qp });
-      if (p.ms) out.push({ kind: "pdf", label: `Paper: ${p.title} (Mark Scheme)`, paper: p, file: p.ms });
-    });
     return out;
-  }, [notes, papers, subject]);
+  }, [notes, subject]);
 
   function begin(items, secs) {
     setRun({ items, idx: 0, picked: null, answers: [], secondsLeft: secs });
@@ -2148,7 +1527,7 @@ function QuizView({ questions, user, notes, papers, onNeedRefs, onAddQuestion, o
     <div>
       <div className="pp-card" style={{ borderRadius: 10, padding: 14, marginBottom: 16, fontSize: 13, lineHeight: 1.55 }}>
         <div className="pp-serif" style={{ fontSize: 15.5, fontWeight: 700, marginBottom: 4 }}>Practice quiz</div>
-        Original practice questions written for this site (they are not copied from past papers — real papers are on the Resources tab). Get instant feedback with an explanation after each question, then retry the ones you missed.
+        Original practice questions written for this site (they are not copied from past papers — real past papers are on the Past Papers tab). Get instant feedback with an explanation after each question, then retry the ones you missed.
       </div>
       <div style={{ display: "flex", gap: 10, marginBottom: 12, flexWrap: "wrap", alignItems: "flex-end" }}>
         <div style={{ width: 150 }}><ExamTypeSelect value={examType} onChange={(t) => { setExamType(t); setSubject(""); setTopic(""); }} includeAll /></div>
@@ -2212,6 +1591,52 @@ function QuizView({ questions, user, notes, papers, onNeedRefs, onAddQuestion, o
 /* right move up a box and show less often.                               */
 /* ---------------------------------------------------------------------- */
 
+let tesseractPromise = null;
+function loadTesseract() {
+  if (window.Tesseract) return Promise.resolve(window.Tesseract);
+  if (!tesseractPromise) {
+    tesseractPromise = new Promise((resolve, reject) => {
+      const sc = document.createElement("script");
+      sc.src = "https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js";
+      sc.onload = () => resolve(window.Tesseract);
+      sc.onerror = () => { tesseractPromise = null; reject(new Error("load")); };
+      document.head.appendChild(sc);
+    });
+  }
+  return tesseractPromise;
+}
+
+// Turns text read from a photo into flashcard suggestions. This is simple
+// pattern matching (term: definition, question lines, "X is Y"), not AI, so
+// the suggestions are shown for checking before anything is added.
+function cardsFromText(text) {
+  const clean = (l) => l.replace(/\s+/g, " ").replace(/^[\u2022\u00b7*\-–—]+\s*/, "").replace(/^\(?\d{1,2}[.)]\s+/, "").trim();
+  const raw = text.split(/\r?\n/).map(clean).filter((l) => l.length > 2);
+  const items = [];
+  for (const line of raw) {
+    const prev = items[items.length - 1];
+    if (prev && /^[a-z]/.test(line) && !/[.?!:]$/.test(prev)) items[items.length - 1] = `${prev} ${line}`;
+    else items.push(line);
+  }
+  const cards = []; const skipped = [];
+  for (let i = 0; i < items.length; i++) {
+    const it = items[i];
+    let m = it.match(/^(.{2,60}?)\s*(?::|\s[-–—=]\s)\s*(.{3,})$/);
+    if (m) { cards.push({ front: m[1].trim(), back: m[2].trim() }); continue; }
+    if (/\?$/.test(it) && items[i + 1]) { cards.push({ front: it, back: items[i + 1] }); i++; continue; }
+    m = it.match(/^(.{3,60}?)\s+(is defined as|refers to|means|is|are)\s+(.{3,})$/i);
+    if (m) {
+      const verb = m[2].toLowerCase();
+      m[1] = m[1].replace(/^(A|An|The)\s/, (w) => w.toLowerCase());
+      const front = verb === "means" ? `What does ${m[1]} mean?` : verb === "refers to" ? `What does ${m[1]} refer to?` : verb === "is defined as" ? `How is ${m[1]} defined?` : `What ${verb} ${m[1]}?`;
+      cards.push({ front, back: m[3].replace(/[.]$/, "") });
+      continue;
+    }
+    skipped.push(it);
+  }
+  return { cards, skipped };
+}
+
 function FlashcardsView() {
   const [decks, setDecks] = useLocalState("preplist:flashcards", []);
   const [deckId, setDeckId] = useState("");
@@ -2223,6 +1648,36 @@ function FlashcardsView() {
   const [flipped, setFlipped] = useState(false);
   const [done, setDone] = useState(0);
   const deck = decks.find((d) => d.id === deckId);
+  const [ocrMsg, setOcrMsg] = useState("");
+  const [ocrBusy, setOcrBusy] = useState(false);
+  const [proposals, setProposals] = useState(null);
+  const [rawText, setRawText] = useState("");
+
+  async function readPhoto(e) {
+    const file = e.target.files && e.target.files[0];
+    e.target.value = "";
+    if (!file) return;
+    setProposals(null); setRawText(""); setOcrBusy(true); setOcrMsg("Loading the text reader (first time takes a few seconds)…");
+    try {
+      const T = await loadTesseract();
+      const img = await resizeImageToDataUrl(file, 1800, 0.92);
+      const res = await T.recognize(img, "eng", { logger: (m) => { if (m.status === "recognizing text") setOcrMsg(`Reading the photo… ${Math.round((m.progress || 0) * 100)}%`); } });
+      const text = res.data.text || "";
+      setRawText(text);
+      const { cards, skipped } = cardsFromText(text);
+      setProposals({ cards: cards.map((c) => ({ ...c, on: true })), skipped });
+      setOcrMsg("");
+    } catch {
+      setOcrMsg("Couldn't read that photo. Check your connection and try a clearer, well-lit picture.");
+    }
+    setOcrBusy(false);
+  }
+  function addProposals() {
+    const picked = proposals.cards.filter((c) => c.on && c.front.trim() && c.back.trim()).map((c) => ({ id: uid(), front: c.front.trim(), back: c.back.trim(), box: 0 }));
+    if (!picked.length) return;
+    updateDeck((d) => ({ ...d, cards: [...d.cards, ...picked] }));
+    setProposals(null); setRawText("");
+  }
 
   function addDeck() {
     if (!newDeck.trim()) return;
@@ -2298,6 +1753,32 @@ function FlashcardsView() {
             <input className="pp-input" style={{ flex: 1, minWidth: 160, padding: "8px 10px", fontSize: 14 }} placeholder="Front (question / term)" value={front} onChange={(e) => setFront(e.target.value)} />
             <input className="pp-input" style={{ flex: 1, minWidth: 160, padding: "8px 10px", fontSize: 14 }} placeholder="Back (answer)" value={back} onChange={(e) => setBack(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") addCard(); }} />
             <button className="pp-btn pp-btn-primary" style={{ padding: "8px 16px", opacity: front.trim() && back.trim() ? 1 : 0.5 }} disabled={!(front.trim() && back.trim())} onClick={addCard}>Add card</button>
+          </div>
+          <div className="pp-card" style={{ borderRadius: 10, padding: 12, marginBottom: 14 }}>
+            <div style={{ fontSize: 13.5, fontWeight: 700, marginBottom: 4 }}>Make cards from a photo</div>
+            <div style={{ fontSize: 12.5, color: "var(--muted)", marginBottom: 8 }}>Take or upload a photo of your notes or textbook page. The site reads the text on your device and suggests cards from lines like "Term: definition", questions followed by answers, and "X is Y" sentences. You check them before they're added. Works best on clear, printed text.</div>
+            <input type="file" accept="image/*" onChange={readPhoto} disabled={ocrBusy} className="pp-file-input" aria-label="Photo of notes" />
+            {ocrMsg && <div style={{ fontSize: 12.5, marginTop: 8 }}>{ocrMsg}</div>}
+            {proposals && (
+              <div style={{ marginTop: 10 }}>
+                {proposals.cards.length === 0 ? (
+                  <div style={{ fontSize: 13 }}>I couldn't spot any term/definition pairs in that photo. Try lines written like "Osmosis: movement of water across a membrane", then check the text I read below.</div>
+                ) : (
+                  <>
+                    <div style={{ fontSize: 12.5, fontWeight: 700, marginBottom: 6 }}>{proposals.cards.length} suggested card{proposals.cards.length === 1 ? "" : "s"} — fix anything that's wrong, untick what you don't want</div>
+                    {proposals.cards.map((c, i) => (
+                      <div key={i} style={{ display: "flex", gap: 6, alignItems: "center", marginBottom: 6, flexWrap: "wrap" }}>
+                        <input type="checkbox" checked={c.on} onChange={() => setProposals((p) => ({ ...p, cards: p.cards.map((x, k) => (k === i ? { ...x, on: !x.on } : x)) }))} aria-label={`Include card ${i + 1}`} style={{ accentColor: "var(--accent)" }} />
+                        <input className="pp-input" style={{ flex: 1, minWidth: 130, padding: "6px 8px", fontSize: 13 }} value={c.front} onChange={(e) => setProposals((p) => ({ ...p, cards: p.cards.map((x, k) => (k === i ? { ...x, front: e.target.value } : x)) }))} />
+                        <input className="pp-input" style={{ flex: 1, minWidth: 130, padding: "6px 8px", fontSize: 13 }} value={c.back} onChange={(e) => setProposals((p) => ({ ...p, cards: p.cards.map((x, k) => (k === i ? { ...x, back: e.target.value } : x)) }))} />
+                      </div>
+                    ))}
+                    <button className="pp-btn pp-btn-primary" style={{ padding: "8px 16px", marginTop: 4 }} onClick={addProposals}>Add {proposals.cards.filter((c) => c.on).length} card{proposals.cards.filter((c) => c.on).length === 1 ? "" : "s"} to this deck</button>
+                  </>
+                )}
+                <details style={{ marginTop: 8 }}><summary style={{ fontSize: 12, color: "var(--muted)", cursor: "pointer" }}>Text I read from the photo</summary><pre style={{ whiteSpace: "pre-wrap", fontSize: 12, margin: "6px 0 0" }}>{rawText || "(nothing)"}</pre></details>
+              </div>
+            )}
           </div>
           {deck.cards.map((c) => (
             <div key={c.id} style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 0", borderTop: "1px solid var(--border)", fontSize: 13 }}>
@@ -2599,14 +2080,12 @@ function SearchResultGroup({ label, icon: SectionIcon, items, labelKey, onPick }
   );
 }
 
-function GlobalSearchModal({ notes, videos, papers, checklistItems, onClose, onJump }) {
+function GlobalSearchModal({ notes, videos, onClose, onJump }) {
   const [q, setQ] = useState("");
   const s = q.trim().toLowerCase();
   const noteMatches = s ? notes.filter((n) => n.title.toLowerCase().includes(s) || n.subject.toLowerCase().includes(s)) : [];
   const videoMatches = s ? videos.filter((v) => v.title.toLowerCase().includes(s) || v.subject.toLowerCase().includes(s)) : [];
-  const paperMatches = s ? papers.filter((p) => p.title.toLowerCase().includes(s) || p.subject.toLowerCase().includes(s)) : [];
-  const topicMatches = s ? checklistItems.filter((i) => i.text.toLowerCase().includes(s) || i.subject.toLowerCase().includes(s)) : [];
-  const totalMatches = noteMatches.length + videoMatches.length + paperMatches.length + topicMatches.length;
+  const totalMatches = noteMatches.length + videoMatches.length;
 
   function pick(tabId, elId) { onJump(tabId, elId); onClose(); }
 
@@ -2615,7 +2094,7 @@ function GlobalSearchModal({ notes, videos, papers, checklistItems, onClose, onJ
       <div className="pp-card pp-pop" onClick={(e) => e.stopPropagation()} style={{ width: "100%", maxWidth: 560, maxHeight: "75vh", overflowY: "auto", borderRadius: 14, padding: 18 }}>
         <div style={{ position: "relative" }}>
           <Search size={15} style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)", color: "var(--muted)" }} />
-          <input autoFocus className="pp-input" style={{ width: "100%", padding: "10px 12px 10px 34px", fontSize: 15 }} placeholder="Search notes, videos, papers, topics…" value={q} onChange={(e) => setQ(e.target.value)} />
+          <input autoFocus className="pp-input" style={{ width: "100%", padding: "10px 12px 10px 34px", fontSize: 15 }} placeholder="Search notes and videos…" value={q} onChange={(e) => setQ(e.target.value)} />
         </div>
         {s && (
           <div style={{ marginTop: 14 }}>
@@ -2625,8 +2104,6 @@ function GlobalSearchModal({ notes, videos, papers, checklistItems, onClose, onJ
               <>
                 <SearchResultGroup label="Notes" icon={BookOpen} items={noteMatches} onPick={(n) => pick("notes", `note-${n.id}`)} />
                 <SearchResultGroup label="Videos" icon={VideoIcon} items={videoMatches} onPick={(v) => pick("videos", `video-${v.id}`)} />
-                <SearchResultGroup label="Past Papers" icon={FileText} items={paperMatches} onPick={(p) => pick("papers", `paper-${p.id}`)} />
-                <SearchResultGroup label="Checklist" icon={ListChecks} items={topicMatches} labelKey="text" onPick={(i) => pick("checklist", `topic-${i.id}`)} />
               </>
             )}
           </div>
@@ -2645,8 +2122,6 @@ const TABS = [
   { id: "videos", label: "Videos", icon: VideoIcon },
   { id: "papers", label: "Past Papers", icon: FileText },
   { id: "quiz", label: "Quiz", icon: HelpCircle },
-  { id: "resources", label: "Resources", icon: LinkIcon },
-  { id: "checklist", label: "Checklist", icon: ListChecks },
   { id: "flashcards", label: "Flashcards", icon: Star },
   { id: "tools", label: "Tools", icon: Clock },
   { id: "saved", label: "Saved", icon: Bookmark }
@@ -2659,16 +2134,13 @@ function MainApp({ user, onSwitchRole, theme, setTheme }) {
   const want = useCallback((...names) => setWanted((prev) => (names.every((n) => prev.has(n)) ? prev : new Set([...prev, ...names]))), []);
   const [notes, notesReady] = useCollection("notes", undefined, wanted.has("notes"));
   const [videos, videosReady] = useCollection("videos", undefined, wanted.has("videos"));
-  const [rawPapers, papersReady] = useCollection("pastPapers", undefined, wanted.has("papers"));
-  const papers = useMemo(() => groupPapers(rawPapers), [rawPapers]);
-  const [checklistItems, checklistReady] = useCollection("checklistItems", undefined, wanted.has("checklist"));
   const [quizQuestions, quizReady] = useCollection("quizQuestions", undefined, wanted.has("quiz"));
 
   const [tab, setTab] = useState("notes");
   const [showSearch, setShowSearch] = useState(false);
-  const TAB_NEEDS = { notes: ["notes"], videos: ["videos"], papers: ["papers"], quiz: ["quiz"], checklist: ["checklist"], saved: ["notes", "videos", "papers"], resources: [], tools: [], flashcards: [] };
+  const TAB_NEEDS = { notes: ["notes"], videos: ["videos"], papers: [], quiz: ["quiz"], saved: ["notes", "videos"], tools: [], flashcards: [] };
   useEffect(() => { want(...(TAB_NEEDS[tab] || [])); }, [tab, want]);
-  useEffect(() => { if (showSearch) want("notes", "videos", "papers", "checklist"); }, [showSearch, want]);
+  useEffect(() => { if (showSearch) want("notes", "videos"); }, [showSearch, want]);
   const [toast, setToast] = useState(null);
   const notify = useCallback((t) => setToast(t), []);
   useEffect(() => {
@@ -2679,16 +2151,11 @@ function MainApp({ user, onSwitchRole, theme, setTheme }) {
 
   const [lastNoteId, setLastNoteId] = useLocalState("preplist:lastNote", null);
   const [lastVideoId, setLastVideoId] = useLocalState("preplist:lastVideo", null);
-  const [lastPaperId, setLastPaperId] = useLocalState("preplist:lastPaper", null);
   const [savedNoteIds, setSavedNoteIds] = useLocalState("preplist:savedNotes", []);
   const [savedVideoIds, setSavedVideoIds] = useLocalState("preplist:savedVideos", []);
-  const [savedPaperIds, setSavedPaperIds] = useLocalState("preplist:savedPapers", []);
   const toggleSaved = (setList) => (id) => setList((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
   const onToggleSavedNote = useCallback(toggleSaved(setSavedNoteIds), [setSavedNoteIds]);
   const onToggleSavedVideo = useCallback(toggleSaved(setSavedVideoIds), [setSavedVideoIds]);
-  const onToggleSavedPaper = useCallback(toggleSaved(setSavedPaperIds), [setSavedPaperIds]);
-  const [checkedTopicIds, setCheckedTopicIds] = useLocalState("preplist:checkedTopics", []);
-  const onToggleChecked = useCallback(toggleSaved(setCheckedTopicIds), [setCheckedTopicIds]);
 
   const [pendingScroll, setPendingScroll] = useState(null);
   useEffect(() => {
@@ -2714,26 +2181,6 @@ function MainApp({ user, onSwitchRole, theme, setTheme }) {
     try { await db.collection("videos").add({ ...payload, addedByRole: user.role, createdAt: Date.now() }); return true; }
     catch (e) { notify({ kind: "error", text: friendlyDbError(e) }); return false; }
   }
-  async function addPaper(payload) {
-    const { qp, ms, ...meta } = payload;
-    try {
-      const now = Date.now();
-      const writes = [];
-      if (qp) { const fileId = await saveFile(qp.fileData); writes.push(db.collection("pastPapers").add({ ...meta, kind: "qp", fileId, fileName: qp.fileName, uploadedByRole: user.role, createdAt: now })); }
-      if (ms) { const fileId = await saveFile(ms.fileData); writes.push(db.collection("pastPapers").add({ ...meta, kind: "ms", fileId, fileName: ms.fileName, uploadedByRole: user.role, createdAt: now })); }
-      await Promise.all(writes);
-      return true;
-    } catch (e) { notify({ kind: "error", text: friendlyDbError(e) }); return false; }
-  }
-  async function addChecklistItem(payload) {
-    try { await db.collection("checklistItems").add({ ...payload, addedByRole: user.role, createdAt: Date.now() }); return true; }
-    catch (e) { notify({ kind: "error", text: friendlyDbError(e) }); return false; }
-  }
-  async function deleteChecklistItem(id) {
-    try { await db.collection("checklistItems").doc(id).delete(); }
-    catch (e) { notify({ kind: "error", text: friendlyDbError(e) }); }
-  }
-
   async function addQuizQuestion(payload) {
     try { await db.collection("quizQuestions").add({ ...payload, addedByRole: user.role, createdAt: Date.now() }); return true; }
     catch (e) { notify({ kind: "error", text: friendlyDbError(e) }); return false; }
@@ -2743,7 +2190,7 @@ function MainApp({ user, onSwitchRole, theme, setTheme }) {
     catch (e) { notify({ kind: "error", text: friendlyDbError(e) }); }
   }
 
-  const READY = { notes: notesReady, videos: videosReady, papers: papersReady, checklist: checklistReady, quiz: quizReady };
+  const READY = { notes: notesReady, videos: videosReady, quiz: quizReady };
   const dataReady = (TAB_NEEDS[tab] || []).every((n) => READY[n]);
 
   return (
@@ -2776,22 +2223,20 @@ function MainApp({ user, onSwitchRole, theme, setTheme }) {
             <>
               {tab === "notes" && <NotesView notes={notes} user={user} onAddNote={addNote} lastNoteId={lastNoteId} setLastNoteId={setLastNoteId} savedNoteIds={savedNoteIds} onToggleSavedNote={onToggleSavedNote} />}
               {tab === "videos" && <VideosView videos={videos} user={user} onAddVideo={addVideo} lastVideoId={lastVideoId} setLastVideoId={setLastVideoId} savedVideoIds={savedVideoIds} onToggleSavedVideo={onToggleSavedVideo} />}
-              {tab === "papers" && <PapersView papers={papers} user={user} onAddPaper={addPaper} lastPaperId={lastPaperId} setLastPaperId={setLastPaperId} savedPaperIds={savedPaperIds} onToggleSavedPaper={onToggleSavedPaper} />}
-              {tab === "quiz" && <QuizView questions={quizQuestions} user={user} notes={notes} papers={papers} onNeedRefs={() => want("notes", "papers")} onAddQuestion={addQuizQuestion} onDeleteQuestion={deleteQuizQuestion} />}
-              {tab === "resources" && <ResourcesView />}
+              {tab === "papers" && <PastPapersView />}
+              {tab === "quiz" && <QuizView questions={quizQuestions} user={user} notes={notes} onNeedRefs={() => want("notes")} onAddQuestion={addQuizQuestion} onDeleteQuestion={deleteQuizQuestion} />}
               {tab === "tools" && <ToolsView />}
               {tab === "flashcards" && <FlashcardsView />}
-              {tab === "checklist" && <ChecklistView items={checklistItems} user={user} onAddItem={addChecklistItem} onDeleteItem={deleteChecklistItem} checkedIds={checkedTopicIds} onToggleChecked={onToggleChecked} />}
-              {tab === "saved" && <SavedView notes={notes} videos={videos} papers={papers}
-                lastNoteId={lastNoteId} lastVideoId={lastVideoId} lastPaperId={lastPaperId}
-                savedNoteIds={savedNoteIds} savedVideoIds={savedVideoIds} savedPaperIds={savedPaperIds}
-                onToggleSavedNote={onToggleSavedNote} onToggleSavedVideo={onToggleSavedVideo} onToggleSavedPaper={onToggleSavedPaper}
+              {tab === "saved" && <SavedView notes={notes} videos={videos}
+                lastNoteId={lastNoteId} lastVideoId={lastVideoId}
+                savedNoteIds={savedNoteIds} savedVideoIds={savedVideoIds}
+                onToggleSavedNote={onToggleSavedNote} onToggleSavedVideo={onToggleSavedVideo}
                 onJump={jumpTo} />}
             </>
           )}
         </main>
 
-        {showSearch && <GlobalSearchModal notes={notes} videos={videos} papers={papers} checklistItems={checklistItems} onClose={() => setShowSearch(false)} onJump={jumpTo} />}
+        {showSearch && <GlobalSearchModal notes={notes} videos={videos} onClose={() => setShowSearch(false)} onJump={jumpTo} />}
         <Toast toast={toast} onClose={() => setToast(null)} />
       </div>
     </ToastContext.Provider>

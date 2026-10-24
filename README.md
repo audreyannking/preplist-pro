@@ -75,40 +75,6 @@ your behalf.
   KaTeX wherever that text is shown.
 - **Photos** (note scans) are resized and stored as compressed JPEG data
   directly in Firestore documents — no paid storage plan needed.
-- **Past-paper PDFs** are stored the same way, capped at ~700KB per file to
-  stay under Firestore's 1&nbsp;MiB-per-document limit (see `MAX_PDF_BYTES`
-  in `app.jsx`). Heavily scanned, image-heavy papers may not fit — ask if
-  you want to switch to Firebase Storage for larger files (needs the paid
-  "Blaze" plan, which needs a card on file, though actual cost should stay
-  $0 at this scale).
-- **Past Papers: board, exam type, subject, and syllabus code.** Each paper
-  is tagged with an Exam board (Cambridge, Edexcel, or College Board), an Exam
-  type (IGCSE / AS Level / A Level for Cambridge and Edexcel; SAT / AP for
-  College Board), a Subject, and a Syllabus code picked from a dropdown that
-  narrows to the real official codes for that board + level + subject
-  (`SYLLABUS_CODES` in `app.jsx`, compiled from Cambridge's subject pages and
-  Pearson's 2025/26 information manuals, including Edexcel's regional "R"
-  papers used in the UAE and Oman and the Edexcel IAL unit codes). Subject
-  and Syllabus are separate dropdowns, and Session (e.g. May/June) and Year
-  are separate too. Zone and Variant apply to Cambridge papers only. SAT and
-  AP have no syllabus-code system, so they use Section (SAT) / course name
-  (AP) instead and the code field doesn't appear. Gaps are real: Edexcel has
-  no International A Level in Computer Science or Chinese, so those
-  combinations list no code.
-- **Question papers + mark schemes.** Each Past Papers upload can include a
-  Question Paper PDF, a Mark Scheme PDF, or both. Under the hood each PDF is
-  its own Firestore document (`kind: "qp"` or `"ms"`, see `groupPapers()` in
-  `app.jsx`) so a pair never has to fit Firestore's 1&nbsp;MiB document
-  limit together — the app groups matching ones back into a single card
-  with "Question Paper" / "Mark Scheme" buttons for display.
-- **In-site PDF viewer with split screen.** Question papers and mark schemes
-  open inside the site (not a new tab). "Split screen" puts two documents side
-  by side (stacked top/bottom on a phone) and each side has its own picker,
-  so you can show any two papers, or a paper next to its mark scheme; there
-  is also Swap sides, plus New tab / Download on each pane. Press Escape to close. Files
-  are turned into temporary blob URLs so the browser's built-in PDF viewer
-  can display them (iPhone Safari may show only the first page in a frame —
-  use New tab there).
 - **Built to handle many visitors.** The site itself is static files on
   GitHub Pages (served from a CDN), so page loads scale easily. The database
   work is kept light: each tab only reads its own collection the first time
@@ -120,7 +86,7 @@ your behalf.
   Firebase's limit on new anonymous sign-ins per IP. The real ceiling is
   the free Firestore plan's 50,000 document reads/day — upgrade to the
   pay-as-you-go Blaze plan if the site gets big.
-- **Resources tab (links, not copies).** Past papers belong to the exam
+- **Past Papers tab (links, not copies).** Past papers belong to the exam
   boards — Cambridge says it can't permit them to be republished on any
   website, and Pearson only allows private centre use — so this tab links to
   the official sources instead: Cambridge's per-subject past-paper pages,
@@ -146,10 +112,6 @@ your behalf.
   per subject, and see what you need on the next assessment to hit a target.
   It's an estimate stored on-device, not an official grade or SABIS's own
   point system.
-- **IB board.** Past Papers also has an IB board (exam type "IB Diploma") so
-  IB material can be organised the same way. IB past papers are sold by the
-  IB, so none are included and uploads should only be things you have
-  permission to share.
 - **Grade-tracker presets.** Pick a weight preset to fill in typical
   assessment names and weights, or save your school's own. The built-in
   "SABIS-style" preset is just a starting point — its weights are not
@@ -161,18 +123,13 @@ your behalf.
 - **Tools tab.** Exam countdown (your own dates), a focus/break study timer
   (the browser tab title shows the time left), and Digital SAT pacing
   reference. All stored on-device.
-- **Cambridge paper picker (Resources).** Pick a level, subject and series,
+- **Cambridge paper picker (Past Papers tab).** Pick a level, subject and series,
   then open each question paper or mark scheme as its own option in the split
   view, or paper + mark scheme side by side. The list lives in
   `cambridge-papers.json`, built from the links on Cambridge's public
   past-paper pages (links only — the PDFs stay on Cambridge's servers).
   Cambridge's public pages only list the latest series plus specimens, and
   the list needs rebuilding when Cambridge publishes a new series.
-- **Revision checklist.** The Checklist tab lets Teachers and Admins lay out
-  a list of topics per subject; anyone can tick items off as studied. The
-  topic list itself is shared (Firestore, `checklistItems` collection) but
-  which boxes are checked is personal per device (`localStorage`), same as
-  the rest of this no-accounts app.
 - **Global search.** The search icon in the header opens one search box
   that looks across Notes, Videos, Past Papers, and the Checklist at once
   and jumps straight to whatever you pick.
@@ -189,3 +146,11 @@ your behalf.
 - **No AI PDF-to-quiz conversion (yet).** That would need a real AI model
   reading the PDF, which needs an API key kept secret on a small backend —
   ask if you want that built.
+- **Past Papers source chips.** Cambridge, Edexcel, SAT, AP, IB and Save My
+  Exams each get their own view. The site doesn't host papers (the exam
+  boards don't allow that) — it links to the official sources. The SAT has no
+  "past papers"; College Board publishes practice tests and a question bank.
+- **Flashcards from a photo.** Upload or take a photo of notes and the text
+  is read on the device with Tesseract.js (loaded from a CDN), then lines
+  like "Term: definition", question/answer pairs and "X is Y" sentences are
+  suggested as cards for you to check. It's pattern matching, not AI.
