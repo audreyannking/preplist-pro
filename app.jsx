@@ -1776,9 +1776,9 @@ function EmbedPane({ item, items, onPick, label }) {
   );
 }
 
-function EmbedSplitViewer({ items, startUrl, onClose }) {
+function EmbedSplitViewer({ items, startUrl, startRight, onClose }) {
   const [left, setLeft] = useState(startUrl);
-  const [right, setRight] = useState(null);
+  const [right, setRight] = useState(startRight || null);
   useEffect(() => {
     const onKey = (e) => { if (e.key === "Escape") onClose(); };
     window.addEventListener("keydown", onKey);
@@ -1790,7 +1790,7 @@ function EmbedSplitViewer({ items, startUrl, onClose }) {
       <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 14px", borderBottom: "1px solid var(--border)", flexWrap: "wrap" }}>
         <div style={{ flex: 1, minWidth: 160 }}>
           <div className="pp-serif" style={{ fontSize: 16, fontWeight: 700 }}>Split view</div>
-          <div style={{ fontSize: 11.5, color: "var(--muted)" }}>Two official pages side by side. Click a paper or mark scheme inside either side to open it there. If a side stays blank, use New tab.</div>
+          <div style={{ fontSize: 11.5, color: "var(--muted)" }}>Two documents side by side. Use the picker on each side to switch, for example from a question paper to its mark scheme. If a side stays blank, use New tab.</div>
         </div>
         <button className="pp-btn pp-btn-ghost" style={{ padding: "6px 14px", fontSize: 12.5 }} onClick={() => { setLeft(right); setRight(left); }}>Swap sides</button>
         <button className="pp-btn pp-btn-ghost" style={{ padding: 7, borderRadius: 999 }} onClick={onClose} aria-label="Close split view"><X size={16} /></button>
@@ -1803,9 +1803,80 @@ function EmbedSplitViewer({ items, startUrl, onClose }) {
   );
 }
 
+function CambridgePapers({ onOpen }) {
+  const [index, setIndex] = useState(null);
+  const [failed, setFailed] = useState(false);
+  const [level, setLevel] = useState("IGCSE");
+  const [slug, setSlug] = useState("");
+  const [seriesName, setSeriesName] = useState("");
+  useEffect(() => {
+    fetch("cambridge-papers.json").then((r) => r.json()).then(setIndex).catch(() => setFailed(true));
+  }, []);
+  if (failed) return null;
+  if (!index) return <div style={{ fontSize: 13, color: "var(--muted)", marginBottom: 18 }}>Loading the Cambridge paper list…</div>;
+  const subjects = index.subjects.filter((s) => s.level === level);
+  const subj = subjects.find((s) => s.slug === slug);
+  const seriesList = subj ? Object.keys(subj.series) : [];
+  const series = subj && subj.series[seriesName];
+  const url = (p) => index.base + p;
+  const docsFor = () => {
+    const out = [];
+    Object.entries(subj.series).forEach(([sn, papers]) => Object.entries(papers).forEach(([pn, d]) => {
+      if (d.qp) out.push({ url: url(d.qp), label: `${sn} · Paper ${pn} · Question paper`, group: subj.name });
+      if (d.ms) out.push({ url: url(d.ms), label: `${sn} · Paper ${pn} · Mark scheme`, group: subj.name });
+    }));
+    return out;
+  };
+  const open = (left, right) => onOpen(docsFor(), url(left), right ? url(right) : null);
+  const sel = { padding: "8px 10px", fontSize: 14, width: "100%" };
+  const btn = { padding: "4px 10px", fontSize: 12 };
+  return (
+    <div className="pp-card" style={{ borderRadius: 10, padding: 14, marginBottom: 22 }}>
+      <div className="pp-serif" style={{ fontSize: 16, fontWeight: 700, marginBottom: 2 }}>Cambridge papers and mark schemes — pick and open</div>
+      <div style={{ fontSize: 12.5, color: "var(--muted)", marginBottom: 10 }}>Each question paper and each mark scheme is its own option: "Open" shows it in the split view (pick the other document on the second side), "New tab" opens it on its own. These are links to Cambridge's own files (nothing is copied). Cambridge's public pages only list the latest series and specimen papers — older years need a school login with Cambridge.</div>
+      <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 10 }}>
+        <div style={{ width: 150 }}>
+          <select className="pp-select" aria-label="Level" style={sel} value={level} onChange={(e) => { setLevel(e.target.value); setSlug(""); setSeriesName(""); }}>
+            <option value="IGCSE">IGCSE</option><option value="AS & A Level">AS &amp; A Level</option>
+          </select>
+        </div>
+        <div style={{ flex: 1, minWidth: 220 }}>
+          <select className="pp-select" aria-label="Cambridge subject" style={sel} value={slug} onChange={(e) => { const s2 = subjects.find((x) => x.slug === e.target.value); setSlug(e.target.value); setSeriesName(s2 ? Object.keys(s2.series)[0] || "" : ""); }}>
+            <option value="">Choose a subject…</option>
+            {subjects.map((s) => <option key={s.slug} value={s.slug}>{s.name}</option>)}
+          </select>
+        </div>
+        {subj && (
+          <div style={{ width: 170 }}>
+            <select className="pp-select" aria-label="Exam series" style={sel} value={seriesName} onChange={(e) => setSeriesName(e.target.value)}>
+              {seriesList.map((n) => <option key={n} value={n}>{n}</option>)}
+            </select>
+          </div>
+        )}
+      </div>
+      {subj && seriesList.length === 0 && <div style={{ fontSize: 13, color: "var(--muted)" }}>Cambridge hasn't published any papers for this subject on its public page.</div>}
+      {series && Object.keys(series).sort((a, b) => a.localeCompare(b, undefined, { numeric: true })).map((pn) => {
+        const d = series[pn];
+        return (
+          <div key={pn} style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", padding: "7px 0", borderTop: "1px solid var(--border)" }}>
+            <b style={{ fontSize: 13.5, width: 70 }}>Paper {pn}</b>
+            {d.qp && <span style={{ display: "inline-flex", gap: 4, alignItems: "center" }}><span style={{ fontSize: 12, color: "var(--muted)" }}>Question paper</span>
+              <button className="pp-btn pp-btn-ghost" style={btn} onClick={() => open(d.qp, null)}>Open</button>
+              <a className="pp-btn pp-btn-ghost" style={{ ...btn, textDecoration: "none" }} href={url(d.qp)} target="_blank" rel="noopener noreferrer">New tab</a></span>}
+            {d.ms && <span style={{ display: "inline-flex", gap: 4, alignItems: "center" }}><span style={{ fontSize: 12, color: "var(--muted)" }}>Mark scheme</span>
+              <button className="pp-btn pp-btn-ghost" style={btn} onClick={() => open(d.ms, null)}>Open</button>
+              <a className="pp-btn pp-btn-ghost" style={{ ...btn, textDecoration: "none" }} href={url(d.ms)} target="_blank" rel="noopener noreferrer">New tab</a></span>}
+            {d.qp && d.ms && <button className="pp-btn pp-btn-primary" style={btn} onClick={() => open(d.qp, d.ms)}>Paper + mark scheme side by side</button>}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 function ResourcesView() {
   const notify = useToast();
-  const [splitStart, setSplitStart] = useState(null);
+  const [split, setSplit] = useState(null);
   const embedItems = RESOURCE_GROUPS.flatMap((g) => g.links.filter((l) => l.embed).map((l) => ({ ...l, group: g.title })));
   const half = (url, side) => { if (!openHalfScreen(url, side)) notify({ kind: "error", text: "Your browser blocked the pop-up. Allow pop-ups for this site, then try again." }); };
   return (
@@ -1815,6 +1886,7 @@ function ResourcesView() {
         Past papers belong to the exam boards, and Cambridge doesn't allow them to be republished on other websites — so this page links to the official sources instead of copying them.
         Each Cambridge and Pearson page below lists the <b>question papers and the mark schemes</b> together. <b>Open</b> uses a new tab. <b>Split view</b> (Cambridge and Khan Academy) shows two pages side by side right here inside PrepList Pro — it works in any browser. Pearson, College Board and the IB don't allow their pages to be shown inside other websites, so those only get <b>Left half</b> / <b>Right half</b>, which try to open a window on that half of your screen (your browser may open a full tab instead).
       </div>
+      <CambridgePapers onOpen={(items, left, right) => setSplit({ items, left, right })} />
       {RESOURCE_GROUPS.map((g) => (
         <div key={g.title} style={{ marginBottom: 22 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
@@ -1828,7 +1900,7 @@ function ResourcesView() {
                 <div style={{ flex: 1, minWidth: 0, fontSize: 13.5, fontWeight: 600 }}>{l.label}</div>
                 <a className="pp-btn pp-btn-ghost" href={l.url} target="_blank" rel="noopener noreferrer" style={{ padding: "5px 10px", fontSize: 12, textDecoration: "none", flexShrink: 0 }}>Open</a>
                 {l.embed ? (
-                  <button className="pp-btn pp-btn-primary" onClick={() => setSplitStart(l.url)} style={{ padding: "5px 10px", fontSize: 12, flexShrink: 0 }} title="Show this beside another page, inside this site">Split view</button>
+                  <button className="pp-btn pp-btn-primary" onClick={() => setSplit({ items: embedItems, left: l.url, right: null })} style={{ padding: "5px 10px", fontSize: 12, flexShrink: 0 }} title="Show this beside another page, inside this site">Split view</button>
                 ) : (
                   <>
                     <button className="pp-btn pp-btn-ghost" onClick={() => half(l.url, "left")} style={{ padding: "5px 8px", fontSize: 12, flexShrink: 0 }} title="This site can't be shown inside other pages, so this tries a window on the left half of your screen">Left half</button>
@@ -1840,7 +1912,7 @@ function ResourcesView() {
           </div>
         </div>
       ))}
-      {splitStart && <EmbedSplitViewer items={embedItems} startUrl={splitStart} onClose={() => setSplitStart(null)} />}
+      {split && <EmbedSplitViewer items={split.items} startUrl={split.left} startRight={split.right} onClose={() => setSplit(null)} />}
     </div>
   );
 }

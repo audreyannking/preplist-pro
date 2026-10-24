@@ -161,6 +161,13 @@ your behalf.
 - **Tools tab.** Exam countdown (your own dates), a focus/break study timer
   (the browser tab title shows the time left), and Digital SAT pacing
   reference. All stored on-device.
+- **Cambridge paper picker (Resources).** Pick a level, subject and series,
+  then open each question paper or mark scheme as its own option in the split
+  view, or paper + mark scheme side by side. The list lives in
+  `cambridge-papers.json`, built from the links on Cambridge's public
+  past-paper pages (links only — the PDFs stay on Cambridge's servers).
+  Cambridge's public pages only list the latest series plus specimens, and
+  the list needs rebuilding when Cambridge publishes a new series.
 - **Revision checklist.** The Checklist tab lets Teachers and Admins lay out
   a list of topics per subject; anyone can tick items off as studied. The
   topic list itself is shared (Firestore, `checklistItems` collection) but
