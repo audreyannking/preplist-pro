@@ -143,6 +143,14 @@ your behalf.
   per subject, and see what you need on the next assessment to hit a target.
   It's an estimate stored on-device, not an official grade or SABIS's own
   point system.
+- **IB board.** Past Papers also has an IB board (exam type "IB Diploma") so
+  IB material can be organised the same way. IB past papers are sold by the
+  IB, so none are included and uploads should only be things you have
+  permission to share.
+- **Grade-tracker presets.** Pick a weight preset to fill in typical
+  assessment names and weights, or save your school's own. The built-in
+  "SABIS-style" preset is just a starting point — its weights are not
+  official SABIS numbers.
 - **Tools tab.** Exam countdown (your own dates), a focus/break study timer
   (the browser tab title shows the time left), and Digital SAT pacing
   reference. All stored on-device.

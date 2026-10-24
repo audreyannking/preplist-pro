@@ -146,13 +146,19 @@ const PAPER_SUBJECTS = [
   "Math", "Physics", "Chemistry", "Biology", "English", "History",
   "Computer Science", "Economics", "Business", "French", "Arabic", "Mandarin Chinese"
 ];
-const BOARDS = ["Cambridge", "Edexcel", "College Board"];
-const EXAM_TYPES = ["IGCSE", "AS Level", "A Level", "SAT", "AP"];
+const BOARDS = ["Cambridge", "Edexcel", "College Board", "IB"];
+const EXAM_TYPES = ["IGCSE", "AS Level", "A Level", "SAT", "AP", "IB Diploma"];
 const EXAM_TYPES_BY_BOARD = {
   Cambridge: ["IGCSE", "AS Level", "A Level"],
   Edexcel: ["IGCSE", "AS Level", "A Level"],
-  "College Board": ["SAT", "AP"]
+  "College Board": ["SAT", "AP"],
+  IB: ["IB Diploma"]
 };
+const IB_SUBJECTS = [
+  "Mathematics: Analysis and Approaches", "Mathematics: Applications and Interpretation", "Physics", "Chemistry", "Biology",
+  "English A: Language and Literature", "English A: Literature", "History", "Economics", "Business Management",
+  "Computer Science", "Psychology", "Geography", "French B", "Arabic A", "Arabic B", "Chinese B", "Theory of Knowledge"
+];
 const SAT_SECTIONS = ["Reading and Writing", "Math"];
 const AP_COURSES = [
   "2-D Art and Design", "3-D Art and Design", "African American Studies", "Art History", "Biology",
@@ -170,17 +176,19 @@ const VARIANTS = ["Variant 1", "Variant 2", "Variant 3"];
 const SESSIONS_BY_BOARD = {
   Cambridge: ["Feb/March", "May/June", "Oct/Nov"],
   Edexcel: ["January", "May/June", "October/November"],
-  "College Board": ["March", "May", "June", "August", "October", "November", "December"]
+  "College Board": ["March", "May", "June", "August", "October", "November", "December"],
+  IB: ["May", "November"]
 };
 const ALL_SESSIONS = Array.from(new Set(Object.values(SESSIONS_BY_BOARD).flat()));
 
 function subjectsFor(board, examType) {
+  if (examType === "IB Diploma" || (!examType && board === "IB")) return IB_SUBJECTS;
   if (examType === "SAT") return SAT_SECTIONS;
   if (examType === "AP") return AP_COURSES;
   if (examType) return PAPER_SUBJECTS;
   if (board === "College Board") return Array.from(new Set([...SAT_SECTIONS, ...AP_COURSES]));
   if (board) return PAPER_SUBJECTS;
-  return Array.from(new Set([...PAPER_SUBJECTS, ...SAT_SECTIONS, ...AP_COURSES]));
+  return Array.from(new Set([...PAPER_SUBJECTS, ...SAT_SECTIONS, ...AP_COURSES, ...IB_SUBJECTS]));
 }
 
 /* ---------------------------------------------------------------------- */
@@ -1311,7 +1319,7 @@ function PapersView({ papers, user, onAddPaper, lastPaperId, setLastPaperId, sav
   function changeExamType(t) { setExamType(t); setSubject(""); setSyllabus(""); setSession(""); }
   function changeSubject(s) { setSubject(s); setSyllabus(""); }
 
-  const syllabusApplies = board !== "College Board" && examType !== "SAT" && examType !== "AP";
+  const syllabusApplies = (!board || board === "Cambridge" || board === "Edexcel") && !["SAT", "AP", "IB Diploma"].includes(examType);
   const showCambridgeFields = !board || board === "Cambridge";
 
   const filtered = useMemo(() => {
@@ -1415,7 +1423,7 @@ function AddPaperModal({ onClose, onSubmit }) {
   const [qp, setQp] = useState(null);
   const [ms, setMs] = useState(null);
 
-  const isCollegeBoard = board === "College Board";
+  const isCollegeBoard = board === "College Board" || board === "IB";
   const isCambridge = board === "Cambridge";
   const syllabusChoices = isCollegeBoard || !board || !examType || !subject ? [] : syllabusOptionsFor(board, examType, subject);
   const needsSyllabus = syllabusChoices.length > 0;
@@ -1673,6 +1681,11 @@ const RESOURCE_GROUPS = [
   {
     title: "Edexcel (Pearson)", official: true, note: "Pearson's official past-paper finder — choose International GCSE or International Advanced Level, then your subject.",
     links: [{ label: "Pearson past papers", url: "https://qualifications.pearson.com/en/support/support-topics/exams/past-papers.html" }]
+  },
+  {
+    title: "IB Diploma", official: true,
+    note: "IB past papers are sold by the IB itself rather than published free, so they can't be shared here. Ask your school's IB coordinator how to get them; this is the IB's official programme page.",
+    links: [{ label: "IB Diploma Programme (official)", url: "https://www.ibo.org/programmes/diploma-programme/" }]
   },
   {
     title: "SAT (College Board)", official: true, note: "Free official practice for the digital SAT.",
@@ -2130,6 +2143,12 @@ function StudyTimerCard() {
   );
 }
 
+const GRADE_PRESETS = [
+  { id: "sabis-style", name: "SABIS-style (set your school's weights)", note: "These weights are only a starting point — SABIS schools can differ, so check your handbook and use \"Save your school's weights\" below to store the real ones.", types: [{ label: "Quiz", weight: 1 }, { label: "Monthly exam", weight: 1 }, { label: "Term exam", weight: 1 }] },
+  { id: "equal", name: "Everything counts equally", types: [{ label: "Assessment", weight: 1 }] },
+  { id: "exam-heavy", name: "Example: exams count more", note: "Example weights for illustration only.", types: [{ label: "Quiz", weight: 1 }, { label: "Test", weight: 2 }, { label: "Exam", weight: 4 }] }
+];
+
 function GradeTrackerCard() {
   const [items, setItems] = useLocalState("preplist:grades", []);
   const [subject, setSubject] = useState("");
@@ -2139,6 +2158,22 @@ function GradeTrackerCard() {
   const [weight, setWeight] = useState("1");
   const [target, setTarget] = useLocalState("preplist:gradeTarget", 85);
   const [nextWeight, setNextWeight] = useState("1");
+  const [myPresets, setMyPresets] = useLocalState("preplist:gradePresets", []);
+  const [presetId, setPresetId] = useState("");
+  const [newPresetName, setNewPresetName] = useState("");
+  const [newPresetTypes, setNewPresetTypes] = useState("");
+  const allPresets = [...GRADE_PRESETS, ...myPresets.map((p) => ({ ...p, mine: true }))];
+  const activePreset = allPresets.find((p) => p.id === presetId);
+  function savePreset() {
+    const types = newPresetTypes.split(",").map((t) => {
+      const [label, w] = t.split(":");
+      return label && label.trim() && Number(w) > 0 ? { label: label.trim(), weight: Number(w) } : null;
+    }).filter(Boolean);
+    if (!newPresetName.trim() || types.length === 0) return;
+    const p = { id: uid(), name: newPresetName.trim(), types };
+    setMyPresets((prev) => [...(prev || []), p]);
+    setPresetId(p.id); setNewPresetName(""); setNewPresetTypes("");
+  }
   const subjects = Array.from(new Set(items.map((i) => i.subject))).sort();
   const canAdd = subject.trim() && name.trim() && score !== "" && Number(max) > 0 && Number(weight) > 0;
   function add() {
@@ -2156,6 +2191,27 @@ function GradeTrackerCard() {
     <div className="pp-card" style={{ borderRadius: 10, padding: 16, marginBottom: 16 }}>
       <div className="pp-serif" style={{ fontSize: 16, fontWeight: 700, marginBottom: 4 }}>Grade tracker</div>
       <div style={{ fontSize: 12.5, color: "var(--muted)", marginBottom: 10 }}>Log your quiz, monthly and term exam marks. Weight says how much each counts (e.g. 1 for a quiz, 3 for a term exam) — use your school's own weights. This is your own estimate, not an official grade.</div>
+      <div style={{ marginBottom: 10 }}>
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
+          <select className="pp-select" aria-label="Weight preset" style={{ padding: "7px 10px", fontSize: 13, maxWidth: 260 }} value={presetId} onChange={(e) => setPresetId(e.target.value)}>
+            <option value="">Weight preset (optional)…</option>
+            {allPresets.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+          </select>
+          {activePreset && activePreset.types.map((t) => (
+            <button key={t.label} className="pp-btn pp-btn-ghost" style={{ padding: "5px 10px", fontSize: 12.5 }} onClick={() => { setName(t.label); setWeight(String(t.weight)); }}>{t.label} (wt {t.weight})</button>
+          ))}
+          {activePreset && activePreset.mine && <button className="pp-btn pp-btn-ghost" style={{ padding: "5px 10px", fontSize: 12.5 }} onClick={() => { setMyPresets((prev) => prev.filter((p) => p.id !== activePreset.id)); setPresetId(""); }}>Delete preset</button>}
+        </div>
+        {activePreset && activePreset.note && <div style={{ fontSize: 12, color: "var(--muted)", marginTop: 6 }}>{activePreset.note}</div>}
+        <details style={{ marginTop: 6 }}>
+          <summary style={{ fontSize: 12.5, cursor: "pointer", color: "var(--muted)" }}>Save your school's weights as a preset</summary>
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 6 }}>
+            <input className="pp-input" style={{ width: 150, padding: "7px 10px", fontSize: 13 }} placeholder="Preset name" value={newPresetName} onChange={(e) => setNewPresetName(e.target.value)} />
+            <input className="pp-input" style={{ flex: 1, minWidth: 200, padding: "7px 10px", fontSize: 13 }} placeholder="Quiz:1, Monthly exam:2, Term exam:3" value={newPresetTypes} onChange={(e) => setNewPresetTypes(e.target.value)} />
+            <button className="pp-btn pp-btn-primary" style={{ padding: "7px 14px", fontSize: 13 }} onClick={savePreset}>Save preset</button>
+          </div>
+        </details>
+      </div>
       <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 10 }}>
         <input className="pp-input" list="pp-grade-subjects" style={{ width: 130, padding: "8px 10px", fontSize: 14 }} placeholder="Subject" value={subject} onChange={(e) => setSubject(e.target.value)} />
         <datalist id="pp-grade-subjects">{[...subjects, ...PAPER_SUBJECTS].map((s) => <option key={s} value={s} />)}</datalist>
