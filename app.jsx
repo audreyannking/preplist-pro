@@ -1744,21 +1744,29 @@ const RESOURCE_GROUPS = [
   }
 ];
 
-function openHalfScreen(url) {
-  const w = Math.floor((window.screen.availWidth || 1200) / 2);
-  const h = window.screen.availHeight || 800;
-  const left = (window.screen.availLeft || 0) + w;
-  const top = window.screen.availTop || 0;
-  window.open(url, "_blank", `noopener,noreferrer,popup=yes,width=${w},height=${h},left=${left},top=${top}`);
+function openHalfScreen(url, side) {
+  const sw = window.screen.availWidth || 1200;
+  const sh = window.screen.availHeight || 800;
+  const x0 = window.screen.availLeft || 0;
+  const y0 = window.screen.availTop || 0;
+  const w = Math.floor(sw / 2);
+  const left = side === "left" ? x0 : x0 + w;
+  const features = `popup=yes,width=${w},height=${sh},left=${left},top=${y0},screenX=${left},screenY=${y0},resizable=yes,scrollbars=yes`;
+  // A fixed name per side means opening a second link on the same side replaces the first.
+  const win = window.open(url, side === "left" ? "pp-half-left" : "pp-half-right", features);
+  if (win) { try { win.opener = null; win.focus(); } catch { /* optional */ } }
+  return !!win;
 }
 
 function ResourcesView() {
+  const notify = useToast();
+  const half = (url, side) => { if (!openHalfScreen(url, side)) notify({ kind: "error", text: "Your browser blocked the pop-up. Allow pop-ups for this site, then try again." }); };
   return (
     <div>
       <div className="pp-card" style={{ borderRadius: 10, padding: 14, marginBottom: 18, fontSize: 13, lineHeight: 1.55 }}>
         <div className="pp-serif" style={{ fontSize: 15.5, fontWeight: 700, marginBottom: 6 }}>Where to find real past papers</div>
         Past papers belong to the exam boards, and Cambridge doesn't allow them to be republished on other websites — so this page links to the official sources instead of copying them.
-        Each Cambridge and Pearson page below lists the <b>question papers and the mark schemes</b> together. <b>Open</b> uses a new tab. <b>Half screen</b> opens the page in a window covering the right half of your screen, so you can keep PrepList Pro on the left half (on a phone it opens as a normal tab).
+        Each Cambridge and Pearson page below lists the <b>question papers and the mark schemes</b> together. <b>Open</b> uses a new tab. <b>Left half</b> and <b>Right half</b> open the page in a window covering that half of your screen — click Left half on one paper and Right half on another to read two papers side by side. If it opens full screen anyway, your browser or phone doesn't allow sized windows (phones never do); use the <b>Split screen</b> viewer on the Past Papers tab for papers uploaded to this site instead.
       </div>
       {RESOURCE_GROUPS.map((g) => (
         <div key={g.title} style={{ marginBottom: 22 }}>
@@ -1767,12 +1775,13 @@ function ResourcesView() {
             <GradeTag text={g.official ? "Official" : "Third-party"} />
           </div>
           {g.note && <div style={{ fontSize: 12.5, color: "var(--muted)", marginBottom: 8 }}>{g.note}</div>}
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))", gap: 8 }}>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(360px, 1fr))", gap: 8 }}>
             {g.links.map((l) => (
               <div key={l.url} className="pp-card" style={{ display: "flex", alignItems: "center", gap: 8, padding: "9px 12px", borderRadius: 8 }}>
                 <div style={{ flex: 1, minWidth: 0, fontSize: 13.5, fontWeight: 600 }}>{l.label}</div>
                 <a className="pp-btn pp-btn-ghost" href={l.url} target="_blank" rel="noopener noreferrer" style={{ padding: "5px 10px", fontSize: 12, textDecoration: "none", flexShrink: 0 }}>Open</a>
-                <button className="pp-btn pp-btn-primary" onClick={() => openHalfScreen(l.url)} style={{ padding: "5px 10px", fontSize: 12, flexShrink: 0 }}>Half screen</button>
+                <button className="pp-btn pp-btn-primary" onClick={() => half(l.url, "left")} style={{ padding: "5px 8px", fontSize: 12, flexShrink: 0 }} title="Open on the left half of your screen">Left half</button>
+                <button className="pp-btn pp-btn-primary" onClick={() => half(l.url, "right")} style={{ padding: "5px 8px", fontSize: 12, flexShrink: 0 }} title="Open on the right half of your screen">Right half</button>
               </div>
             ))}
           </div>

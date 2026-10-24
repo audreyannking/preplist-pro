@@ -127,8 +127,8 @@ your behalf.
   Pearson's past-paper finder, College Board's SAT practice and AP Central,
   plus Save My Exams as a clearly-labelled third-party link (its terms ban
   copying and scraping, so nothing of theirs is copied or embedded). Every
-  link has "Open" (new tab) and "Half screen" (a popup window sized to the
-  right half of the screen, so the site can sit on the left). Third-party
+  link has "Open" (new tab) and "Left half" / "Right half" (popup windows sized to that half of the
+  screen, so you can read two papers side by side, or keep the site on one side). Third-party
   sites block being embedded in a frame, which is why half screen is a
   window rather than an in-page pane.
 - **Quiz tab.** Original multiple-choice practice questions (written for
