@@ -1673,10 +1673,10 @@ function SavedView({ notes, videos, papers, lastNoteId, lastVideoId, lastPaperId
 /* ---------------------------------------------------------------------- */
 
 const CAMBRIDGE_BASE = "https://www.cambridgeinternational.org/programmes-and-qualifications";
-const cambridgeLink = (label, slug) => ({ label, url: `${CAMBRIDGE_BASE}/${slug}/past-papers/` });
+const cambridgeLink = (label, slug) => ({ label: label + " — papers & mark schemes", url: `${CAMBRIDGE_BASE}/${slug}/past-papers/` });
 const RESOURCE_GROUPS = [
   {
-    title: "Cambridge IGCSE", official: true, note: "Official Cambridge past-paper pages, one per subject.",
+    title: "Cambridge IGCSE", official: true, note: "Official Cambridge pages with question papers and mark schemes, one per subject.",
     links: [
       cambridgeLink("Mathematics (0580)", "cambridge-igcse-mathematics-0580"),
       cambridgeLink("Physics (0625)", "cambridge-igcse-physics-0625"),
@@ -1693,7 +1693,7 @@ const RESOURCE_GROUPS = [
     ]
   },
   {
-    title: "Cambridge AS & A Level", official: true, note: "Official Cambridge past-paper pages, one per subject.",
+    title: "Cambridge AS & A Level", official: true, note: "Official Cambridge pages with question papers and mark schemes, one per subject.",
     links: [
       cambridgeLink("Mathematics (9709)", "cambridge-international-as-and-a-level-mathematics-9709"),
       cambridgeLink("Physics (9702)", "cambridge-international-as-and-a-level-physics-9702"),
@@ -1710,7 +1710,7 @@ const RESOURCE_GROUPS = [
     ]
   },
   {
-    title: "Edexcel (Pearson)", official: true, note: "Pearson's official past-paper finder — choose International GCSE or International Advanced Level, then your subject.",
+    title: "Edexcel (Pearson)", official: true, note: "Pearson's official finder for past papers and mark schemes — choose International GCSE or International Advanced Level, then your subject.",
     links: [{ label: "Pearson past papers", url: "https://qualifications.pearson.com/en/support/support-topics/exams/past-papers.html" }]
   },
   {
@@ -1758,7 +1758,7 @@ function ResourcesView() {
       <div className="pp-card" style={{ borderRadius: 10, padding: 14, marginBottom: 18, fontSize: 13, lineHeight: 1.55 }}>
         <div className="pp-serif" style={{ fontSize: 15.5, fontWeight: 700, marginBottom: 6 }}>Where to find real past papers</div>
         Past papers belong to the exam boards, and Cambridge doesn't allow them to be republished on other websites — so this page links to the official sources instead of copying them.
-        <b> Open</b> uses a new tab. <b>Half screen</b> opens the page in a window covering the right half of your screen, so you can keep PrepList Pro on the left half (on a phone it opens as a normal tab).
+        Each Cambridge and Pearson page below lists the <b>question papers and the mark schemes</b> together. <b>Open</b> uses a new tab. <b>Half screen</b> opens the page in a window covering the right half of your screen, so you can keep PrepList Pro on the left half (on a phone it opens as a normal tab).
       </div>
       {RESOURCE_GROUPS.map((g) => (
         <div key={g.title} style={{ marginBottom: 22 }}>
@@ -1907,6 +1907,7 @@ function QuizView({ questions, user, notes, papers, onNeedRefs, onAddQuestion, o
     setHistory((h) => [{ at: Date.now(), examType: examType || "Mixed", subject: subject || "All subjects", total: finalRun.items.length, correct, timed: finalRun.secondsLeft != null }, ...(h || [])].slice(0, 10));
     setRun(finalRun);
     setPhase("done");
+    markStudiedToday();
   }
   function choose(i) {
     if (!run || run.picked !== null) return;
@@ -2072,6 +2073,111 @@ function QuizView({ questions, user, notes, papers, onNeedRefs, onAddQuestion, o
 }
 
 /* ---------------------------------------------------------------------- */
+/* Flashcards — your own decks, stored on this device. Cards you get      */
+/* right move up a box and show less often.                               */
+/* ---------------------------------------------------------------------- */
+
+function FlashcardsView() {
+  const [decks, setDecks] = useLocalState("preplist:flashcards", []);
+  const [deckId, setDeckId] = useState("");
+  const [newDeck, setNewDeck] = useState("");
+  const [front, setFront] = useState("");
+  const [back, setBack] = useState("");
+  const [studying, setStudying] = useState(false);
+  const [card, setCard] = useState(null);
+  const [flipped, setFlipped] = useState(false);
+  const [done, setDone] = useState(0);
+  const deck = decks.find((d) => d.id === deckId);
+
+  function addDeck() {
+    if (!newDeck.trim()) return;
+    const d = { id: uid(), name: newDeck.trim(), cards: [] };
+    setDecks((prev) => [...(prev || []), d]); setDeckId(d.id); setNewDeck("");
+  }
+  function updateDeck(fn) { setDecks((prev) => prev.map((d) => (d.id === deckId ? fn(d) : d))); }
+  function addCard() {
+    if (!front.trim() || !back.trim()) return;
+    updateDeck((d) => ({ ...d, cards: [...d.cards, { id: uid(), front: front.trim(), back: back.trim(), box: 0 }] }));
+    setFront(""); setBack("");
+  }
+  function pickCard(list) {
+    if (!list.length) return null;
+    const weights = list.map((c) => 1 / (1 + c.box * 2));
+    let r = Math.random() * weights.reduce((a, b) => a + b, 0);
+    for (let i = 0; i < list.length; i++) { r -= weights[i]; if (r <= 0) return list[i]; }
+    return list[0];
+  }
+  function startStudy() { setDone(0); setStudying(true); setFlipped(false); setCard(pickCard(deck.cards)); }
+  function grade(known) {
+    const id = card.id;
+    const cards = deck.cards.map((c) => (c.id === id ? { ...c, box: known ? Math.min(c.box + 1, 4) : 0 } : c));
+    updateDeck((d) => ({ ...d, cards }));
+    markStudiedToday();
+    setDone((n) => n + 1); setFlipped(false);
+    const others = cards.length > 1 ? cards.filter((c) => c.id !== id) : cards;
+    setCard(pickCard(others));
+  }
+
+  if (studying && deck && card) {
+    return (
+      <div>
+        <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 12 }}>
+          <div style={{ fontSize: 13, fontWeight: 700, flex: 1 }}>{deck.name} · {done} reviewed</div>
+          <button className="pp-btn pp-btn-ghost" style={{ padding: "6px 12px", fontSize: 12.5 }} onClick={() => setStudying(false)}>Finish</button>
+        </div>
+        <div className="pp-card" onClick={() => setFlipped(true)} style={{ borderRadius: 12, padding: 28, minHeight: 200, display: "flex", flexDirection: "column", justifyContent: "center", textAlign: "center", cursor: flipped ? "default" : "pointer" }}>
+          <div style={{ fontSize: 11.5, color: "var(--muted)", marginBottom: 8 }}>{flipped ? "Answer" : "Question — tap to reveal"}</div>
+          <div className="pp-serif" style={{ fontSize: 20, fontWeight: 600, lineHeight: 1.45 }}><MathText text={flipped ? card.back : card.front} /></div>
+        </div>
+        {flipped && (
+          <div style={{ display: "flex", gap: 10, justifyContent: "center", marginTop: 14 }}>
+            <button className="pp-btn pp-btn-ghost" style={{ padding: "10px 22px" }} onClick={() => grade(false)}>Again</button>
+            <button className="pp-btn pp-btn-primary" style={{ padding: "10px 22px" }} onClick={() => grade(true)}>Got it</button>
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  return (
+    <div>
+      <div className="pp-card" style={{ borderRadius: 10, padding: 14, marginBottom: 16, fontSize: 13, lineHeight: 1.55 }}>
+        <div className="pp-serif" style={{ fontSize: 15.5, fontWeight: 700, marginBottom: 4 }}>Flashcards</div>
+        Make your own decks (write them in your own words). Cards you get right show up less; cards you miss come back sooner. Use $...$ for maths. Everything is saved on this device only.
+      </div>
+      <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 14 }}>
+        <select className="pp-select" aria-label="Deck" style={{ padding: "8px 10px", fontSize: 14, minWidth: 170 }} value={deckId} onChange={(e) => setDeckId(e.target.value)}>
+          <option value="">Choose a deck…</option>
+          {decks.map((d) => <option key={d.id} value={d.id}>{d.name} ({d.cards.length})</option>)}
+        </select>
+        <input className="pp-input" style={{ flex: 1, minWidth: 140, padding: "8px 10px", fontSize: 14 }} placeholder="New deck name, e.g. Biology – cells" value={newDeck} onChange={(e) => setNewDeck(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") addDeck(); }} />
+        <button className="pp-btn pp-btn-primary" style={{ padding: "8px 16px", opacity: newDeck.trim() ? 1 : 0.5 }} disabled={!newDeck.trim()} onClick={addDeck}>Create deck</button>
+      </div>
+      {deck && (
+        <div>
+          <div style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 12, flexWrap: "wrap" }}>
+            <button className="pp-btn pp-btn-primary" style={{ padding: "9px 20px", opacity: deck.cards.length ? 1 : 0.5 }} disabled={!deck.cards.length} onClick={startStudy}>Study this deck</button>
+            <button className="pp-btn pp-btn-ghost" style={{ padding: "9px 14px", fontSize: 13 }} onClick={() => { setDecks((prev) => prev.filter((d) => d.id !== deck.id)); setDeckId(""); }}>Delete deck</button>
+          </div>
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 14 }}>
+            <input className="pp-input" style={{ flex: 1, minWidth: 160, padding: "8px 10px", fontSize: 14 }} placeholder="Front (question / term)" value={front} onChange={(e) => setFront(e.target.value)} />
+            <input className="pp-input" style={{ flex: 1, minWidth: 160, padding: "8px 10px", fontSize: 14 }} placeholder="Back (answer)" value={back} onChange={(e) => setBack(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") addCard(); }} />
+            <button className="pp-btn pp-btn-primary" style={{ padding: "8px 16px", opacity: front.trim() && back.trim() ? 1 : 0.5 }} disabled={!(front.trim() && back.trim())} onClick={addCard}>Add card</button>
+          </div>
+          {deck.cards.map((c) => (
+            <div key={c.id} style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 0", borderTop: "1px solid var(--border)", fontSize: 13 }}>
+              <span style={{ flex: 1, minWidth: 0 }}><b><MathText text={c.front} /></b> — <MathText text={c.back} /></span>
+              <GradeTag text={`Box ${c.box + 1}`} />
+              <button className="pp-btn pp-btn-ghost" style={{ padding: 4, borderRadius: 999 }} onClick={() => updateDeck((d) => ({ ...d, cards: d.cards.filter((x) => x.id !== c.id) }))} aria-label="Delete card"><X size={12} /></button>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ---------------------------------------------------------------------- */
 /* Tools — exam countdown, study timer, and SAT pacing. Everything here   */
 /* is personal and stored on this device.                                 */
 /* ---------------------------------------------------------------------- */
@@ -2080,6 +2186,40 @@ function daysUntil(dateStr) {
   const today = new Date(); today.setHours(0, 0, 0, 0);
   const target = new Date(`${dateStr}T00:00:00`);
   return Math.round((target - today) / 86400000);
+}
+
+function markStudiedToday() {
+  try {
+    const d = new Date(); const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+    const days = readLocal("preplist:studyDays", []);
+    if (!days.includes(key)) { days.push(key); localStorage.setItem("preplist:studyDays", JSON.stringify(days.slice(-400))); }
+    window.dispatchEvent(new Event("pp-studied"));
+  } catch { /* best-effort */ }
+}
+function computeStreak(days) {
+  const set = new Set(days); const d = new Date(); let n = 0;
+  const fmt = (x) => `${x.getFullYear()}-${String(x.getMonth() + 1).padStart(2, "0")}-${String(x.getDate()).padStart(2, "0")}`;
+  if (!set.has(fmt(d))) d.setDate(d.getDate() - 1);
+  while (set.has(fmt(d))) { n++; d.setDate(d.getDate() - 1); }
+  return n;
+}
+
+function StreakCard() {
+  const [days, setDays] = useState(() => readLocal("preplist:studyDays", []));
+  useEffect(() => {
+    const h = () => setDays(readLocal("preplist:studyDays", []));
+    window.addEventListener("pp-studied", h);
+    return () => window.removeEventListener("pp-studied", h);
+  }, []);
+  const streak = computeStreak(days);
+  const week = days.filter((k) => (Date.now() - new Date(`${k}T00:00:00`).getTime()) / 86400000 < 7).length;
+  return (
+    <div className="pp-card" style={{ borderRadius: 10, padding: 16, marginBottom: 16, display: "flex", gap: 24, alignItems: "center", flexWrap: "wrap" }}>
+      <div><div className="pp-serif" style={{ fontSize: 30, fontWeight: 700, lineHeight: 1 }}>{streak}</div><div style={{ fontSize: 12.5, color: "var(--muted)" }}>day study streak</div></div>
+      <div><div className="pp-serif" style={{ fontSize: 30, fontWeight: 700, lineHeight: 1 }}>{week}/7</div><div style={{ fontSize: 12.5, color: "var(--muted)" }}>days studied this week</div></div>
+      <div style={{ fontSize: 12.5, color: "var(--muted)", flex: 1, minWidth: 180 }}>A day counts when you finish a quiz, a flashcard round, or a focus block. Stored on this device.</div>
+    </div>
+  );
 }
 
 function CountdownCard() {
@@ -2134,7 +2274,7 @@ function StudyTimerCard() {
       if (left > 0) { setSecondsLeft(left); return; }
       try { navigator.vibrate && navigator.vibrate(300); } catch { /* optional */ }
       setRunning(false);
-      if (mode === "focus") { setSessions((n) => n + 1); setMode("break"); setSecondsLeft(breakMin * 60); }
+      if (mode === "focus") { markStudiedToday(); setSessions((n) => n + 1); setMode("break"); setSecondsLeft(breakMin * 60); }
       else { setMode("focus"); setSecondsLeft(focusMin * 60); }
     }, 500);
     return () => clearInterval(t);
@@ -2285,6 +2425,7 @@ function GradeTrackerCard() {
 function ToolsView() {
   return (
     <div>
+      <StreakCard />
       <GradeTrackerCard />
       <CountdownCard />
       <StudyTimerCard />
@@ -2371,6 +2512,7 @@ const TABS = [
   { id: "quiz", label: "Quiz", icon: HelpCircle },
   { id: "resources", label: "Resources", icon: LinkIcon },
   { id: "checklist", label: "Checklist", icon: ListChecks },
+  { id: "flashcards", label: "Flashcards", icon: Star },
   { id: "tools", label: "Tools", icon: Clock },
   { id: "saved", label: "Saved", icon: Bookmark }
 ];
@@ -2389,7 +2531,7 @@ function MainApp({ user, onSwitchRole, theme, setTheme }) {
 
   const [tab, setTab] = useState("notes");
   const [showSearch, setShowSearch] = useState(false);
-  const TAB_NEEDS = { notes: ["notes"], videos: ["videos"], papers: ["papers"], quiz: ["quiz"], checklist: ["checklist"], saved: ["notes", "videos", "papers"], resources: [], tools: [] };
+  const TAB_NEEDS = { notes: ["notes"], videos: ["videos"], papers: ["papers"], quiz: ["quiz"], checklist: ["checklist"], saved: ["notes", "videos", "papers"], resources: [], tools: [], flashcards: [] };
   useEffect(() => { want(...(TAB_NEEDS[tab] || [])); }, [tab, want]);
   useEffect(() => { if (showSearch) want("notes", "videos", "papers", "checklist"); }, [showSearch, want]);
   const [toast, setToast] = useState(null);
@@ -2503,6 +2645,7 @@ function MainApp({ user, onSwitchRole, theme, setTheme }) {
               {tab === "quiz" && <QuizView questions={quizQuestions} user={user} notes={notes} papers={papers} onNeedRefs={() => want("notes", "papers")} onAddQuestion={addQuizQuestion} onDeleteQuestion={deleteQuizQuestion} />}
               {tab === "resources" && <ResourcesView />}
               {tab === "tools" && <ToolsView />}
+              {tab === "flashcards" && <FlashcardsView />}
               {tab === "checklist" && <ChecklistView items={checklistItems} user={user} onAddItem={addChecklistItem} onDeleteItem={deleteChecklistItem} checkedIds={checkedTopicIds} onToggleChecked={onToggleChecked} />}
               {tab === "saved" && <SavedView notes={notes} videos={videos} papers={papers}
                 lastNoteId={lastNoteId} lastVideoId={lastVideoId} lastPaperId={lastPaperId}

@@ -152,6 +152,10 @@ your behalf.
   assessment names and weights, or save your school's own. The built-in
   "SABIS-style" preset is just a starting point — its weights are not
   official SABIS numbers.
+- **Flashcards and study streak.** Flashcards lets you make your own decks
+  (device-only) with a simple box system — right answers show less often,
+  misses come back sooner. A study streak on the Tools tab counts days you
+  finish a quiz, a flashcard round or a focus block.
 - **Tools tab.** Exam countdown (your own dates), a focus/break study timer
   (the browser tab title shows the time left), and Digital SAT pacing
   reference. All stored on-device.
