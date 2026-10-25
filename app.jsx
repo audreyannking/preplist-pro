@@ -1931,7 +1931,7 @@ function StudyTimerCard() {
 }
 
 const GRADE_PRESETS = [
-  { id: "sabis-style", name: "SABIS-style (set your school's weights)", note: "These weights are only a starting point — SABIS schools can differ, so check your handbook and use \"Save your school's weights\" below to store the real ones.", types: [{ label: "Quiz", weight: 1 }, { label: "Monthly exam", weight: 1 }, { label: "Term exam", weight: 1 }] },
+  { id: "school-style", name: "School-style (set your school's weights)", note: "These weights are only a starting point — every school is different, so check your handbook and use \"Save your school's weights\" below to store the real ones.", types: [{ label: "Quiz", weight: 1 }, { label: "Monthly exam", weight: 1 }, { label: "Term exam", weight: 1 }] },
   { id: "equal", name: "Everything counts equally", types: [{ label: "Assessment", weight: 1 }] },
   { id: "exam-heavy", name: "Example: exams count more", note: "Example weights for illustration only.", types: [{ label: "Quiz", weight: 1 }, { label: "Test", weight: 2 }, { label: "Exam", weight: 4 }] }
 ];

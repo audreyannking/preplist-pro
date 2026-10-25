@@ -107,15 +107,15 @@ your behalf.
   any note or uploaded paper open beside the question. Teachers/Admins can
   add or delete questions (Firestore `quizQuestions`) — only questions they
   wrote themselves.
-- **Grade tracker (Tracker tab).** For SABIS students and anyone else: log
+- **Grade tracker (Tracker tab).** For any student: log
   quiz / monthly / term marks with your own weights, see a running average
   per subject, and see what you need on the next assessment to hit a target.
-  It's an estimate stored on-device, not an official grade or SABIS's own
+  It's an estimate stored on-device, not an official grade or any school's own
   point system.
 - **Grade-tracker presets.** Pick a weight preset to fill in typical
   assessment names and weights, or save your school's own. The built-in
-  "SABIS-style" preset is just a starting point — its weights are not
-  official SABIS numbers.
+  "School-style" preset is just a starting point — its weights are not
+  official numbers from any school.
 - **Flashcards and study streak.** Flashcards lets you make your own decks
   (device-only) with a simple box system — right answers show less often,
   misses come back sooner. A study streak on the Tracker tab counts days you
