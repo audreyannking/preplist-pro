@@ -158,3 +158,4 @@ your behalf.
   every visit and loads `app.js?v=<that value>`, so browsers can't get stuck on
   a cached old copy. When you deploy, put a new value in `version.txt` (the
   last line of the deploy steps) — it is also shown at the bottom of the site.
+- **Contact tab.** Shows the project email (preplistpro@gmail.com) with a mail link and a copy button.

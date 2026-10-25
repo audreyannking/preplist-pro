@@ -105,6 +105,7 @@ const ICON_PATHS = {
   camera: <><path d="M4 8h3l1.4-1.9h7.2L17 8h3a1 1 0 0 1 1 1v10.2a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V9a1 1 0 0 1 1-1Z"/><circle cx="12" cy="13.3" r="3.4"/></>,
   bookmark: <path d="M6.5 3.5h11a1 1 0 0 1 1 1V21l-6.5-4.2L5.5 21V4.5a1 1 0 0 1 1-1Z"/>,
   helpcircle: <><circle cx="12" cy="12" r="9"/><path d="M9.4 9.3a2.7 2.7 0 0 1 5.2.9c0 1.8-2.6 2.2-2.6 4"/><line x1="12" y1="17.2" x2="12" y2="17.3"/></>,
+  mail: <><rect x="3" y="5" width="18" height="14" rx="2"/><polyline points="3.5,7 12,13 20.5,7"/></>,
   link: <><path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1"/><path d="M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1"/></>
 };
 
@@ -128,7 +129,7 @@ const Sun = makeIcon("sun"), Moon = makeIcon("moon"), Plus = makeIcon("plus"), X
   Briefcase = makeIcon("briefcase"), ShieldCheck = makeIcon("shieldcheck"), LayoutGrid = makeIcon("layoutgrid"),
   ChevronRight = makeIcon("chevronright"), Calendar = makeIcon("calendar"), Users = makeIcon("users"),
   Megaphone = makeIcon("megaphone"), Camera = makeIcon("camera"), Bookmark = makeIcon("bookmark"),
-  HelpCircle = makeIcon("helpcircle"), LinkIcon = makeIcon("link");
+  HelpCircle = makeIcon("helpcircle"), LinkIcon = makeIcon("link"), Mail = makeIcon("mail");
 
 /* ---------------------------------------------------------------------- */
 /* Constants                                                              */
@@ -2107,6 +2108,30 @@ function GlobalSearchModal({ notes, videos, onClose, onJump }) {
   );
 }
 
+function ContactView() {
+  const notify = useToast();
+  const email = "preplistpro@gmail.com";
+  function copy() {
+    const done = () => notify({ kind: "ok", text: "Email address copied." });
+    const fail = () => notify({ kind: "error", text: "Couldn't copy — please copy it by hand." });
+    if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(email).then(done, fail);
+    else fail();
+  }
+  return (
+    <div className="pp-card" style={{ borderRadius: 10, padding: 20, maxWidth: 560 }}>
+      <div className="pp-serif" style={{ fontSize: 20, fontWeight: 700, marginBottom: 6 }}>Contact us</div>
+      <div style={{ fontSize: 14, lineHeight: 1.6, marginBottom: 14 }}>
+        Found a bug? Have an idea for a feature? Want to help write notes or make videos? Email us — we read every message.
+      </div>
+      <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
+        <a className="pp-btn pp-btn-primary" href={`mailto:${email}`} style={{ padding: "10px 18px", textDecoration: "none", display: "inline-flex", alignItems: "center", gap: 8 }}><Mail size={15} /> {email}</a>
+        <button className="pp-btn pp-btn-ghost" style={{ padding: "10px 16px", fontSize: 13.5 }} onClick={copy}>Copy email</button>
+      </div>
+      <div style={{ fontSize: 12, color: "var(--muted)", marginTop: 16 }}>PrepList Pro is an independent student project and is not affiliated with or endorsed by any school or organisation.</div>
+    </div>
+  );
+}
+
 /* ---------------------------------------------------------------------- */
 /* App shell                                                              */
 /* ---------------------------------------------------------------------- */
@@ -2118,7 +2143,8 @@ const TABS = [
   { id: "quiz", label: "Quiz", icon: HelpCircle },
   { id: "flashcards", label: "Flashcards", icon: Star },
   { id: "tools", label: "Tracker", icon: Clock },
-  { id: "saved", label: "Saved", icon: Bookmark }
+  { id: "saved", label: "Saved", icon: Bookmark },
+  { id: "contact", label: "Contact", icon: Mail }
 ];
 
 function MainApp({ user, onSwitchRole, theme, setTheme }) {
@@ -2132,7 +2158,7 @@ function MainApp({ user, onSwitchRole, theme, setTheme }) {
 
   const [tab, setTab] = useState("notes");
   const [showSearch, setShowSearch] = useState(false);
-  const TAB_NEEDS = { notes: ["notes"], videos: ["videos"], papers: [], quiz: ["quiz"], saved: ["notes", "videos"], tools: [], flashcards: [] };
+  const TAB_NEEDS = { notes: ["notes"], videos: ["videos"], papers: [], quiz: ["quiz"], saved: ["notes", "videos"], tools: [], flashcards: [], contact: [] };
   useEffect(() => { want(...(TAB_NEEDS[tab] || [])); }, [tab, want]);
   useEffect(() => { if (showSearch) want("notes", "videos"); }, [showSearch, want]);
   const [toast, setToast] = useState(null);
@@ -2221,6 +2247,7 @@ function MainApp({ user, onSwitchRole, theme, setTheme }) {
               {tab === "quiz" && <QuizView questions={quizQuestions} user={user} notes={notes} onNeedRefs={() => want("notes")} onAddQuestion={addQuizQuestion} onDeleteQuestion={deleteQuizQuestion} />}
               {tab === "tools" && <ToolsView />}
               {tab === "flashcards" && <FlashcardsView />}
+              {tab === "contact" && <ContactView />}
               {tab === "saved" && <SavedView notes={notes} videos={videos}
                 lastNoteId={lastNoteId} lastVideoId={lastVideoId}
                 savedNoteIds={savedNoteIds} savedVideoIds={savedVideoIds}
