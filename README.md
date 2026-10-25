@@ -3,7 +3,7 @@
 A shared study website: notes, videos, and past exam papers. Past papers are
 organized by subject, exam type (IGCSE / AS Level / A Level), zone, and
 variant, matching how Cambridge papers are labeled. No accounts, no sign-up —
-pick a role (Student / Teacher / Admin) and go. Public to anyone worldwide.
+pick a role (Student / Admin) and go. Public to anyone worldwide.
 
 It's a single static page (`index.html`) — no build step, no server to run.
 Data is stored in [Firebase](https://firebase.google.com/) Firestore on the
@@ -64,8 +64,8 @@ your behalf.
   (a `babel.config.json` in this repo sets the classic JSX runtime it needs).
   If you're asking for changes rather than editing it yourself, this step is
   handled for you automatically.
-- **No accounts.** Visitors pick a role (Student / Teacher / Admin) on
-  entry; Teacher and Admin need the access password set in `index.html`
+- **No accounts.** Visitors pick a role (Student / Admin) on
+  entry; Admin needs the access password set in `index.html`
   (`ACCESS_PASSWORD`). Nothing is verified server-side — see the security
   note in `firestore.rules`.
 - **No names collected anywhere** — posts show only a role ("Posted by a

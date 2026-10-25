@@ -174,7 +174,7 @@ function subjectsFor(board, examType) {
   return Array.from(new Set([...PAPER_SUBJECTS, ...SAT_SECTIONS, ...AP_COURSES, ...IB_SUBJECTS]));
 }
 
-const ACCESS_PASSWORD = "3147"; // gate for Teacher/Admin role — client-side only, not real security
+const ACCESS_PASSWORD = "3069"; // gate for the Admin role — client-side only, not real security
 
 /* ---------------------------------------------------------------------- */
 /* Firestore + local-storage helpers                                      */
@@ -314,10 +314,10 @@ function extractYouTubeId(url) {
   for (const p of patterns) { const m = url.match(p); if (m) return m[1]; }
   return null;
 }
-function isStaffRole(role) { return role === "admin" || role === "teacher"; }
+function isStaffRole(role) { return role === "admin"; }
 function hasElevatedAccess(user) { return isStaffRole(user?.role); }
 function canLeadDepartment(user) { return user?.role === "admin"; }
-function roleLabel(role) { return role === "teacher" ? "Teacher" : role === "admin" ? "Admin" : "Student"; }
+function roleLabel(role) { return role === "admin" ? "Admin" : "Student"; }
 
 /* ---------------------------------------------------------------------- */
 /* Global styles                                                          */
@@ -430,7 +430,7 @@ function StatusBadge({ status }) {
   if (status === "pending") return <span style={{ display: "inline-flex", alignItems: "center", gap: 4, fontSize: 11.5, fontWeight: 700, color: "#8A611A", background: "#F5EBC2", padding: "2px 8px", borderRadius: 999 }}><Clock size={11} /> Pending review</span>;
   return <span style={{ display: "inline-flex", alignItems: "center", gap: 4, fontSize: 11.5, fontWeight: 700, color: "#8A3434", background: "#F6DEDE", padding: "2px 8px", borderRadius: 999 }}><X size={11} /> Changes requested</span>;
 }
-const ROLE_ICON = { student: GraduationCap, teacher: Briefcase, admin: ShieldCheck };
+const ROLE_ICON = { student: GraduationCap, admin: ShieldCheck };
 function RoleBadge({ role, size = 28 }) {
   const RIcon = ROLE_ICON[role] || User;
   const c = subjectColor(role || "x");
@@ -506,13 +506,12 @@ function FilterBar({ query, setQuery, subject, setSubject, grade, setGrade, plac
 }
 
 /* ---------------------------------------------------------------------- */
-/* Role gate — no accounts: pick a role, Teacher/Admin need a password    */
+/* Role gate — no accounts: pick a role, Admin needs a password           */
 /* ---------------------------------------------------------------------- */
 
 const ROLE_INFO = {
-  student: { label: "Student", icon: GraduationCap, desc: "Browse notes, videos, and past papers." },
-  teacher: { label: "Teacher", icon: Briefcase, desc: "Upload notes for your subjects, browse videos and past papers." },
-  admin: { label: "Admin", icon: ShieldCheck, desc: "Full access — manage notes, videos, and past papers." }
+  student: { label: "Student", icon: GraduationCap, desc: "Browse notes, videos, quizzes, flashcards and past papers." },
+  admin: { label: "Admin", icon: ShieldCheck, desc: "Full access — add notes, videos and quiz questions." }
 };
 
 function SetupNeededScreen() {
@@ -785,7 +784,7 @@ function NotesView({ notes, user, onAddNote, lastNoteId, setLastNoteId, savedNot
           onClick={() => document.getElementById(`note-${lastNote.id}`)?.scrollIntoView({ behavior: "smooth", block: "center" })} />
       )}
       {filtered.length === 0 ? (
-        <EmptyState icon={BookOpen} title="No notes yet" body={canUpload ? "Upload the first set of notes for students to study from." : "Only admins and teachers can upload notes — check back soon."} />
+        <EmptyState icon={BookOpen} title="No notes yet" body={canUpload ? "Upload the first set of notes for students to study from." : "Only admins can upload notes — check back soon."} />
       ) : (
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(230px, 1fr))", gap: 14 }}>
           {filtered.map((n) => {
@@ -953,11 +952,6 @@ function NoteImage({ note, style }) {
     </div>
   );
 }
-
-/* ---------------------------------------------------------------------- */
-/* Checklist — teachers/admins lay out topics per subject, everyone can   */
-/* tick them off as studied (personal, stored on-device).                 */
-/* ---------------------------------------------------------------------- */
 
 /* ---------------------------------------------------------------------- */
 /* Saved — everything bookmarked, plus what you were last reading/       */
@@ -1304,7 +1298,7 @@ function PastPapersView() {
 
 /* ---------------------------------------------------------------------- */
 /* Quiz — original practice questions (written for this site, not taken   */
-/* from past papers). Teachers/Admins can add more.                       */
+/* from past papers). Admins can add more.                       */
 /* ---------------------------------------------------------------------- */
 
 function shuffled(list) {
@@ -2246,7 +2240,7 @@ function MainApp({ user, onSwitchRole, theme, setTheme }) {
 
 function PreplistProRoot() {
   const [theme, setTheme] = useLocalState("preplist:theme", "light");
-  const [role, setRole] = useLocalState("preplist:role", null);
+  const [role, setRole] = useLocalState("preplist:role2", null);
   const sessionReady = useAnonymousSession();
 
   if (!FIREBASE_READY) return <div className="pp-root" data-theme={theme} style={{ minHeight: "100dvh" }}><GlobalStyle /><SetupNeededScreen /></div>;
