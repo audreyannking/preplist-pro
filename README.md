@@ -159,3 +159,4 @@ your behalf.
   a cached old copy. When you deploy, put a new value in `version.txt` (the
   last line of the deploy steps) — it is also shown at the bottom of the site.
 - **Contact tab.** Shows the project email (preplistpro@gmail.com) with a mail link and a copy button.
+- **Cambridge subject buttons.** On the Past Papers tab each Cambridge subject has "Pick papers", which opens the paper picker for that subject. (Cambridge's own page can't be used inside the split, because PDF links on it open in a new tab and escape the split; the picker loads the PDFs themselves into the split instead.) Save My Exams now has about 65 verified per-subject past-paper links (IGCSE and A Level for Cambridge and Edexcel, AS Level, and AP).

@@ -1037,7 +1037,7 @@ function SavedView({ notes, videos, lastNoteId, lastVideoId, savedNoteIds, saved
 /* ---------------------------------------------------------------------- */
 
 const CAMBRIDGE_BASE = "https://www.cambridgeinternational.org/programmes-and-qualifications";
-const cambridgeLink = (label, slug) => ({ embed: true, label: label + " — papers & mark schemes", url: `${CAMBRIDGE_BASE}/${slug}/past-papers/` });
+const cambridgeLink = (label, slug) => ({ pick: { level: slug.startsWith("cambridge-igcse") ? "IGCSE" : "AS & A Level", slug }, label: label + " — papers & mark schemes", url: `${CAMBRIDGE_BASE}/${slug}/past-papers/` });
 const RESOURCE_GROUPS = [
   {
     title: "Cambridge IGCSE", source: "cambridge", official: true, note: "Official Cambridge pages with question papers and mark schemes, one per subject.",
@@ -1098,13 +1098,119 @@ const RESOURCE_GROUPS = [
     ]
   },
   {
-    title: "Save My Exams (third-party)", source: "sme", official: false,
-    note: "Revision notes and past papers by topic. Some content needs a free or paid account. We only link to it — nothing from the site is copied or embedded here.",
+    title: "About Save My Exams", source: "sme", official: false,
+    note: "Third-party revision site with past papers and notes by topic. Some content needs a free or paid account. We only link to it — nothing from the site is copied or embedded here. Left half / Right half open a window on that half of your screen, and a PDF you open inside it stays in that window.",
     links: [
-      { label: "Save My Exams - IGCSE", url: "https://www.savemyexams.com/igcse/" },
-      { label: "Save My Exams - AS Level", url: "https://www.savemyexams.com/as/" },
-      { label: "Save My Exams - A Level", url: "https://www.savemyexams.com/a-level/" },
-      { label: "Save My Exams - AP", url: "https://www.savemyexams.com/ap/" }
+      { label: "Save My Exams home", url: "https://www.savemyexams.com/" },
+      { label: "All IGCSE subjects", url: "https://www.savemyexams.com/igcse/" },
+      { label: "All AS Level subjects", url: "https://www.savemyexams.com/as/" },
+      { label: "All A Level subjects", url: "https://www.savemyexams.com/a-level/" }
+    ]
+  },
+  {
+    title: "Save My Exams \u2014 IGCSE \u2014 Cambridge", source: "sme", official: false, compact: true,
+    links: [
+      { label: "Biology", url: "https://www.savemyexams.com/igcse/biology/cie/past-papers/" },
+      { label: "Business", url: "https://www.savemyexams.com/igcse/business/cie/past-papers/" },
+      { label: "Chemistry", url: "https://www.savemyexams.com/igcse/chemistry/cie/past-papers/" },
+      { label: "Computer Science", url: "https://www.savemyexams.com/igcse/computer-science/cie/past-papers/" },
+      { label: "Economics", url: "https://www.savemyexams.com/igcse/economics/cie/past-papers/" },
+      { label: "English Language", url: "https://www.savemyexams.com/igcse/english-language/cie/past-papers/" },
+      { label: "English Literature", url: "https://www.savemyexams.com/igcse/english-literature/cie/past-papers/" },
+      { label: "Geography", url: "https://www.savemyexams.com/igcse/geography/cie/past-papers/" },
+      { label: "History", url: "https://www.savemyexams.com/igcse/history/cie/past-papers/" },
+      { label: "Maths", url: "https://www.savemyexams.com/igcse/maths/cie/past-papers/" },
+      { label: "Physics", url: "https://www.savemyexams.com/igcse/physics/cie/past-papers/" },
+      { label: "Psychology", url: "https://www.savemyexams.com/igcse/psychology/cie/past-papers/" },
+      { label: "Sociology", url: "https://www.savemyexams.com/igcse/sociology/cie/past-papers/" }
+    ]
+  },
+  {
+    title: "Save My Exams \u2014 IGCSE \u2014 Edexcel", source: "sme", official: false, compact: true,
+    links: [
+      { label: "Arabic", url: "https://www.savemyexams.com/igcse/arabic/edexcel/past-papers/" },
+      { label: "Biology", url: "https://www.savemyexams.com/igcse/biology/edexcel/past-papers/" },
+      { label: "Business", url: "https://www.savemyexams.com/igcse/business/edexcel/past-papers/" },
+      { label: "Chemistry", url: "https://www.savemyexams.com/igcse/chemistry/edexcel/past-papers/" },
+      { label: "Chinese", url: "https://www.savemyexams.com/igcse/chinese/edexcel/past-papers/" },
+      { label: "Computer Science", url: "https://www.savemyexams.com/igcse/computer-science/edexcel/past-papers/" },
+      { label: "Economics", url: "https://www.savemyexams.com/igcse/economics/edexcel/past-papers/" },
+      { label: "English Literature", url: "https://www.savemyexams.com/igcse/english-literature/edexcel/past-papers/" },
+      { label: "French", url: "https://www.savemyexams.com/igcse/french/edexcel/past-papers/" },
+      { label: "Further Maths", url: "https://www.savemyexams.com/igcse/further-maths/edexcel/past-papers/" },
+      { label: "Geography", url: "https://www.savemyexams.com/igcse/geography/edexcel/past-papers/" },
+      { label: "History", url: "https://www.savemyexams.com/igcse/history/edexcel/past-papers/" },
+      { label: "Maths", url: "https://www.savemyexams.com/igcse/maths/edexcel/a/past-papers/" },
+      { label: "Physics", url: "https://www.savemyexams.com/igcse/physics/edexcel/past-papers/" }
+    ]
+  },
+  {
+    title: "Save My Exams \u2014 AS Level \u2014 Cambridge", source: "sme", official: false, compact: true,
+    links: [
+      { label: "Biology", url: "https://www.savemyexams.com/as/biology/cie/past-papers/" },
+      { label: "Business", url: "https://www.savemyexams.com/as/business/cie/past-papers/" },
+      { label: "Chemistry", url: "https://www.savemyexams.com/as/chemistry/cie/past-papers/" },
+      { label: "Computer Science", url: "https://www.savemyexams.com/as/computer-science/cie/past-papers/" },
+      { label: "Economics", url: "https://www.savemyexams.com/as/economics/cie/past-papers/" },
+      { label: "English Language", url: "https://www.savemyexams.com/as/english-language/cie/past-papers/" },
+      { label: "Further Maths", url: "https://www.savemyexams.com/as/further-maths/cie/past-papers/" },
+      { label: "History", url: "https://www.savemyexams.com/as/history/cie/past-papers/" },
+      { label: "Maths", url: "https://www.savemyexams.com/as/maths/cie/past-papers/" },
+      { label: "Physics", url: "https://www.savemyexams.com/as/physics/cie/past-papers/" },
+      { label: "Psychology", url: "https://www.savemyexams.com/as/psychology/cie/past-papers/" },
+      { label: "Sociology", url: "https://www.savemyexams.com/as/sociology/cie/past-papers/" }
+    ]
+  },
+  {
+    title: "Save My Exams \u2014 A Level \u2014 Cambridge", source: "sme", official: false, compact: true,
+    links: [
+      { label: "Biology", url: "https://www.savemyexams.com/a-level/biology/cie/past-papers/" },
+      { label: "Business", url: "https://www.savemyexams.com/a-level/business/cie/past-papers/" },
+      { label: "Chemistry", url: "https://www.savemyexams.com/a-level/chemistry/cie/past-papers/" },
+      { label: "Computer Science", url: "https://www.savemyexams.com/a-level/computer-science/cie/past-papers/" },
+      { label: "Economics", url: "https://www.savemyexams.com/a-level/economics/cie/past-papers/" },
+      { label: "English Language", url: "https://www.savemyexams.com/a-level/english-language/cie/past-papers/" },
+      { label: "English Literature", url: "https://www.savemyexams.com/a-level/english-literature/cie/past-papers/" },
+      { label: "Further Maths", url: "https://www.savemyexams.com/a-level/further-maths/cie/past-papers/" },
+      { label: "Geography", url: "https://www.savemyexams.com/a-level/geography/cie/past-papers/" },
+      { label: "History", url: "https://www.savemyexams.com/a-level/history/cie/past-papers/" },
+      { label: "Maths", url: "https://www.savemyexams.com/a-level/maths/cie/past-papers/" },
+      { label: "Physics", url: "https://www.savemyexams.com/a-level/physics/cie/past-papers/" },
+      { label: "Psychology", url: "https://www.savemyexams.com/a-level/psychology/cie/past-papers/" },
+      { label: "Sociology", url: "https://www.savemyexams.com/a-level/sociology/cie/past-papers/" }
+    ]
+  },
+  {
+    title: "Save My Exams \u2014 A Level \u2014 Edexcel (International)", source: "sme", official: false, compact: true,
+    links: [
+      { label: "Arabic", url: "https://www.savemyexams.com/a-level/arabic/edexcel/past-papers/" },
+      { label: "Business", url: "https://www.savemyexams.com/a-level/business/edexcel/past-papers/" },
+      { label: "Chemistry", url: "https://www.savemyexams.com/a-level/chemistry/edexcel/past-papers/" },
+      { label: "Chinese", url: "https://www.savemyexams.com/a-level/chinese/edexcel/past-papers/" },
+      { label: "English Language", url: "https://www.savemyexams.com/a-level/english-language/edexcel/past-papers/" },
+      { label: "English Literature", url: "https://www.savemyexams.com/a-level/english-literature/edexcel/past-papers/" },
+      { label: "French", url: "https://www.savemyexams.com/a-level/french/edexcel/past-papers/" },
+      { label: "Further Maths", url: "https://www.savemyexams.com/a-level/further-maths/edexcel/past-papers/" },
+      { label: "Geography", url: "https://www.savemyexams.com/a-level/geography/edexcel/past-papers/" },
+      { label: "History", url: "https://www.savemyexams.com/a-level/history/edexcel/past-papers/" },
+      { label: "Maths", url: "https://www.savemyexams.com/a-level/maths/edexcel/past-papers/" },
+      { label: "Physics", url: "https://www.savemyexams.com/a-level/physics/edexcel/past-papers/" },
+      { label: "Psychology", url: "https://www.savemyexams.com/a-level/psychology/edexcel/past-papers/" }
+    ]
+  },
+  {
+    title: "Save My Exams — AP", source: "sme", official: false, compact: true,
+    links: [
+      { label: "All AP subjects", url: "https://www.savemyexams.com/ap/" },
+      { label: "AP Biology", url: "https://www.savemyexams.com/ap/biology/" },
+      { label: "AP Chemistry", url: "https://www.savemyexams.com/ap/chemistry/" },
+      { label: "AP Physics", url: "https://www.savemyexams.com/ap/physics/" },
+      { label: "AP Psychology", url: "https://www.savemyexams.com/ap/psychology/" },
+      { label: "AP Statistics", url: "https://www.savemyexams.com/ap/statistics/" },
+      { label: "AP Environmental Science", url: "https://www.savemyexams.com/ap/environmental-science/" },
+      { label: "AP Calculus AB", url: "https://www.savemyexams.com/ap/maths/college-board/calculus-ab/20/" },
+      { label: "AP Calculus BC", url: "https://www.savemyexams.com/ap/maths/college-board/calculus-bc/20/" },
+      { label: "AP US History", url: "https://www.savemyexams.com/ap/history/college-board/us-history/23/" }
     ]
   }
 ];
@@ -1168,7 +1274,7 @@ function EmbedSplitViewer({ items, startUrl, startRight, onClose }) {
   );
 }
 
-function CambridgePapers({ onOpen }) {
+function CambridgePapers({ onOpen, preset }) {
   const [index, setIndex] = useState(null);
   const [failed, setFailed] = useState(false);
   const [level, setLevel] = useState("IGCSE");
@@ -1177,6 +1283,13 @@ function CambridgePapers({ onOpen }) {
   useEffect(() => {
     fetch("cambridge-papers.json").then((r) => r.json()).then(setIndex).catch(() => setFailed(true));
   }, []);
+  useEffect(() => {
+    if (!preset || !index) return;
+    const subjectMatch = index.subjects.find((x) => x.slug === preset.slug);
+    setLevel(preset.level); setSlug(preset.slug); setSeriesName(subjectMatch ? Object.keys(subjectMatch.series)[0] || "" : "");
+    const el = document.getElementById("cambridge-picker");
+    if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
+  }, [preset, index]);
   if (failed) return null;
   if (!index) return <div style={{ fontSize: 13, color: "var(--muted)", marginBottom: 18 }}>Loading the Cambridge paper list…</div>;
   const subjects = index.subjects.filter((s) => s.level === level);
@@ -1196,7 +1309,7 @@ function CambridgePapers({ onOpen }) {
   const sel = { padding: "8px 10px", fontSize: 14, width: "100%" };
   const btn = { padding: "4px 10px", fontSize: 12 };
   return (
-    <div className="pp-card" style={{ borderRadius: 10, padding: 14, marginBottom: 22 }}>
+    <div id="cambridge-picker" className="pp-card" style={{ borderRadius: 10, padding: 14, marginBottom: 22 }}>
       <div className="pp-serif" style={{ fontSize: 16, fontWeight: 700, marginBottom: 2 }}>Cambridge papers and mark schemes — pick and open</div>
       <div style={{ fontSize: 12.5, color: "var(--muted)", marginBottom: 10 }}>Each question paper and each mark scheme is its own option: "Open" shows it in the split view (pick the other document on the second side), "New tab" opens it on its own. These are links to Cambridge's own files (nothing is copied). Cambridge's public pages only list the latest series and specimen papers — older years need a school login with Cambridge.</div>
       <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 10 }}>
@@ -1251,6 +1364,7 @@ const PAPER_SOURCES = [
 function PastPapersView() {
   const notify = useToast();
   const [source, setSource] = useLocalState("preplist:paperSource", "cambridge");
+  const [preset, setPreset] = useState(null);
   const [split, setSplit] = useState(null);
   const embedItems = RESOURCE_GROUPS.flatMap((g) => g.links.filter((l) => l.embed).map((l) => ({ ...l, group: g.title })));
   const half = (url, side) => { if (!openHalfScreen(url, side)) notify({ kind: "error", text: "Your browser blocked the pop-up. Allow pop-ups for this site, then try again." }); };
@@ -1259,14 +1373,14 @@ function PastPapersView() {
       <div className="pp-card" style={{ borderRadius: 10, padding: 14, marginBottom: 18, fontSize: 13, lineHeight: 1.55 }}>
         <div className="pp-serif" style={{ fontSize: 15.5, fontWeight: 700, marginBottom: 6 }}>Past papers — pick your exam board</div>
         Past papers belong to the exam boards, and Cambridge doesn't allow them to be republished on other websites — so this page links to the official sources instead of copying them.
-        Each Cambridge and Pearson page below lists the <b>question papers and the mark schemes</b> together. <b>Open</b> uses a new tab. <b>Split view</b> (Cambridge and Khan Academy) shows two pages side by side right here inside PrepList Pro — it works in any browser. Pearson, College Board and the IB don't allow their pages to be shown inside other websites, so those only get <b>Left half</b> / <b>Right half</b>, which try to open a window on that half of your screen (your browser may open a full tab instead).
+        <b>Cambridge:</b> choose a subject and pick papers, and each question paper and mark scheme opens straight into a split screen (side by side, or stacked on a phone) — the PDFs stay inside the split. <b>Other sites</b> (Pearson, College Board, the IB, Save My Exams) refuse to be shown inside other websites, so use <b>Open</b> (new tab) or <b>Left half</b> / <b>Right half</b>, which open a window on that half of your screen; a PDF you open inside that window stays in it.
       </div>
       <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 18 }} role="tablist" aria-label="Past paper source">
         {PAPER_SOURCES.map((p) => (
           <button key={p.id} role="tab" aria-selected={source === p.id} className={`pp-btn ${source === p.id ? "pp-btn-primary" : "pp-btn-ghost"}`} style={{ padding: "7px 16px", fontSize: 13.5 }} onClick={() => setSource(p.id)}>{p.label}</button>
         ))}
       </div>
-      {source === "cambridge" && <CambridgePapers onOpen={(items, left, right) => setSplit({ items, left, right })} />}
+      {source === "cambridge" && <CambridgePapers preset={preset} onOpen={(items, left, right) => setSplit({ items, left, right })} />}
       {RESOURCE_GROUPS.filter((g) => g.source === source).map((g) => (
         <div key={g.title} style={{ marginBottom: 22 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
@@ -1274,12 +1388,14 @@ function PastPapersView() {
             <GradeTag text={g.official ? "Official" : "Third-party"} />
           </div>
           {g.note && <div style={{ fontSize: 12.5, color: "var(--muted)", marginBottom: 8 }}>{g.note}</div>}
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(360px, 1fr))", gap: 8 }}>
+          <div style={{ display: "grid", gridTemplateColumns: g.compact ? "repeat(auto-fill, minmax(300px, 1fr))" : "repeat(auto-fill, minmax(360px, 1fr))", gap: 8 }}>
             {g.links.map((l) => (
               <div key={l.url} className="pp-card" style={{ display: "flex", alignItems: "center", gap: 8, padding: "9px 12px", borderRadius: 8 }}>
                 <div style={{ flex: 1, minWidth: 0, fontSize: 13.5, fontWeight: 600 }}>{l.label}</div>
                 <a className="pp-btn pp-btn-ghost" href={l.url} target="_blank" rel="noopener noreferrer" style={{ padding: "5px 10px", fontSize: 12, textDecoration: "none", flexShrink: 0 }}>Open</a>
-                {l.embed ? (
+                {l.pick ? (
+                  <button className="pp-btn pp-btn-primary" onClick={() => setPreset({ ...l.pick, n: Date.now() })} style={{ padding: "5px 10px", fontSize: 12, flexShrink: 0 }} title="Choose a paper and mark scheme and open them side by side">Pick papers</button>
+                ) : l.embed ? (
                   <button className="pp-btn pp-btn-primary" onClick={() => setSplit({ items: embedItems, left: l.url, right: null })} style={{ padding: "5px 10px", fontSize: 12, flexShrink: 0 }} title="Show this beside another page, inside this site">Split view</button>
                 ) : (
                   <>
