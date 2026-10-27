@@ -1241,6 +1241,7 @@ function EmbedPane({ item, items, onPick, label }) {
         </div>
         {item && <a className="pp-btn pp-btn-ghost" href={item.url} target="_blank" rel="noopener noreferrer" style={{ padding: "4px 10px", fontSize: 12, textDecoration: "none", flexShrink: 0 }}>New tab</a>}
       </div>
+      {item && <div style={{ fontSize: 11.5, color: "var(--muted)", padding: "4px 12px", borderBottom: "1px solid var(--border)" }}>Large PDFs can take a few seconds. If this side stays blank, use New tab — or close this and use the Left half / Right half buttons instead.</div>}
       {item ? <iframe key={item.url} title={item.label} src={item.url} style={{ flex: 1, width: "100%", minHeight: 0, border: 0, background: "#fff" }} />
         : <div style={{ padding: 16, fontSize: 13, color: "var(--muted)" }}>Pick a page to show on this side.</div>}
     </div>
@@ -1274,7 +1275,7 @@ function EmbedSplitViewer({ items, startUrl, startRight, onClose }) {
   );
 }
 
-function CambridgePapers({ onOpen, preset }) {
+function CambridgePapers({ onOpen, onHalf, preset }) {
   const [index, setIndex] = useState(null);
   const [failed, setFailed] = useState(false);
   const [level, setLevel] = useState("IGCSE");
@@ -1340,11 +1341,16 @@ function CambridgePapers({ onOpen, preset }) {
             <b style={{ fontSize: 13.5, width: 70 }}>Paper {pn}</b>
             {d.qp && <span style={{ display: "inline-flex", gap: 4, alignItems: "center" }}><span style={{ fontSize: 12, color: "var(--muted)" }}>Question paper</span>
               <button className="pp-btn pp-btn-ghost" style={btn} onClick={() => open(d.qp, null)}>Open</button>
-              <a className="pp-btn pp-btn-ghost" style={{ ...btn, textDecoration: "none" }} href={url(d.qp)} target="_blank" rel="noopener noreferrer">New tab</a></span>}
+              <a className="pp-btn pp-btn-ghost" style={{ ...btn, textDecoration: "none" }} href={url(d.qp)} target="_blank" rel="noopener noreferrer">New tab</a>
+              <button className="pp-btn pp-btn-ghost" style={btn} onClick={() => onHalf(url(d.qp), "left")}>Left half</button>
+              <button className="pp-btn pp-btn-ghost" style={btn} onClick={() => onHalf(url(d.qp), "right")}>Right half</button></span>}
             {d.ms && <span style={{ display: "inline-flex", gap: 4, alignItems: "center" }}><span style={{ fontSize: 12, color: "var(--muted)" }}>Mark scheme</span>
               <button className="pp-btn pp-btn-ghost" style={btn} onClick={() => open(d.ms, null)}>Open</button>
-              <a className="pp-btn pp-btn-ghost" style={{ ...btn, textDecoration: "none" }} href={url(d.ms)} target="_blank" rel="noopener noreferrer">New tab</a></span>}
+              <a className="pp-btn pp-btn-ghost" style={{ ...btn, textDecoration: "none" }} href={url(d.ms)} target="_blank" rel="noopener noreferrer">New tab</a>
+              <button className="pp-btn pp-btn-ghost" style={btn} onClick={() => onHalf(url(d.ms), "left")}>Left half</button>
+              <button className="pp-btn pp-btn-ghost" style={btn} onClick={() => onHalf(url(d.ms), "right")}>Right half</button></span>}
             {d.qp && d.ms && <button className="pp-btn pp-btn-primary" style={btn} onClick={() => open(d.qp, d.ms)}>Paper + mark scheme side by side</button>}
+            {d.qp && d.ms && <button className="pp-btn pp-btn-ghost" style={btn} onClick={() => { onHalf(url(d.qp), "left"); onHalf(url(d.ms), "right"); }} title="Opens two windows, one on each half of your screen">Two half-screen windows</button>}
           </div>
         );
       })}
@@ -1380,7 +1386,7 @@ function PastPapersView() {
           <button key={p.id} role="tab" aria-selected={source === p.id} className={`pp-btn ${source === p.id ? "pp-btn-primary" : "pp-btn-ghost"}`} style={{ padding: "7px 16px", fontSize: 13.5 }} onClick={() => setSource(p.id)}>{p.label}</button>
         ))}
       </div>
-      {source === "cambridge" && <CambridgePapers preset={preset} onOpen={(items, left, right) => setSplit({ items, left, right })} />}
+      {source === "cambridge" && <CambridgePapers preset={preset} onHalf={half} onOpen={(items, left, right) => setSplit({ items, left, right })} />}
       {RESOURCE_GROUPS.filter((g) => g.source === source).map((g) => (
         <div key={g.title} style={{ marginBottom: 22 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
@@ -1473,6 +1479,97 @@ function AddQuestionModal({ onClose, onSubmit }) {
   );
 }
 
+// Parses CSV (or tab-separated) text into quiz questions. Columns:
+// question, option A, option B, [option C], [option D], correct answer (A-D), [explanation]
+function parseCsvRows(text) {
+  const delim = (text.split(/\r?\n/)[0] || "").includes("\t") ? "\t" : ",";
+  const rows = []; let row = []; let cell = ""; let q = false;
+  for (let i = 0; i < text.length; i++) {
+    const c = text[i];
+    if (q) {
+      if (c === '"' && text[i + 1] === '"') { cell += '"'; i++; }
+      else if (c === '"') q = false;
+      else cell += c;
+    } else if (c === '"') q = true;
+    else if (c === delim) { row.push(cell); cell = ""; }
+    else if (c === "\n" || c === "\r") { if (c === "\r" && text[i + 1] === "\n") i++; row.push(cell); cell = ""; if (row.some((x) => x.trim())) rows.push(row); row = []; }
+    else cell += c;
+  }
+  row.push(cell); if (row.some((x) => x.trim())) rows.push(row);
+  return rows;
+}
+function quizFromCsv(text) {
+  const rows = parseCsvRows(text.replace(/^\uFEFF/, ""));
+  if (rows.length && /question/i.test(rows[0][0] || "") && /option|answer|correct/i.test(rows[0].join(" "))) rows.shift();
+  const good = []; const problems = [];
+  rows.forEach((r, i) => {
+    const cells = r.map((x) => x.trim());
+    const question = cells[0];
+    const opts = cells.slice(1, 5);
+    const options = opts.filter(Boolean);
+    const rawAnswer = (cells[5] || "").trim();
+    let answer = -1;
+    if (/^[A-D]$/i.test(rawAnswer)) answer = rawAnswer.toUpperCase().charCodeAt(0) - 65;
+    else if (/^[1-4]$/.test(rawAnswer)) answer = Number(rawAnswer) - 1;
+    else if (rawAnswer) answer = opts.findIndex((o) => o.toLowerCase() === rawAnswer.toLowerCase());
+    // keep the answer index pointing at the right option after blanks are dropped
+    const mapped = answer >= 0 && opts[answer] ? options.indexOf(opts[answer]) : -1;
+    if (!question) problems.push(`Row ${i + 1}: no question text.`);
+    else if (options.length < 2) problems.push(`Row ${i + 1}: needs at least two answer options.`);
+    else if (mapped < 0) problems.push(`Row ${i + 1}: the correct answer must be A, B, C or D (matching a filled option).`);
+    else good.push({ question, options, answer: mapped, explanation: cells[6] || "" });
+  });
+  return { good, problems };
+}
+
+function ImportQuizModal({ onClose, onImport }) {
+  const [examType, setExamType] = useState("");
+  const [subject, setSubject] = useState("");
+  const [topic, setTopic] = useState("");
+  const [text, setText] = useState("");
+  const [busy, setBusy] = useState(false);
+  const parsed = useMemo(() => (text.trim() ? quizFromCsv(text) : null), [text]);
+  const canImport = examType && subject && parsed && parsed.good.length > 0 && !busy;
+  async function readFile(e) {
+    const f = e.target.files && e.target.files[0];
+    e.target.value = "";
+    if (!f) return;
+    if (/\.xlsx?$/i.test(f.name)) { alert("Please save the spreadsheet as CSV first (File > Download > CSV), then upload that."); return; }
+    setText(await f.text());
+  }
+  function downloadTemplate() {
+    const csv = 'question,option A,option B,option C,option D,correct answer (A-D),explanation (optional)\n"What is 2 + 2?",3,4,5,6,B,"Adding 2 and 2 gives 4."\n"Which of these is a prime number?",4,6,7,9,C,"7 can only be divided by 1 and itself."\n';
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(new Blob([csv], { type: "text/csv" })); a.download = "quiz-template.csv"; a.click();
+    setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+  }
+  return (
+    <Modal title="Upload a quiz" onClose={onClose} wide>
+      <div style={{ fontSize: 13, lineHeight: 1.55, marginBottom: 12 }}>
+        Upload a CSV file (or paste the same text) with one question per row: <b>question, option A, option B, option C, option D, correct answer (A–D), explanation</b>. Use questions you wrote yourself — please don't copy from exam papers or books.
+        <div style={{ marginTop: 8 }}><button className="pp-btn pp-btn-ghost" style={{ padding: "6px 12px", fontSize: 12.5 }} onClick={downloadTemplate}>Download a template</button></div>
+      </div>
+      <TwoUp>
+        <Field label="Exam type"><ExamTypeSelect value={examType} onChange={(t) => { setExamType(t); setSubject(""); }} /></Field>
+        <Field label={examType === "SAT" ? "Section" : "Subject"}><PaperSubjectSelect value={subject} onChange={setSubject} examType={examType} /></Field>
+      </TwoUp>
+      <Field label="Topic (optional)"><input className="pp-input" style={{ width: "100%", padding: "9px 12px", fontSize: 14.5 }} value={topic} onChange={(e) => setTopic(e.target.value)} placeholder="e.g. Algebra" /></Field>
+      <Field label="Quiz file (.csv)"><input type="file" accept=".csv,.txt,.tsv,text/csv,text/plain" onChange={readFile} className="pp-file-input" aria-label="Quiz file" /></Field>
+      <Field label="…or paste it here"><textarea className="pp-input" style={{ width: "100%", padding: "9px 12px", fontSize: 13, minHeight: 90, resize: "vertical", fontFamily: "monospace" }} value={text} onChange={(e) => setText(e.target.value)} placeholder='"What is 2 + 2?",3,4,5,6,B,"Adding gives 4."' /></Field>
+      {parsed && (
+        <div style={{ fontSize: 13, marginBottom: 12 }}>
+          <b>{parsed.good.length}</b> question{parsed.good.length === 1 ? "" : "s"} ready to upload.
+          {parsed.problems.length > 0 && <div style={{ color: "#8A3434", marginTop: 4 }}>{parsed.problems.slice(0, 5).map((p) => <div key={p}>{p}</div>)}{parsed.problems.length > 5 && <div>…and {parsed.problems.length - 5} more problems.</div>}</div>}
+        </div>
+      )}
+      <button className="pp-btn pp-btn-primary" style={{ width: "100%", padding: "10px 0", opacity: canImport ? 1 : 0.5 }} disabled={!canImport}
+        onClick={async () => { setBusy(true); await onImport(parsed.good.map((q) => ({ ...q, examType, subject, topic: topic.trim() }))); setBusy(false); }}>
+        Upload {parsed ? parsed.good.length : 0} question{parsed && parsed.good.length === 1 ? "" : "s"}
+      </button>
+    </Modal>
+  );
+}
+
 function QuizReference({ options, refIndex, setRefIndex }) {
   const opt = options[Number(refIndex)];
   return (
@@ -1493,7 +1590,7 @@ function QuizReference({ options, refIndex, setRefIndex }) {
   );
 }
 
-function QuizView({ questions, user, notes, onNeedRefs, onAddQuestion, onDeleteQuestion }) {
+function QuizView({ questions, user, notes, onNeedRefs, onAddQuestion, onImportQuestions, onDeleteQuestion, onDeleteMany }) {
   const [phase, setPhase] = useState("setup");
   const [examType, setExamType] = useState("");
   const [subject, setSubject] = useState("");
@@ -1502,6 +1599,7 @@ function QuizView({ questions, user, notes, onNeedRefs, onAddQuestion, onDeleteQ
   const [timed, setTimed] = useState(false);
   const [history, setHistory] = useLocalState("preplist:quizHistory", []);
   const [showAdd, setShowAdd] = useState(false);
+  const [showImport, setShowImport] = useState(false);
   const [run, setRun] = useState(null);
   const [split, setSplit] = useState(false);
   const [refIndex, setRefIndex] = useState("");
@@ -1638,7 +1736,7 @@ function QuizView({ questions, user, notes, onNeedRefs, onAddQuestion, onDeleteQ
     <div>
       <div className="pp-card" style={{ borderRadius: 10, padding: 14, marginBottom: 16, fontSize: 13, lineHeight: 1.55 }}>
         <div className="pp-serif" style={{ fontSize: 15.5, fontWeight: 700, marginBottom: 4 }}>Practice quiz</div>
-        Original practice questions written for this site (they are not copied from past papers — real past papers are on the Past Papers tab). Get instant feedback with an explanation after each question, then retry the ones you missed.
+        Quizzes uploaded by the PrepList Pro team. Get instant feedback with an explanation after each question, then retry the ones you missed. (Real past papers are on the Past Papers tab.)
       </div>
       <div style={{ display: "flex", gap: 10, marginBottom: 12, flexWrap: "wrap", alignItems: "flex-end" }}>
         <div style={{ width: 150 }}><ExamTypeSelect value={examType} onChange={(t) => { setExamType(t); setSubject(""); setTopic(""); }} includeAll /></div>
@@ -1667,7 +1765,8 @@ function QuizView({ questions, user, notes, onNeedRefs, onAddQuestion, onDeleteQ
       <div style={{ display: "flex", gap: 10, alignItems: "center", marginBottom: 20, flexWrap: "wrap" }}>
         <button className="pp-btn pp-btn-primary" style={{ padding: "10px 20px", opacity: pool.length ? 1 : 0.5 }} disabled={!pool.length} onClick={start}>Start quiz</button>
         <span style={{ fontSize: 12.5, color: "var(--muted)" }}>{pool.length} question{pool.length === 1 ? "" : "s"} available</span>
-        {canManage && <button className="pp-btn pp-btn-ghost" style={{ padding: "9px 14px", fontSize: 13, marginLeft: "auto" }} onClick={() => setShowAdd(true)}><Plus size={14} style={{ marginRight: 5, display: "inline" }} />Add question</button>}
+        {canManage && <button className="pp-btn pp-btn-primary" style={{ padding: "9px 14px", fontSize: 13, marginLeft: "auto" }} onClick={() => setShowImport(true)}>Upload a quiz</button>}
+        {canManage && <button className="pp-btn pp-btn-ghost" style={{ padding: "9px 14px", fontSize: 13 }} onClick={() => setShowAdd(true)}><Plus size={14} style={{ marginRight: 5, display: "inline" }} />Add one question</button>}
       </div>
       {history.length > 0 && (
         <div style={{ marginBottom: 20 }}>
@@ -1683,7 +1782,11 @@ function QuizView({ questions, user, notes, onNeedRefs, onAddQuestion, onDeleteQ
       )}
       {canManage && pool.length > 0 && (
         <div>
-          <div className="pp-serif" style={{ fontSize: 15, fontWeight: 700, marginBottom: 6 }}>Manage questions</div>
+          <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 6, flexWrap: "wrap" }}>
+            <div className="pp-serif" style={{ fontSize: 15, fontWeight: 700 }}>Manage questions</div>
+            <button className="pp-btn pp-btn-ghost" style={{ padding: "4px 10px", fontSize: 12, marginLeft: "auto" }}
+              onClick={() => { if (window.confirm(`Delete these ${pool.length} question${pool.length === 1 ? "" : "s"}? This can't be undone.`)) onDeleteMany(pool.map((q) => q.id)); }}>Delete all {pool.length} shown</button>
+          </div>
           {pool.slice(0, 40).map((q) => (
             <div key={q.id} style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 0", borderBottom: "1px solid var(--border)", fontSize: 13 }}>
               <span style={{ flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{q.subject}: {q.question}</span>
@@ -1692,6 +1795,8 @@ function QuizView({ questions, user, notes, onNeedRefs, onAddQuestion, onDeleteQ
           ))}
         </div>
       )}
+      {questions.length === 0 && <EmptyState icon={HelpCircle} title="No quizzes yet" body={canManage ? "Use Upload a quiz to add your first one from a CSV file or pasted text." : "Quizzes will appear here soon — check back later."} />}
+      {showImport && <ImportQuizModal onClose={() => setShowImport(false)} onImport={async (list) => { const ok = await onImportQuestions(list); if (ok) setShowImport(false); }} />}
       {showAdd && <AddQuestionModal onClose={() => setShowAdd(false)} onSubmit={async (payload) => { const ok = await onAddQuestion(payload); if (ok) setShowAdd(false); }} />}
     </div>
   );
@@ -2224,7 +2329,57 @@ function GlobalSearchModal({ notes, videos, onClose, onJump }) {
   );
 }
 
-function ContactView() {
+function FeedbackCard({ isAdmin, feedback }) {
+  const notify = useToast();
+  const [deviceId, setDeviceId] = useLocalState("preplist:deviceId", null);
+  const [saved, setSaved] = useLocalState("preplist:myFeedback", null);
+  const [rating, setRating] = useState((saved && saved.rating) || 0);
+  const [hover, setHover] = useState(0);
+  const [comment, setComment] = useState((saved && saved.comment) || "");
+  const [busy, setBusy] = useState(false);
+  async function submit() {
+    if (!rating || busy) return;
+    setBusy(true);
+    try {
+      let id = deviceId;
+      if (!id) { id = uid(); setDeviceId(id); }
+      await db.collection("feedback").doc(id).set({ rating, comment: comment.trim().slice(0, 300), updatedAt: Date.now() });
+      setSaved({ rating, comment: comment.trim() });
+      notify({ kind: "ok", text: "Thank you for your feedback!" });
+    } catch (e) { notify({ kind: "error", text: friendlyDbError(e) }); }
+    setBusy(false);
+  }
+  const shown = hover || rating;
+  const avg = feedback && feedback.length ? feedback.reduce((a, f) => a + f.rating, 0) / feedback.length : 0;
+  return (
+    <div className="pp-card" style={{ borderRadius: 10, padding: 20, maxWidth: 560, marginTop: 16 }}>
+      <div className="pp-serif" style={{ fontSize: 18, fontWeight: 700, marginBottom: 4 }}>Rate PrepList Pro</div>
+      <div style={{ fontSize: 13.5, color: "var(--muted)", marginBottom: 10 }}>How are we doing? Tap a star out of 5.</div>
+      <div style={{ display: "flex", gap: 4, marginBottom: 12 }} role="radiogroup" aria-label="Rating out of 5 stars">
+        {[1, 2, 3, 4, 5].map((n) => (
+          <button key={n} role="radio" aria-checked={rating === n} aria-label={`${n} star${n === 1 ? "" : "s"}`} className="pp-btn pp-btn-ghost"
+            style={{ padding: 6, borderRadius: 8, border: "none", background: "transparent" }}
+            onMouseEnter={() => setHover(n)} onMouseLeave={() => setHover(0)} onClick={() => setRating(n)}>
+            <Star size={30} fill={n <= shown ? "#E2A92B" : "none"} style={{ color: n <= shown ? "#E2A92B" : "var(--muted)" }} />
+          </button>
+        ))}
+      </div>
+      <textarea className="pp-input" maxLength={300} style={{ width: "100%", padding: "9px 12px", fontSize: 14, minHeight: 70, resize: "vertical", fontFamily: "inherit" }}
+        placeholder="Anything we should improve? (optional — please don't include personal details)" value={comment} onChange={(e) => setComment(e.target.value)} />
+      <button className="pp-btn pp-btn-primary" style={{ marginTop: 10, padding: "9px 20px", opacity: rating && !busy ? 1 : 0.5 }} disabled={!rating || busy} onClick={submit}>{saved ? "Update my feedback" : "Send feedback"}</button>
+      {isAdmin && (
+        <div style={{ marginTop: 18, borderTop: "1px solid var(--border)", paddingTop: 12 }}>
+          <div style={{ fontSize: 13.5, fontWeight: 700 }}>Admin view: {feedback && feedback.length ? `${avg.toFixed(1)} / 5 from ${feedback.length} rating${feedback.length === 1 ? "" : "s"}` : "no ratings yet"}</div>
+          {(feedback || []).filter((f) => f.comment).sort((a, b) => b.updatedAt - a.updatedAt).slice(0, 10).map((f) => (
+            <div key={f.id} style={{ fontSize: 13, padding: "6px 0", borderTop: "1px solid var(--border)" }}>{"★".repeat(f.rating)}{"☆".repeat(5 - f.rating)} — {f.comment} <span style={{ color: "var(--muted)", fontSize: 11.5 }}>· {timeAgo(f.updatedAt)}</span></div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function ContactView({ isAdmin, feedback }) {
   const notify = useToast();
   const email = "preplistpro@gmail.com";
   function copy() {
@@ -2234,6 +2389,7 @@ function ContactView() {
     else fail();
   }
   return (
+    <div>
     <div className="pp-card" style={{ borderRadius: 10, padding: 20, maxWidth: 560 }}>
       <div className="pp-serif" style={{ fontSize: 20, fontWeight: 700, marginBottom: 6 }}>Contact us</div>
       <div style={{ fontSize: 14, lineHeight: 1.6, marginBottom: 14 }}>
@@ -2244,6 +2400,8 @@ function ContactView() {
         <button className="pp-btn pp-btn-ghost" style={{ padding: "10px 16px", fontSize: 13.5 }} onClick={copy}>Copy email</button>
       </div>
       <div style={{ fontSize: 12, color: "var(--muted)", marginTop: 16 }}>PrepList Pro is an independent student project and is not affiliated with or endorsed by any school or organisation.</div>
+    </div>
+    <FeedbackCard isAdmin={isAdmin} feedback={feedback} />
     </div>
   );
 }
@@ -2271,11 +2429,12 @@ function MainApp({ user, onSwitchRole, theme, setTheme }) {
   const [notes, notesReady] = useCollection("notes", undefined, wanted.has("notes"));
   const [videos, videosReady] = useCollection("videos", undefined, wanted.has("videos"));
   const [quizQuestions, quizReady] = useCollection("quizQuestions", undefined, wanted.has("quiz"));
+  const [feedbackList] = useCollection("feedback", undefined, wanted.has("feedback"));
 
   const [tab, setTab] = useState("notes");
   const [showSearch, setShowSearch] = useState(false);
   const TAB_NEEDS = { notes: ["notes"], videos: ["videos"], papers: [], quiz: ["quiz"], saved: ["notes", "videos"], tools: [], flashcards: [], contact: [] };
-  useEffect(() => { want(...(TAB_NEEDS[tab] || [])); }, [tab, want]);
+  useEffect(() => { want(...(TAB_NEEDS[tab] || [])); if (tab === "contact" && user.role === "admin") want("feedback"); }, [tab, want]);
   useEffect(() => { if (showSearch) want("notes", "videos"); }, [showSearch, want]);
   const [toast, setToast] = useState(null);
   const notify = useCallback((t) => setToast(t), []);
@@ -2321,6 +2480,27 @@ function MainApp({ user, onSwitchRole, theme, setTheme }) {
     try { await db.collection("quizQuestions").add({ ...payload, addedByRole: user.role, createdAt: Date.now() }); return true; }
     catch (e) { notify({ kind: "error", text: friendlyDbError(e) }); return false; }
   }
+  async function deleteManyQuiz(ids) {
+    try {
+      for (let i = 0; i < ids.length; i += 400) {
+        const batch = db.batch();
+        ids.slice(i, i + 400).forEach((id) => batch.delete(db.collection("quizQuestions").doc(id)));
+        await batch.commit();
+      }
+      notify({ kind: "ok", text: `Deleted ${ids.length} question${ids.length === 1 ? "" : "s"}.` });
+    } catch (e) { notify({ kind: "error", text: friendlyDbError(e) }); }
+  }
+  async function importQuizQuestions(list) {
+    try {
+      for (let i = 0; i < list.length; i += 400) {
+        const batch = db.batch();
+        list.slice(i, i + 400).forEach((q) => batch.set(db.collection("quizQuestions").doc(), { ...q, addedByRole: user.role, createdAt: Date.now() }));
+        await batch.commit();
+      }
+      notify({ kind: "ok", text: `Uploaded ${list.length} question${list.length === 1 ? "" : "s"}.` });
+      return true;
+    } catch (e) { notify({ kind: "error", text: friendlyDbError(e) }); return false; }
+  }
   async function deleteQuizQuestion(id) {
     try { await db.collection("quizQuestions").doc(id).delete(); }
     catch (e) { notify({ kind: "error", text: friendlyDbError(e) }); }
@@ -2360,10 +2540,10 @@ function MainApp({ user, onSwitchRole, theme, setTheme }) {
               {tab === "notes" && <NotesView notes={notes} user={user} onAddNote={addNote} lastNoteId={lastNoteId} setLastNoteId={setLastNoteId} savedNoteIds={savedNoteIds} onToggleSavedNote={onToggleSavedNote} />}
               {tab === "videos" && <VideosView videos={videos} user={user} onAddVideo={addVideo} lastVideoId={lastVideoId} setLastVideoId={setLastVideoId} savedVideoIds={savedVideoIds} onToggleSavedVideo={onToggleSavedVideo} />}
               {tab === "papers" && <PastPapersView />}
-              {tab === "quiz" && <QuizView questions={quizQuestions} user={user} notes={notes} onNeedRefs={() => want("notes")} onAddQuestion={addQuizQuestion} onDeleteQuestion={deleteQuizQuestion} />}
+              {tab === "quiz" && <QuizView questions={quizQuestions} user={user} notes={notes} onNeedRefs={() => want("notes")} onAddQuestion={addQuizQuestion} onImportQuestions={importQuizQuestions} onDeleteQuestion={deleteQuizQuestion} onDeleteMany={deleteManyQuiz} />}
               {tab === "tools" && <ToolsView />}
               {tab === "flashcards" && <FlashcardsView />}
-              {tab === "contact" && <ContactView />}
+              {tab === "contact" && <ContactView isAdmin={user.role === "admin"} feedback={feedbackList} />}
               {tab === "saved" && <SavedView notes={notes} videos={videos}
                 lastNoteId={lastNoteId} lastVideoId={lastVideoId}
                 savedNoteIds={savedNoteIds} savedVideoIds={savedVideoIds}

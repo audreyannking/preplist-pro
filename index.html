@@ -35,6 +35,14 @@
 <script>
   (function () {
     function load(v) {
+      if (!window.firebase || !window.React || !window.ReactDOM) {
+        document.getElementById("root").innerHTML =
+          '<div style="font-family:system-ui,sans-serif;max-width:420px;margin:18vh auto;padding:0 20px;text-align:center;color:#333">' +
+          '<h2 style="margin:0 0 8px">PrepList Pro couldn\'t finish loading</h2>' +
+          '<p style="margin:0 0 16px;line-height:1.5">Part of the site didn\'t download — usually a weak or blocked connection. Please check your internet and try again.</p>' +
+          '<button onclick="location.reload()" style="padding:10px 20px;font-size:15px;border:0;border-radius:8px;background:#3b5bdb;color:#fff;cursor:pointer">Reload</button></div>';
+        return;
+      }
       var s = document.createElement("script");
       window.__ppVersion = v || "";
       s.src = "app.js" + (v ? "?v=" + encodeURIComponent(v) : "");
