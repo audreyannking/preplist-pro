@@ -63,6 +63,7 @@ function Toast({ toast, onClose }) {
       display: "flex", alignItems: "flex-start", gap: 10, fontSize: 13.5, lineHeight: 1.45, boxShadow: "0 6px 20px rgba(0,0,0,0.18)"
     }}>
       <span style={{ flex: 1 }}>{toast.text}</span>
+      {toast.action && <button onClick={() => { toast.action.onClick(); onClose(); }} style={{ background: "none", border: "1.5px solid currentColor", borderRadius: 6, cursor: "pointer", color: "inherit", padding: "2px 10px", fontWeight: 700, fontSize: 13, flexShrink: 0 }}>{toast.action.label}</button>}
       <button onClick={onClose} aria-label="Dismiss" style={{ background: "none", border: "none", cursor: "pointer", color: "inherit", padding: 0, flexShrink: 0 }}><X size={14} /></button>
     </div>
   );
@@ -104,6 +105,7 @@ const ICON_PATHS = {
   megaphone: <><path d="M3 10.2v4.2h2.9l8.6 3.8V6.4Z"/><path d="M17.5 9a3.1 3.1 0 0 1 0 6.2"/></>,
   camera: <><path d="M4 8h3l1.4-1.9h7.2L17 8h3a1 1 0 0 1 1 1v10.2a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V9a1 1 0 0 1 1-1Z"/><circle cx="12" cy="13.3" r="3.4"/></>,
   bookmark: <path d="M6.5 3.5h11a1 1 0 0 1 1 1V21l-6.5-4.2L5.5 21V4.5a1 1 0 0 1 1-1Z"/>,
+  trash: <><path d="M3.5 6h17"/><path d="M18.5 6v13.5a2 2 0 0 1-2 2h-9a2 2 0 0 1-2-2V6"/><path d="M8.5 6V4.5a2 2 0 0 1 2-2h3a2 2 0 0 1 2 2V6"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></>,
   helpcircle: <><circle cx="12" cy="12" r="9"/><path d="M9.4 9.3a2.7 2.7 0 0 1 5.2.9c0 1.8-2.6 2.2-2.6 4"/><line x1="12" y1="17.2" x2="12" y2="17.3"/></>,
   mail: <><rect x="3" y="5" width="18" height="14" rx="2"/><polyline points="3.5,7 12,13 20.5,7"/></>,
   link: <><path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1"/><path d="M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1"/></>
@@ -129,7 +131,7 @@ const Sun = makeIcon("sun"), Moon = makeIcon("moon"), Plus = makeIcon("plus"), X
   Briefcase = makeIcon("briefcase"), ShieldCheck = makeIcon("shieldcheck"), LayoutGrid = makeIcon("layoutgrid"),
   ChevronRight = makeIcon("chevronright"), Calendar = makeIcon("calendar"), Users = makeIcon("users"),
   Megaphone = makeIcon("megaphone"), Camera = makeIcon("camera"), Bookmark = makeIcon("bookmark"),
-  HelpCircle = makeIcon("helpcircle"), LinkIcon = makeIcon("link"), Mail = makeIcon("mail");
+  Trash = makeIcon("trash"), HelpCircle = makeIcon("helpcircle"), LinkIcon = makeIcon("link"), Mail = makeIcon("mail");
 
 /* ---------------------------------------------------------------------- */
 /* Constants                                                              */
@@ -759,7 +761,7 @@ function PhotoPicker({ value, onChange, required }) {
 /* Notes                                                                   */
 /* ---------------------------------------------------------------------- */
 
-function NotesView({ notes, user, onAddNote, lastNoteId, setLastNoteId, savedNoteIds, onToggleSavedNote }) {
+function NotesView({ notes, user, onAddNote, onDeleteNote, lastNoteId, setLastNoteId, savedNoteIds, onToggleSavedNote }) {
   const [showForm, setShowForm] = useState(false);
   const [query, setQuery] = useState("");
   const [subject, setSubject] = useState("");
@@ -795,6 +797,7 @@ function NotesView({ notes, user, onAddNote, lastNoteId, setLastNoteId, savedNot
                 style={{ borderRadius: 10, padding: 14, cursor: "pointer", transform: `rotate(${cardTilt(n.id) * 0.6}deg)`, outline: n.id === lastNoteId ? "2px solid var(--accent)" : "none", outlineOffset: 2 }}>
                 <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
                   <div style={{ display: "flex", gap: 6, flexWrap: "wrap", flex: 1 }}><Tag text={n.subject} /><GradeTag text={n.grade} /></div>
+                  {canUpload && <button className="pp-btn pp-btn-ghost" style={{ padding: 5, borderRadius: 999, flexShrink: 0 }} onClick={(e) => { e.stopPropagation(); if (window.confirm(`Delete "${n.title}"? You can undo for a few seconds afterwards.`)) onDeleteNote(n); }} aria-label="Delete note" title="Delete note"><Trash size={14} /></button>}
                   <button className="pp-btn pp-btn-ghost" style={{ padding: 5, borderRadius: 999, flexShrink: 0 }} onClick={(e) => { e.stopPropagation(); onToggleSavedNote(n.id); }} aria-label={isSaved ? "Remove bookmark" : "Add bookmark"}>
                     <Bookmark size={14} fill={isSaved ? "var(--accent)" : "none"} style={{ color: "var(--accent)" }} />
                   </button>
@@ -849,7 +852,7 @@ function AddNoteModal({ onClose, onSubmit }) {
 /* Videos                                                                  */
 /* ---------------------------------------------------------------------- */
 
-function VideosView({ videos, user, onAddVideo, lastVideoId, setLastVideoId, savedVideoIds, onToggleSavedVideo }) {
+function VideosView({ videos, user, onAddVideo, onDeleteVideo, lastVideoId, setLastVideoId, savedVideoIds, onToggleSavedVideo }) {
   const [showForm, setShowForm] = useState(false);
   const [query, setQuery] = useState("");
   const [subject, setSubject] = useState("");
@@ -889,6 +892,7 @@ function VideosView({ videos, user, onAddVideo, lastVideoId, setLastVideoId, sav
                 <div style={{ padding: 12 }}>
                   <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
                     <div style={{ display: "flex", gap: 6, flexWrap: "wrap", flex: 1 }}><Tag text={v.subject} /><GradeTag text={v.grade} /></div>
+                    {isAdmin && <button className="pp-btn pp-btn-ghost" style={{ padding: 5, borderRadius: 999, flexShrink: 0 }} onClick={(e) => { e.stopPropagation(); if (window.confirm(`Delete "${v.title}"? You can undo for a few seconds afterwards.`)) onDeleteVideo(v); }} aria-label="Delete video" title="Delete video"><Trash size={14} /></button>}
                     <button className="pp-btn pp-btn-ghost" style={{ padding: 5, borderRadius: 999, flexShrink: 0 }} onClick={(e) => { e.stopPropagation(); onToggleSavedVideo(v.id); }} aria-label={isSaved ? "Remove bookmark" : "Add bookmark"}>
                       <Bookmark size={14} fill={isSaved ? "var(--accent)" : "none"} style={{ color: "var(--accent)" }} />
                     </button>
@@ -2440,7 +2444,7 @@ function MainApp({ user, onSwitchRole, theme, setTheme }) {
   const notify = useCallback((t) => setToast(t), []);
   useEffect(() => {
     if (!toast) return;
-    const t = setTimeout(() => setToast(null), 4500);
+    const t = setTimeout(() => setToast(null), toast.action ? 10000 : 4500);
     return () => clearTimeout(t);
   }, [toast]);
 
@@ -2480,16 +2484,38 @@ function MainApp({ user, onSwitchRole, theme, setTheme }) {
     try { await db.collection("quizQuestions").add({ ...payload, addedByRole: user.role, createdAt: Date.now() }); return true; }
     catch (e) { notify({ kind: "error", text: friendlyDbError(e) }); return false; }
   }
-  async function deleteManyQuiz(ids) {
+  // Deletes documents but keeps a copy for ~10 seconds so "Undo" can put them back.
+  async function deleteWithUndo(coll, items, label, fileIds = []) {
+    if (!items.length) return;
     try {
-      for (let i = 0; i < ids.length; i += 400) {
+      for (let i = 0; i < items.length; i += 400) {
         const batch = db.batch();
-        ids.slice(i, i + 400).forEach((id) => batch.delete(db.collection("quizQuestions").doc(id)));
+        items.slice(i, i + 400).forEach((it) => batch.delete(db.collection(coll).doc(it.id)));
         await batch.commit();
       }
-      notify({ kind: "ok", text: `Deleted ${ids.length} question${ids.length === 1 ? "" : "s"}.` });
+      const timer = setTimeout(() => fileIds.forEach((fid) => db.collection("files").doc(fid).delete().catch(() => {})), 12000);
+      notify({
+        kind: "ok", text: `Deleted ${label}.`,
+        action: {
+          label: "Undo",
+          onClick: async () => {
+            clearTimeout(timer);
+            try {
+              for (let i = 0; i < items.length; i += 400) {
+                const batch = db.batch();
+                items.slice(i, i + 400).forEach((it) => { const { id, ...data } = it; batch.set(db.collection(coll).doc(id), data); });
+                await batch.commit();
+              }
+              notify({ kind: "ok", text: `Restored ${label}.` });
+            } catch (e) { notify({ kind: "error", text: friendlyDbError(e) }); }
+          }
+        }
+      });
     } catch (e) { notify({ kind: "error", text: friendlyDbError(e) }); }
   }
+  const deleteNote = (n) => deleteWithUndo("notes", [n], `"${n.title}"`, n.fileId ? [n.fileId] : []);
+  const deleteVideo = (v) => deleteWithUndo("videos", [v], `"${v.title}"`);
+  const deleteManyQuiz = (ids) => deleteWithUndo("quizQuestions", quizQuestions.filter((q) => ids.includes(q.id)), `${ids.length} question${ids.length === 1 ? "" : "s"}`);
   async function importQuizQuestions(list) {
     try {
       for (let i = 0; i < list.length; i += 400) {
@@ -2501,10 +2527,7 @@ function MainApp({ user, onSwitchRole, theme, setTheme }) {
       return true;
     } catch (e) { notify({ kind: "error", text: friendlyDbError(e) }); return false; }
   }
-  async function deleteQuizQuestion(id) {
-    try { await db.collection("quizQuestions").doc(id).delete(); }
-    catch (e) { notify({ kind: "error", text: friendlyDbError(e) }); }
-  }
+  const deleteQuizQuestion = (id) => deleteWithUndo("quizQuestions", quizQuestions.filter((q) => q.id === id), "question");
 
   const READY = { notes: notesReady, videos: videosReady, quiz: quizReady };
   const dataReady = (TAB_NEEDS[tab] || []).every((n) => READY[n]);
@@ -2537,8 +2560,8 @@ function MainApp({ user, onSwitchRole, theme, setTheme }) {
         <main style={{ maxWidth: 960, margin: "0 auto", padding: "22px 18px 90px" }}>
           {!dataReady ? <Loading label="Loading…" /> : (
             <>
-              {tab === "notes" && <NotesView notes={notes} user={user} onAddNote={addNote} lastNoteId={lastNoteId} setLastNoteId={setLastNoteId} savedNoteIds={savedNoteIds} onToggleSavedNote={onToggleSavedNote} />}
-              {tab === "videos" && <VideosView videos={videos} user={user} onAddVideo={addVideo} lastVideoId={lastVideoId} setLastVideoId={setLastVideoId} savedVideoIds={savedVideoIds} onToggleSavedVideo={onToggleSavedVideo} />}
+              {tab === "notes" && <NotesView notes={notes} user={user} onAddNote={addNote} onDeleteNote={deleteNote} lastNoteId={lastNoteId} setLastNoteId={setLastNoteId} savedNoteIds={savedNoteIds} onToggleSavedNote={onToggleSavedNote} />}
+              {tab === "videos" && <VideosView videos={videos} user={user} onAddVideo={addVideo} onDeleteVideo={deleteVideo} lastVideoId={lastVideoId} setLastVideoId={setLastVideoId} savedVideoIds={savedVideoIds} onToggleSavedVideo={onToggleSavedVideo} />}
               {tab === "papers" && <PastPapersView />}
               {tab === "quiz" && <QuizView questions={quizQuestions} user={user} notes={notes} onNeedRefs={() => want("notes")} onAddQuestion={addQuizQuestion} onImportQuestions={importQuizQuestions} onDeleteQuestion={deleteQuizQuestion} onDeleteMany={deleteManyQuiz} />}
               {tab === "tools" && <ToolsView />}
