@@ -1234,6 +1234,9 @@ function openHalfScreen(url, side) {
 }
 
 function EmbedPane({ item, items, onPick, label }) {
+  const [alt, setAlt] = useState(false);
+  useEffect(() => { setAlt(false); }, [item && item.url]);
+  const src = item ? (alt ? `https://docs.google.com/viewer?embedded=true&url=${encodeURIComponent(item.url)}` : item.url) : "";
   return (
     <div style={{ flex: 1, minWidth: 0, minHeight: 0, display: "flex", flexDirection: "column", border: "1px solid var(--border)", borderRadius: 10, overflow: "hidden", background: "var(--surface)" }}>
       <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 12px", borderBottom: "1px solid var(--border)" }}>
@@ -1243,10 +1246,11 @@ function EmbedPane({ item, items, onPick, label }) {
             {items.map((i) => <option key={i.url} value={i.url}>{i.group}: {i.label}</option>)}
           </select>
         </div>
+        {item && <button className="pp-btn pp-btn-ghost" style={{ padding: "4px 10px", fontSize: 12, flexShrink: 0 }} onClick={() => setAlt((v) => !v)}>{alt ? "Normal viewer" : "Blank? Try other viewer"}</button>}
         {item && <a className="pp-btn pp-btn-ghost" href={item.url} target="_blank" rel="noopener noreferrer" style={{ padding: "4px 10px", fontSize: 12, textDecoration: "none", flexShrink: 0 }}>New tab</a>}
       </div>
-      {item && <div style={{ fontSize: 11.5, color: "var(--muted)", padding: "4px 12px", borderBottom: "1px solid var(--border)" }}>Large PDFs can take a few seconds. If this side stays blank, use New tab — or close this and use the Left half / Right half buttons instead.</div>}
-      {item ? <iframe key={item.url} title={item.label} src={item.url} style={{ flex: 1, width: "100%", minHeight: 0, border: 0, background: "#fff" }} />
+      {item && <div style={{ fontSize: 11.5, color: "var(--muted)", padding: "4px 12px", borderBottom: "1px solid var(--border)" }}>Large PDFs can take a few seconds. If this side stays blank, press “Blank? Try other viewer”, or use New tab.</div>}
+      {item ? <iframe key={src} title={item.label} src={src} style={{ flex: 1, width: "100%", minHeight: 0, border: 0, background: "#fff" }} />
         : <div style={{ padding: 16, fontSize: 13, color: "var(--muted)" }}>Pick a page to show on this side.</div>}
     </div>
   );
