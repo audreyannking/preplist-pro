@@ -753,6 +753,70 @@ function PhotoPicker({ value, onChange, required }) {
   );
 }
 
+const MAX_NOTE_PHOTOS = 10;
+function MultiPhotoPicker({ value, onChange }) {
+  const [busy, setBusy] = useState(false);
+  const [failed, setFailed] = useState(0);
+
+  async function handleFiles(e) {
+    const files = Array.from(e.target.files || []);
+    e.target.value = "";
+    if (!files.length) return;
+    setBusy(true);
+    setFailed(0);
+    const room = MAX_NOTE_PHOTOS - value.length;
+    const added = [];
+    let bad = 0;
+    for (const file of files.slice(0, Math.max(room, 0))) {
+      try { added.push(await resizeImageToDataUrl(file)); } catch { bad++; }
+    }
+    if (files.length > room) bad += files.length - Math.max(room, 0);
+    setFailed(bad);
+    if (added.length) onChange([...value, ...added]);
+    setBusy(false);
+  }
+  const move = (i, d) => { const j = i + d; if (j < 0 || j >= value.length) return; const next = [...value]; [next[i], next[j]] = [next[j], next[i]]; onChange(next); };
+
+  return (
+    <div>
+      {value.length > 0 && (
+        <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginBottom: 10 }}>
+          {value.map((src, i) => (
+            <div key={i} style={{ position: "relative" }}>
+              <img src={src} alt={`Page ${i + 1}`} style={{ height: 96, borderRadius: 8, border: "1px solid var(--border)", display: "block" }} />
+              <div style={{ position: "absolute", left: 4, bottom: 4, display: "flex", gap: 3, alignItems: "center" }}>
+                <span style={{ fontSize: 11, fontWeight: 700, background: "var(--bg)", borderRadius: 999, padding: "1px 7px" }}>{i + 1}</span>
+                {i > 0 && <button type="button" className="pp-btn pp-btn-ghost" style={{ padding: "0 6px", fontSize: 12, background: "var(--bg)", borderRadius: 999 }} onClick={() => move(i, -1)} aria-label="Move earlier">←</button>}
+                {i < value.length - 1 && <button type="button" className="pp-btn pp-btn-ghost" style={{ padding: "0 6px", fontSize: 12, background: "var(--bg)", borderRadius: 999 }} onClick={() => move(i, 1)} aria-label="Move later">→</button>}
+              </div>
+              <button type="button" className="pp-btn pp-btn-ghost" style={{ position: "absolute", top: 4, right: 4, padding: 4, borderRadius: 999, background: "var(--bg)" }} onClick={() => onChange(value.filter((_, k) => k !== i))} aria-label={`Remove photo ${i + 1}`}><X size={13} /></button>
+            </div>
+          ))}
+        </div>
+      )}
+      {busy ? (
+        <div className="pp-btn pp-btn-ghost" style={{ display: "inline-flex", alignItems: "center", gap: 8, padding: "9px 14px", fontSize: 13.5 }}>
+          <Loader2 size={15} style={{ animation: "pp-spin 0.9s linear infinite" }} /> Processing…
+        </div>
+      ) : value.length >= MAX_NOTE_PHOTOS ? (
+        <div style={{ fontSize: 12.5, color: "var(--muted)" }}>That's the maximum of {MAX_NOTE_PHOTOS} photos for one note.</div>
+      ) : (
+        <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+          <div className="pp-file-slot">
+            <div style={{ fontSize: 11.5, fontWeight: 600, color: "var(--muted)", marginBottom: 5, display: "flex", alignItems: "center", gap: 5 }}><Upload size={12} /> {value.length ? "Add more" : "From files"} (pick several)</div>
+            <input type="file" accept="image/*" multiple onChange={handleFiles} className="pp-file-input" aria-label="Photos" />
+          </div>
+          <div className="pp-file-slot">
+            <div style={{ fontSize: 11.5, fontWeight: 600, color: "var(--muted)", marginBottom: 5, display: "flex", alignItems: "center", gap: 5 }}><Camera size={12} /> Take a photo</div>
+            <input type="file" accept="image/*" capture="environment" onChange={handleFiles} className="pp-file-input" aria-label="Take a photo" />
+          </div>
+        </div>
+      )}
+      {failed > 0 && <div style={{ fontSize: 12, color: "#8A3434", marginTop: 6 }}>{failed} photo{failed > 1 ? "s" : ""} couldn't be added (unreadable, or over the {MAX_NOTE_PHOTOS}-photo limit).</div>}
+    </div>
+  );
+}
+
 /* ---------------------------------------------------------------------- */
 /* Ask question / answer forms                                            */
 /* ---------------------------------------------------------------------- */
@@ -803,7 +867,7 @@ function NotesView({ notes, user, onAddNote, onDeleteNote, lastNoteId, setLastNo
                   </button>
                 </div>
                 <div className="pp-serif" style={{ fontSize: 15.5, fontWeight: 600, marginTop: 8 }}>{n.title}</div>
-                {n.type === "image" ? <NoteImage note={n} style={{ width: "100%", marginTop: 8, borderRadius: 6, border: "1px solid var(--border)" }} /> : <p style={{ fontSize: 13.5, marginTop: 8, lineHeight: 1.5, color: "var(--text)", whiteSpace: "pre-wrap" }}><MathText text={n.content} /></p>}
+                {n.type === "image" ? <NoteImages note={n} style={{ width: "100%", marginTop: 8, borderRadius: 6, border: "1px solid var(--border)" }} /> : <p style={{ fontSize: 13.5, marginTop: 8, lineHeight: 1.5, color: "var(--text)", whiteSpace: "pre-wrap" }}><MathText text={n.content} /></p>}
                 <div style={{ fontSize: 11.5, color: "var(--muted)", marginTop: 10 }}>{roleLabel(n.authorRole)} · {timeAgo(n.createdAt)}</div>
               </div>
             );
@@ -822,8 +886,8 @@ function AddNoteModal({ onClose, onSubmit }) {
   const [type, setType] = useState("text");
   const [text, setText] = useState("");
   const textRef = useRef(null);
-  const [image, setImage] = useState(null);
-  const canSubmit = title.trim() && subject && grade && (type === "text" ? text.trim() : image);
+  const [images, setImages] = useState([]);
+  const canSubmit = title.trim() && subject && grade && (type === "text" ? text.trim() : images.length > 0);
 
   return (
     <Modal title="Upload notes" onClose={onClose}>
@@ -839,9 +903,9 @@ function AddNoteModal({ onClose, onSubmit }) {
         </div>
       </Field>
       {type === "text" ? <Field label="Notes"><MathToolbar textareaRef={textRef} value={text} setValue={setText} /><textarea ref={textRef} className="pp-input" style={{ width: "100%", padding: "9px 12px", fontSize: 14, minHeight: 110, resize: "vertical", fontFamily: "inherit" }} value={text} onChange={(e) => setText(e.target.value)} placeholder="Paste or write the notes…" /></Field>
-        : <Field label="Image or scanned document"><PhotoPicker value={image} onChange={setImage} required /></Field>}
+        : <Field label="Photos or scanned pages (up to 10)"><MultiPhotoPicker value={images} onChange={setImages} /></Field>}
       <button className="pp-btn pp-btn-primary" style={{ width: "100%", padding: "10px 0", opacity: canSubmit ? 1 : 0.5 }} disabled={!canSubmit}
-        onClick={() => onSubmit({ title: title.trim(), subject, grade, type, content: type === "text" ? text.trim() : image })}>
+        onClick={() => onSubmit({ title: title.trim(), subject, grade, type, content: type === "text" ? text.trim() : images })}>
         Publish note
       </button>
     </Modal>
@@ -937,6 +1001,13 @@ function AddVideoModal({ onClose, onSubmit }) {
       <button className="pp-btn pp-btn-primary" style={{ width: "100%", padding: "10px 0", opacity: canSubmit ? 1 : 0.5 }} disabled={!canSubmit} onClick={() => onSubmit({ title: title.trim(), subject, grade, youtubeId: videoId })}>Add video</button>
     </Modal>
   );
+}
+
+function noteFileIds(n) { return n.fileIds && n.fileIds.length ? n.fileIds : n.fileId ? [n.fileId] : []; }
+function NoteImages({ note, style }) {
+  const ids = noteFileIds(note);
+  if (ids.length <= 1) return <NoteImage note={note} style={style} />;
+  return <div>{ids.map((id, i) => <div key={id} style={{ marginTop: i ? 8 : 0 }}><NoteImage note={{ fileId: id }} style={style} /></div>)}</div>;
 }
 
 function NoteImage({ note, style }) {
@@ -1591,7 +1662,7 @@ function QuizReference({ options, refIndex, setRefIndex }) {
       ) : (
         <div className="pp-card" style={{ borderRadius: 10, padding: 14, overflowY: "auto", flex: 1 }}>
           <div className="pp-serif" style={{ fontSize: 15.5, fontWeight: 600, marginBottom: 8 }}>{opt.note.title}</div>
-          {opt.note.type === "image" ? <NoteImage note={opt.note} style={{ width: "100%", borderRadius: 6 }} /> : <p style={{ fontSize: 13.5, lineHeight: 1.55, whiteSpace: "pre-wrap" }}><MathText text={opt.note.content} /></p>}
+          {opt.note.type === "image" ? <NoteImages note={opt.note} style={{ width: "100%", borderRadius: 6 }} /> : <p style={{ fontSize: 13.5, lineHeight: 1.55, whiteSpace: "pre-wrap" }}><MathText text={opt.note.content} /></p>}
         </div>
       )}
     </div>
@@ -2474,7 +2545,11 @@ function MainApp({ user, onSwitchRole, theme, setTheme }) {
   async function addNote(payload) {
     try {
       let doc = { ...payload };
-      if (payload.type === "image") { doc = { ...payload, fileId: await saveFile(payload.content) }; delete doc.content; }
+      if (payload.type === "image") {
+        const fileIds = [];
+        for (const d of payload.content) fileIds.push(await saveFile(d));
+        doc = { ...payload, fileId: fileIds[0], fileIds }; delete doc.content;
+      }
       await db.collection("notes").add({ ...doc, authorRole: user.role, createdAt: Date.now() });
       return true;
     }
@@ -2517,7 +2592,7 @@ function MainApp({ user, onSwitchRole, theme, setTheme }) {
       });
     } catch (e) { notify({ kind: "error", text: friendlyDbError(e) }); }
   }
-  const deleteNote = (n) => deleteWithUndo("notes", [n], `"${n.title}"`, n.fileId ? [n.fileId] : []);
+  const deleteNote = (n) => deleteWithUndo("notes", [n], `"${n.title}"`, noteFileIds(n));
   const deleteVideo = (v) => deleteWithUndo("videos", [v], `"${v.title}"`);
   const deleteManyQuiz = (ids) => deleteWithUndo("quizQuestions", quizQuestions.filter((q) => ids.includes(q.id)), `${ids.length} question${ids.length === 1 ? "" : "s"}`);
   async function importQuizQuestions(list) {
