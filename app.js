@@ -582,7 +582,7 @@ const Sun = makeIcon("sun"),
 /* Constants                                                              */
 /* ---------------------------------------------------------------------- */
 
-const SUBJECTS = ["Math", "Science", "Statistics", "Mechanics", "Physics", "Chemistry", "Biology", "English", "History", "Computer Science", "Economics", "Business", "French", "Arabic", "Islamic", "Other"];
+const SUBJECTS = ["Math", "Science", "Statistics", "Mechanics", "Physics", "Chemistry", "Biology", "English", "History", "Computer Science", "Computing", "Economics", "Business", "French", "Arabic", "Islamic", "Other"];
 const GRADES = ["6th Grade", "7th Grade", "8th Grade", "9th Grade", "10th Grade", "11th Grade", "12th Grade"];
 
 // Past Papers has its own subject list and exam-type set (Cambridge-style),
