@@ -830,6 +830,7 @@ function NotesView({ notes, user, onAddNote, onDeleteNote, lastNoteId, setLastNo
   const [query, setQuery] = useState("");
   const [subject, setSubject] = useState("");
   const [grade, setGrade] = useState("");
+  const [openId, setOpenId] = useState(null);
   const canUpload = hasElevatedAccess(user);
 
   const filtered = useMemo(() => {
@@ -853,12 +854,14 @@ function NotesView({ notes, user, onAddNote, onDeleteNote, lastNoteId, setLastNo
       {filtered.length === 0 ? (
         <EmptyState icon={BookOpen} title="No notes yet" body={canUpload ? "Upload the first set of notes for students to study from." : "Only admins can upload notes — check back soon."} />
       ) : (
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(230px, 1fr))", gap: 14 }}>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(240px, 1fr))", gap: 14 }}>
           {filtered.map((n) => {
             const isSaved = savedNoteIds.includes(n.id);
             return (
-              <div key={n.id} id={`note-${n.id}`} className="pp-card" onClick={() => setLastNoteId(n.id)}
-                style={{ borderRadius: 10, padding: 14, cursor: "pointer", transform: `rotate(${cardTilt(n.id) * 0.6}deg)`, outline: n.id === lastNoteId ? "2px solid var(--accent)" : "none", outlineOffset: 2 }}>
+              <div key={n.id} id={`note-${n.id}`} className="pp-card" role="button" tabIndex={0}
+                onClick={() => { setLastNoteId(n.id); setOpenId(n.id); }}
+                onKeyDown={(e) => { if (e.key === "Enter") { setLastNoteId(n.id); setOpenId(n.id); } }}
+                style={{ borderRadius: 10, padding: 14, cursor: "pointer", display: "flex", flexDirection: "column", outline: n.id === lastNoteId ? "2px solid var(--accent)" : "none", outlineOffset: 2 }}>
                 <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
                   <div style={{ display: "flex", gap: 6, flexWrap: "wrap", flex: 1 }}><Tag text={n.subject} /><GradeTag text={n.grade} /></div>
                   {canUpload && <button className="pp-btn pp-btn-ghost" style={{ padding: 5, borderRadius: 999, flexShrink: 0 }} onClick={(e) => { e.stopPropagation(); if (window.confirm(`Delete "${n.title}"? You can undo for a few seconds afterwards.`)) onDeleteNote(n); }} aria-label="Delete note" title="Delete note"><Trash size={14} /></button>}
@@ -867,13 +870,19 @@ function NotesView({ notes, user, onAddNote, onDeleteNote, lastNoteId, setLastNo
                   </button>
                 </div>
                 <div className="pp-serif" style={{ fontSize: 15.5, fontWeight: 600, marginTop: 8 }}>{n.title}</div>
-                {n.type === "image" ? <NoteImages note={n} style={{ width: "100%", marginTop: 8, borderRadius: 6, border: "1px solid var(--border)" }} /> : <p style={{ fontSize: 13.5, marginTop: 8, lineHeight: 1.5, color: "var(--text)", whiteSpace: "pre-wrap" }}><MathText text={n.content} /></p>}
-                <div style={{ fontSize: 11.5, color: "var(--muted)", marginTop: 10 }}>{roleLabel(n.authorRole)} · {timeAgo(n.createdAt)}</div>
+                {n.type === "image" ? (
+                  <div style={{ position: "relative", marginTop: 8 }}>
+                    <NoteImage note={{ ...n, fileId: noteFileIds(n)[0] }} noZoom style={{ width: "100%", height: 150, objectFit: "cover", objectPosition: "top", borderRadius: 6, border: "1px solid var(--border)", display: "block" }} />
+                    {noteFileIds(n).length > 1 && <span style={{ position: "absolute", right: 6, bottom: 6, fontSize: 11, fontWeight: 700, background: "var(--bg)", color: "var(--text)", borderRadius: 999, padding: "2px 9px", border: "1px solid var(--border)" }}>{noteFileIds(n).length} pages</span>}
+                  </div>
+                ) : <p style={{ fontSize: 13.5, marginTop: 8, lineHeight: 1.5, color: "var(--text)", whiteSpace: "pre-wrap", overflow: "hidden", display: "-webkit-box", WebkitLineClamp: 5, WebkitBoxOrient: "vertical" }}><MathText text={n.content} /></p>}
+                <div style={{ fontSize: 11.5, color: "var(--muted)", marginTop: 10 }}>{roleLabel(n.authorRole)} · {timeAgo(n.createdAt)} · Tap to open</div>
               </div>
             );
           })}
         </div>
       )}
+      {openId && notes.find((n) => n.id === openId) && (() => { const n = notes.find((x) => x.id === openId); return <NoteViewer note={n} saved={savedNoteIds.includes(n.id)} onToggleSaved={() => onToggleSavedNote(n.id)} onClose={() => setOpenId(null)} />; })()}
       {showForm && <AddNoteModal onClose={() => setShowForm(false)} onSubmit={async (payload) => { const ok = await onAddNote(payload); if (ok) setShowForm(false); }} />}
     </div>
   );
@@ -887,6 +896,7 @@ function AddNoteModal({ onClose, onSubmit }) {
   const [text, setText] = useState("");
   const textRef = useRef(null);
   const [images, setImages] = useState([]);
+  const [busy, setBusy] = useState(false);
   const canSubmit = title.trim() && subject && grade && (type === "text" ? text.trim() : images.length > 0);
 
   return (
@@ -904,9 +914,9 @@ function AddNoteModal({ onClose, onSubmit }) {
       </Field>
       {type === "text" ? <Field label="Notes"><MathToolbar textareaRef={textRef} value={text} setValue={setText} /><textarea ref={textRef} className="pp-input" style={{ width: "100%", padding: "9px 12px", fontSize: 14, minHeight: 110, resize: "vertical", fontFamily: "inherit" }} value={text} onChange={(e) => setText(e.target.value)} placeholder="Paste or write the notes…" /></Field>
         : <Field label="Photos or scanned pages (up to 10)"><MultiPhotoPicker value={images} onChange={setImages} /></Field>}
-      <button className="pp-btn pp-btn-primary" style={{ width: "100%", padding: "10px 0", opacity: canSubmit ? 1 : 0.5 }} disabled={!canSubmit}
-        onClick={() => onSubmit({ title: title.trim(), subject, grade, type, content: type === "text" ? text.trim() : images })}>
-        Publish note
+      <button className="pp-btn pp-btn-primary" style={{ width: "100%", padding: "10px 0", opacity: canSubmit ? 1 : 0.5 }} disabled={!canSubmit || busy}
+        onClick={async () => { setBusy(true); try { await onSubmit({ title: title.trim(), subject, grade, type, content: type === "text" ? text.trim() : images }); } finally { setBusy(false); } }}>
+        {busy ? "Publishing… please keep this open" : "Publish note"}
       </button>
     </Modal>
   );
@@ -1004,13 +1014,44 @@ function AddVideoModal({ onClose, onSubmit }) {
 }
 
 function noteFileIds(n) { return n.fileIds && n.fileIds.length ? n.fileIds : n.fileId ? [n.fileId] : []; }
-function NoteImages({ note, style }) {
+function NoteImages({ note, style, noZoom }) {
   const ids = noteFileIds(note);
-  if (ids.length <= 1) return <NoteImage note={note} style={style} />;
-  return <div>{ids.map((id, i) => <div key={id} style={{ marginTop: i ? 8 : 0 }}><NoteImage note={{ fileId: id }} style={style} /></div>)}</div>;
+  if (ids.length <= 1) return <NoteImage note={note} style={style} noZoom={noZoom} />;
+  return <div>{ids.map((id, i) => <div key={id} style={{ marginTop: i ? 8 : 0 }}><NoteImage note={{ fileId: id }} style={style} noZoom={noZoom} /></div>)}</div>;
 }
 
-function NoteImage({ note, style }) {
+function NoteViewer({ note, saved, onToggleSaved, onClose }) {
+  useEffect(() => {
+    const onKey = (e) => { if (e.key === "Escape") onClose(); };
+    window.addEventListener("keydown", onKey);
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => { window.removeEventListener("keydown", onKey); document.body.style.overflow = prev; };
+  }, [onClose]);
+  return (
+    <div role="dialog" aria-label={note.title} style={{ position: "fixed", inset: 0, zIndex: 85, background: "var(--bg)", display: "flex", flexDirection: "column" }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 14px", borderBottom: "1px solid var(--border)" }}>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div className="pp-serif" style={{ fontSize: 17, fontWeight: 700, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{note.title}</div>
+          <div style={{ display: "flex", gap: 6, marginTop: 4 }}><Tag text={note.subject} /><GradeTag text={note.grade} /></div>
+        </div>
+        <button className="pp-btn pp-btn-ghost" style={{ padding: "7px 12px", fontSize: 13, display: "flex", alignItems: "center", gap: 6, flexShrink: 0 }} onClick={onToggleSaved}>
+          <Bookmark size={14} fill={saved ? "var(--accent)" : "none"} style={{ color: "var(--accent)" }} /> {saved ? "Saved" : "Save"}
+        </button>
+        <button className="pp-btn pp-btn-ghost" style={{ padding: 8, borderRadius: 999, flexShrink: 0 }} onClick={onClose} aria-label="Close note"><X size={18} /></button>
+      </div>
+      <div style={{ flex: 1, minHeight: 0, overflowY: "auto", WebkitOverflowScrolling: "touch", padding: "16px 14px 40px" }}>
+        <div style={{ maxWidth: 900, margin: "0 auto" }}>
+          {note.type === "image"
+            ? <NoteImages note={note} noZoom style={{ width: "100%", borderRadius: 6, border: "1px solid var(--border)", display: "block" }} />
+            : <p style={{ fontSize: 16, lineHeight: 1.65, whiteSpace: "pre-wrap" }}><MathText text={note.content} /></p>}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function NoteImage({ note, style, noZoom }) {
   const boxRef = useRef(null);
   const [visible, setVisible] = useState(!!note.content);
   useEffect(() => {
@@ -1037,7 +1078,7 @@ function NoteImage({ note, style }) {
           <img src={src} alt="" style={{ display: "block", margin: "0 auto", maxWidth: "100%", minHeight: "100%", objectFit: "contain" }} />
         </div>
       )}
-      {src ? <img src={src} alt="" style={{ ...style, cursor: "zoom-in" }} onClick={() => setZoom(true)} draggable={false} /> : <div style={{ fontSize: 12.5, color: "var(--muted)", paddingTop: 8 }}>{failed ? "Couldn't load this image." : "Loading image…"}</div>}
+      {src ? <img src={src} alt="" style={noZoom ? style : { ...style, cursor: "zoom-in" }} onClick={noZoom ? undefined : () => setZoom(true)} draggable={false} /> : <div style={{ fontSize: 12.5, color: "var(--muted)", paddingTop: 8 }}>{failed ? "Couldn't load this image." : "Loading image…"}</div>}
     </div>
   );
 }
@@ -2559,8 +2600,7 @@ function MainApp({ user, onSwitchRole, theme, setTheme }) {
     try {
       let doc = { ...payload };
       if (payload.type === "image") {
-        const fileIds = [];
-        for (const d of payload.content) fileIds.push(await saveFile(d));
+        const fileIds = await Promise.all(payload.content.map((d) => saveFile(d)));
         doc = { ...payload, fileId: fileIds[0], fileIds }; delete doc.content;
       }
       await db.collection("notes").add({ ...doc, authorRole: user.role, createdAt: Date.now() });

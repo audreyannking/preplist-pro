@@ -166,3 +166,4 @@ your behalf.
 - **Delete with Undo.** Admins see a bin icon on every note and video (and on quiz questions under Manage questions). A confirmation appears first, and after deleting there is an Undo button for about 10 seconds that puts it back. A note image is only really removed once that window passes. Bookmarks can always be undone by tapping the bookmark again, or the x on the Saved tab.
 - Notes can now have up to 10 photos (reorderable); older single-photo notes still work.
 - Added the Islamic subject; tapping a note picture opens it full-screen in the site (no download prompt).
+- Notes open full-screen when tapped (saving only via the Save button); cards show a small cover with a page count; publishing uploads photos in parallel.

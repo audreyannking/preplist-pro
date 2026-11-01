@@ -2036,6 +2036,7 @@ function NotesView({
   const [query, setQuery] = useState("");
   const [subject, setSubject] = useState("");
   const [grade, setGrade] = useState("");
+  const [openId, setOpenId] = useState(null);
   const canUpload = hasElevatedAccess(user);
   const filtered = useMemo(() => {
     let list = notes;
@@ -2083,7 +2084,7 @@ function NotesView({
   }) : /*#__PURE__*/React.createElement("div", {
     style: {
       display: "grid",
-      gridTemplateColumns: "repeat(auto-fill, minmax(230px, 1fr))",
+      gridTemplateColumns: "repeat(auto-fill, minmax(240px, 1fr))",
       gap: 14
     }
   }, filtered.map(n => {
@@ -2092,12 +2093,24 @@ function NotesView({
       key: n.id,
       id: `note-${n.id}`,
       className: "pp-card",
-      onClick: () => setLastNoteId(n.id),
+      role: "button",
+      tabIndex: 0,
+      onClick: () => {
+        setLastNoteId(n.id);
+        setOpenId(n.id);
+      },
+      onKeyDown: e => {
+        if (e.key === "Enter") {
+          setLastNoteId(n.id);
+          setOpenId(n.id);
+        }
+      },
       style: {
         borderRadius: 10,
         padding: 14,
         cursor: "pointer",
-        transform: `rotate(${cardTilt(n.id) * 0.6}deg)`,
+        display: "flex",
+        flexDirection: "column",
         outline: n.id === lastNoteId ? "2px solid var(--accent)" : "none",
         outlineOffset: 2
       }
@@ -2158,21 +2171,50 @@ function NotesView({
         fontWeight: 600,
         marginTop: 8
       }
-    }, n.title), n.type === "image" ? /*#__PURE__*/React.createElement(NoteImages, {
-      note: n,
+    }, n.title), n.type === "image" ? /*#__PURE__*/React.createElement("div", {
+      style: {
+        position: "relative",
+        marginTop: 8
+      }
+    }, /*#__PURE__*/React.createElement(NoteImage, {
+      note: {
+        ...n,
+        fileId: noteFileIds(n)[0]
+      },
+      noZoom: true,
       style: {
         width: "100%",
-        marginTop: 8,
+        height: 150,
+        objectFit: "cover",
+        objectPosition: "top",
         borderRadius: 6,
+        border: "1px solid var(--border)",
+        display: "block"
+      }
+    }), noteFileIds(n).length > 1 && /*#__PURE__*/React.createElement("span", {
+      style: {
+        position: "absolute",
+        right: 6,
+        bottom: 6,
+        fontSize: 11,
+        fontWeight: 700,
+        background: "var(--bg)",
+        color: "var(--text)",
+        borderRadius: 999,
+        padding: "2px 9px",
         border: "1px solid var(--border)"
       }
-    }) : /*#__PURE__*/React.createElement("p", {
+    }, noteFileIds(n).length, " pages")) : /*#__PURE__*/React.createElement("p", {
       style: {
         fontSize: 13.5,
         marginTop: 8,
         lineHeight: 1.5,
         color: "var(--text)",
-        whiteSpace: "pre-wrap"
+        whiteSpace: "pre-wrap",
+        overflow: "hidden",
+        display: "-webkit-box",
+        WebkitLineClamp: 5,
+        WebkitBoxOrient: "vertical"
       }
     }, /*#__PURE__*/React.createElement(MathText, {
       text: n.content
@@ -2182,8 +2224,16 @@ function NotesView({
         color: "var(--muted)",
         marginTop: 10
       }
-    }, roleLabel(n.authorRole), " · ", timeAgo(n.createdAt)));
-  })), showForm && /*#__PURE__*/React.createElement(AddNoteModal, {
+    }, roleLabel(n.authorRole), " · ", timeAgo(n.createdAt), " · Tap to open"));
+  })), openId && notes.find(n => n.id === openId) && (() => {
+    const n = notes.find(x => x.id === openId);
+    return /*#__PURE__*/React.createElement(NoteViewer, {
+      note: n,
+      saved: savedNoteIds.includes(n.id),
+      onToggleSaved: () => onToggleSavedNote(n.id),
+      onClose: () => setOpenId(null)
+    });
+  })(), showForm && /*#__PURE__*/React.createElement(AddNoteModal, {
     onClose: () => setShowForm(false),
     onSubmit: async payload => {
       const ok = await onAddNote(payload);
@@ -2202,6 +2252,7 @@ function AddNoteModal({
   const [text, setText] = useState("");
   const textRef = useRef(null);
   const [images, setImages] = useState([]);
+  const [busy, setBusy] = useState(false);
   const canSubmit = title.trim() && subject && grade && (type === "text" ? text.trim() : images.length > 0);
   return /*#__PURE__*/React.createElement(Modal, {
     title: "Upload notes",
@@ -2297,15 +2348,22 @@ function AddNoteModal({
       padding: "10px 0",
       opacity: canSubmit ? 1 : 0.5
     },
-    disabled: !canSubmit,
-    onClick: () => onSubmit({
-      title: title.trim(),
-      subject,
-      grade,
-      type,
-      content: type === "text" ? text.trim() : images
-    })
-  }, "Publish note"));
+    disabled: !canSubmit || busy,
+    onClick: async () => {
+      setBusy(true);
+      try {
+        await onSubmit({
+          title: title.trim(),
+          subject,
+          grade,
+          type,
+          content: type === "text" ? text.trim() : images
+        });
+      } finally {
+        setBusy(false);
+      }
+    }
+  }, busy ? "Publishing… please keep this open" : "Publish note"));
 }
 
 /* ---------------------------------------------------------------------- */
@@ -2577,12 +2635,14 @@ function noteFileIds(n) {
 }
 function NoteImages({
   note,
-  style
+  style,
+  noZoom
 }) {
   const ids = noteFileIds(note);
   if (ids.length <= 1) return /*#__PURE__*/React.createElement(NoteImage, {
     note: note,
-    style: style
+    style: style,
+    noZoom: noZoom
   });
   return /*#__PURE__*/React.createElement("div", null, ids.map((id, i) => /*#__PURE__*/React.createElement("div", {
     key: id,
@@ -2593,12 +2653,135 @@ function NoteImages({
     note: {
       fileId: id
     },
-    style: style
+    style: style,
+    noZoom: noZoom
   }))));
+}
+function NoteViewer({
+  note,
+  saved,
+  onToggleSaved,
+  onClose
+}) {
+  useEffect(() => {
+    const onKey = e => {
+      if (e.key === "Escape") onClose();
+    };
+    window.addEventListener("keydown", onKey);
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      window.removeEventListener("keydown", onKey);
+      document.body.style.overflow = prev;
+    };
+  }, [onClose]);
+  return /*#__PURE__*/React.createElement("div", {
+    role: "dialog",
+    "aria-label": note.title,
+    style: {
+      position: "fixed",
+      inset: 0,
+      zIndex: 85,
+      background: "var(--bg)",
+      display: "flex",
+      flexDirection: "column"
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      alignItems: "center",
+      gap: 10,
+      padding: "10px 14px",
+      borderBottom: "1px solid var(--border)"
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      flex: 1,
+      minWidth: 0
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "pp-serif",
+    style: {
+      fontSize: 17,
+      fontWeight: 700,
+      overflow: "hidden",
+      textOverflow: "ellipsis",
+      whiteSpace: "nowrap"
+    }
+  }, note.title), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      gap: 6,
+      marginTop: 4
+    }
+  }, /*#__PURE__*/React.createElement(Tag, {
+    text: note.subject
+  }), /*#__PURE__*/React.createElement(GradeTag, {
+    text: note.grade
+  }))), /*#__PURE__*/React.createElement("button", {
+    className: "pp-btn pp-btn-ghost",
+    style: {
+      padding: "7px 12px",
+      fontSize: 13,
+      display: "flex",
+      alignItems: "center",
+      gap: 6,
+      flexShrink: 0
+    },
+    onClick: onToggleSaved
+  }, /*#__PURE__*/React.createElement(Bookmark, {
+    size: 14,
+    fill: saved ? "var(--accent)" : "none",
+    style: {
+      color: "var(--accent)"
+    }
+  }), " ", saved ? "Saved" : "Save"), /*#__PURE__*/React.createElement("button", {
+    className: "pp-btn pp-btn-ghost",
+    style: {
+      padding: 8,
+      borderRadius: 999,
+      flexShrink: 0
+    },
+    onClick: onClose,
+    "aria-label": "Close note"
+  }, /*#__PURE__*/React.createElement(X, {
+    size: 18
+  }))), /*#__PURE__*/React.createElement("div", {
+    style: {
+      flex: 1,
+      minHeight: 0,
+      overflowY: "auto",
+      WebkitOverflowScrolling: "touch",
+      padding: "16px 14px 40px"
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      maxWidth: 900,
+      margin: "0 auto"
+    }
+  }, note.type === "image" ? /*#__PURE__*/React.createElement(NoteImages, {
+    note: note,
+    noZoom: true,
+    style: {
+      width: "100%",
+      borderRadius: 6,
+      border: "1px solid var(--border)",
+      display: "block"
+    }
+  }) : /*#__PURE__*/React.createElement("p", {
+    style: {
+      fontSize: 16,
+      lineHeight: 1.65,
+      whiteSpace: "pre-wrap"
+    }
+  }, /*#__PURE__*/React.createElement(MathText, {
+    text: note.content
+  })))));
 }
 function NoteImage({
   note,
-  style
+  style,
+  noZoom
 }) {
   const boxRef = useRef(null);
   const [visible, setVisible] = useState(!!note.content);
@@ -2675,11 +2858,11 @@ function NoteImage({
   })), src ? /*#__PURE__*/React.createElement("img", {
     src: src,
     alt: "",
-    style: {
+    style: noZoom ? style : {
       ...style,
       cursor: "zoom-in"
     },
-    onClick: () => setZoom(true),
+    onClick: noZoom ? undefined : () => setZoom(true),
     draggable: false
   }) : /*#__PURE__*/React.createElement("div", {
     style: {
@@ -6655,8 +6838,7 @@ function MainApp({
         ...payload
       };
       if (payload.type === "image") {
-        const fileIds = [];
-        for (const d of payload.content) fileIds.push(await saveFile(d));
+        const fileIds = await Promise.all(payload.content.map(d => saveFile(d)));
         doc = {
           ...payload,
           fileId: fileIds[0],
