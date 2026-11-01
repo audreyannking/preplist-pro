@@ -139,7 +139,7 @@ const Sun = makeIcon("sun"), Moon = makeIcon("moon"), Plus = makeIcon("plus"), X
 
 const SUBJECTS = [
   "Math", "Science", "Statistics", "Mechanics", "Physics", "Chemistry", "Biology",
-  "English", "History", "Computer Science", "Economics", "Business", "French", "Arabic", "Other"
+  "English", "History", "Computer Science", "Economics", "Business", "French", "Arabic", "Islamic", "Other"
 ];
 const GRADES = ["6th Grade", "7th Grade", "8th Grade", "9th Grade", "10th Grade", "11th Grade", "12th Grade"];
 
@@ -1022,9 +1022,22 @@ function NoteImage({ note, style }) {
     return () => io.disconnect();
   }, [visible]);
   const [src, failed] = useFileData(note.content, note.fileId, visible);
+  const [zoom, setZoom] = useState(false);
+  useEffect(() => {
+    if (!zoom) return;
+    const onKey = (e) => { if (e.key === "Escape") setZoom(false); };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [zoom]);
   return (
     <div ref={boxRef} style={{ minHeight: src ? 0 : 90 }}>
-      {src ? <img src={src} alt="" style={style} /> : <div style={{ fontSize: 12.5, color: "var(--muted)", paddingTop: 8 }}>{failed ? "Couldn't load this image." : "Loading image…"}</div>}
+      {zoom && src && (
+        <div onClick={() => setZoom(false)} style={{ position: "fixed", inset: 0, zIndex: 90, background: "rgba(0,0,0,0.88)", overflow: "auto", WebkitOverflowScrolling: "touch", cursor: "zoom-out" }}>
+          <button type="button" className="pp-btn pp-btn-ghost" style={{ position: "fixed", top: 12, right: 12, padding: 8, borderRadius: 999, background: "var(--bg)", zIndex: 91 }} onClick={() => setZoom(false)} aria-label="Close picture"><X size={18} /></button>
+          <img src={src} alt="" style={{ display: "block", margin: "0 auto", maxWidth: "100%", minHeight: "100%", objectFit: "contain" }} />
+        </div>
+      )}
+      {src ? <img src={src} alt="" style={{ ...style, cursor: "zoom-in" }} onClick={() => setZoom(true)} draggable={false} /> : <div style={{ fontSize: 12.5, color: "var(--muted)", paddingTop: 8 }}>{failed ? "Couldn't load this image." : "Loading image…"}</div>}
     </div>
   );
 }

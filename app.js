@@ -582,7 +582,7 @@ const Sun = makeIcon("sun"),
 /* Constants                                                              */
 /* ---------------------------------------------------------------------- */
 
-const SUBJECTS = ["Math", "Science", "Statistics", "Mechanics", "Physics", "Chemistry", "Biology", "English", "History", "Computer Science", "Economics", "Business", "French", "Arabic", "Other"];
+const SUBJECTS = ["Math", "Science", "Statistics", "Mechanics", "Physics", "Chemistry", "Biology", "English", "History", "Computer Science", "Economics", "Business", "French", "Arabic", "Islamic", "Other"];
 const GRADES = ["6th Grade", "7th Grade", "8th Grade", "9th Grade", "10th Grade", "11th Grade", "12th Grade"];
 
 // Past Papers has its own subject list and exam-type set (Cambridge-style),
@@ -2621,15 +2621,66 @@ function NoteImage({
     return () => io.disconnect();
   }, [visible]);
   const [src, failed] = useFileData(note.content, note.fileId, visible);
+  const [zoom, setZoom] = useState(false);
+  useEffect(() => {
+    if (!zoom) return;
+    const onKey = e => {
+      if (e.key === "Escape") setZoom(false);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [zoom]);
   return /*#__PURE__*/React.createElement("div", {
     ref: boxRef,
     style: {
       minHeight: src ? 0 : 90
     }
-  }, src ? /*#__PURE__*/React.createElement("img", {
+  }, zoom && src && /*#__PURE__*/React.createElement("div", {
+    onClick: () => setZoom(false),
+    style: {
+      position: "fixed",
+      inset: 0,
+      zIndex: 90,
+      background: "rgba(0,0,0,0.88)",
+      overflow: "auto",
+      WebkitOverflowScrolling: "touch",
+      cursor: "zoom-out"
+    }
+  }, /*#__PURE__*/React.createElement("button", {
+    type: "button",
+    className: "pp-btn pp-btn-ghost",
+    style: {
+      position: "fixed",
+      top: 12,
+      right: 12,
+      padding: 8,
+      borderRadius: 999,
+      background: "var(--bg)",
+      zIndex: 91
+    },
+    onClick: () => setZoom(false),
+    "aria-label": "Close picture"
+  }, /*#__PURE__*/React.createElement(X, {
+    size: 18
+  })), /*#__PURE__*/React.createElement("img", {
     src: src,
     alt: "",
-    style: style
+    style: {
+      display: "block",
+      margin: "0 auto",
+      maxWidth: "100%",
+      minHeight: "100%",
+      objectFit: "contain"
+    }
+  })), src ? /*#__PURE__*/React.createElement("img", {
+    src: src,
+    alt: "",
+    style: {
+      ...style,
+      cursor: "zoom-in"
+    },
+    onClick: () => setZoom(true),
+    draggable: false
   }) : /*#__PURE__*/React.createElement("div", {
     style: {
       fontSize: 12.5,
