@@ -91,6 +91,8 @@ const ICON_PATHS = {
   video: <><rect x="3" y="6" width="13" height="12" rx="2"/><path d="M16.5 10l4.5-3v10l-4.5-3Z"/></>,
   loader2: <><circle cx="12" cy="12" r="9" opacity="0.25"/><path d="M21 12a9 9 0 0 0-9-9"/></>,
   filetext: <><path d="M6 2.3h8.5L19.5 7v14.7H6Z"/><line x1="9" y1="13.2" x2="15" y2="13.2"/><line x1="9" y1="17" x2="15" y2="17"/><line x1="9" y1="9.4" x2="11.5" y2="9.4"/></>,
+  folder: <><path d="M3 7.2V5.4a1.8 1.8 0 0 1 1.8-1.8h4.1l2 2.1h7.3a1.8 1.8 0 0 1 1.8 1.8v12a1.8 1.8 0 0 1-1.8 1.8H4.8A1.8 1.8 0 0 1 3 19.3Z"/><path d="M3 9.6h18"/></>,
+  download: <><line x1="12" y1="4" x2="12" y2="15.5"/><polyline points="7,10.8 12,15.8 17,10.8"/><path d="M4.5 16v3a2 2 0 0 0 2 2h11a2 2 0 0 0 2-2v-3"/></>,
   pencil: <><path d="M4 20l0.8-4.2L15.4 5.2l3.4 3.4L8.2 19Z"/><line x1="14" y1="6.6" x2="17.4" y2="10"/></>,
   sparkles: <><path d="M12 3.2l1.5 4.3 4.3 1.5-4.3 1.5-1.5 4.3-1.5-4.3-4.3-1.5 4.3-1.5Z"/><path d="M19 14.5l0.8 2.1 2.1 0.8-2.1 0.8-0.8 2.1-0.8-2.1-2.1-0.8 2.1-0.8Z"/></>,
   graduationcap: <><path d="M2 9.2 12 5l10 4.2-10 4.2Z"/><path d="M6.3 11.2v5c0 1.7 2.9 3 5.7 3s5.7-1.3 5.7-3v-5"/><path d="M20.5 10v5.4"/></>,
@@ -131,7 +133,8 @@ const Sun = makeIcon("sun"), Moon = makeIcon("moon"), Plus = makeIcon("plus"), X
   Briefcase = makeIcon("briefcase"), ShieldCheck = makeIcon("shieldcheck"), LayoutGrid = makeIcon("layoutgrid"),
   ChevronRight = makeIcon("chevronright"), Calendar = makeIcon("calendar"), Users = makeIcon("users"),
   Megaphone = makeIcon("megaphone"), Camera = makeIcon("camera"), Bookmark = makeIcon("bookmark"),
-  Trash = makeIcon("trash"), HelpCircle = makeIcon("helpcircle"), LinkIcon = makeIcon("link"), Mail = makeIcon("mail");
+  Trash = makeIcon("trash"), HelpCircle = makeIcon("helpcircle"), LinkIcon = makeIcon("link"), Mail = makeIcon("mail"),
+  Folder = makeIcon("folder"), Download = makeIcon("download");
 
 /* ---------------------------------------------------------------------- */
 /* Constants                                                              */
@@ -249,6 +252,85 @@ function useFileData(inline, fileId, enabled = true) {
     return () => { live = false; };
   }, [inline, fileId, enabled]);
   return [data, failed];
+}
+
+// Files tab: metadata lives in "libraryFiles" and the bytes are split into
+// small "libraryFileChunks" documents, so a 25 MB upload stays under
+// Firestore's 1 MiB per-document limit and is only fetched when opened.
+const LIBRARY_CHUNK_BYTES = 512 * 1024;
+const MAX_LIBRARY_FILE_BYTES = 25 * 1024 * 1024;
+const MAX_TEXT_PREVIEW_BYTES = 2 * 1024 * 1024;
+
+function formatBytes(bytes) {
+  const n = Number(bytes) || 0;
+  if (n < 1024) return `${n} B`;
+  const units = ["KB", "MB", "GB"];
+  let v = n / 1024, i = 0;
+  while (v >= 1024 && i < units.length - 1) { v /= 1024; i++; }
+  return `${v >= 10 ? Math.round(v) : v.toFixed(1)} ${units[i]}`;
+}
+function libraryChunkId(fileId, index) { return `${fileId}__${index}`; }
+function guessMimeType(file) {
+  if (file && file.type) return file.type;
+  const ext = String((file && file.name) || "").split(".").pop().toLowerCase();
+  const types = {
+    pdf: "application/pdf", txt: "text/plain", csv: "text/csv", md: "text/markdown", json: "application/json",
+    png: "image/png", jpg: "image/jpeg", jpeg: "image/jpeg", gif: "image/gif", webp: "image/webp", svg: "image/svg+xml",
+    doc: "application/msword", docx: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    xls: "application/vnd.ms-excel", xlsx: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    ppt: "application/vnd.ms-powerpoint", pptx: "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+    zip: "application/zip"
+  };
+  return types[ext] || "application/octet-stream";
+}
+function readBlobChunkBase64(blob) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      const raw = String(reader.result || "");
+      const comma = raw.indexOf(",");
+      resolve(comma >= 0 ? raw.slice(comma + 1) : "");
+    };
+    reader.onerror = () => reject(reader.error || new Error("read-failed"));
+    reader.readAsDataURL(blob);
+  });
+}
+const libraryBlobCache = new Map();
+async function fetchLibraryFileBlob(meta) {
+  const cached = libraryBlobCache.get(meta.id);
+  if (cached) {
+    libraryBlobCache.delete(meta.id);
+    libraryBlobCache.set(meta.id, cached);
+    return cached;
+  }
+  const pending = (async () => {
+    const count = Math.min(100, Math.max(1, Number(meta.chunkCount) || 1));
+    const snaps = await Promise.all(Array.from({ length: count }, (_, i) =>
+      db.collection("libraryFileChunks").doc(libraryChunkId(meta.id, i)).get()
+    ));
+    const parts = snaps.map((snap) => {
+      if (!snap.exists) throw new Error("missing-file-chunk");
+      const bin = atob(snap.data().data || "");
+      const bytes = new Uint8Array(bin.length);
+      for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+      return bytes;
+    });
+    return new Blob(parts, { type: meta.mimeType || "application/octet-stream" });
+  })();
+  libraryBlobCache.set(meta.id, pending);
+  try {
+    const blob = await pending;
+    while (libraryBlobCache.size > 3) {
+      const oldest = libraryBlobCache.keys().next().value;
+      if (oldest === meta.id) break;
+      libraryBlobCache.delete(oldest);
+    }
+    libraryBlobCache.set(meta.id, blob);
+    return blob;
+  } catch (e) {
+    libraryBlobCache.delete(meta.id);
+    throw e;
+  }
 }
 
 function resizeImageToDataUrl(file, maxW = 900, quality = 0.68) {
@@ -513,8 +595,8 @@ function FilterBar({ query, setQuery, subject, setSubject, grade, setGrade, plac
 /* ---------------------------------------------------------------------- */
 
 const ROLE_INFO = {
-  student: { label: "Student", icon: GraduationCap, desc: "Browse notes, videos, quizzes, flashcards and past papers." },
-  admin: { label: "Admin", icon: ShieldCheck, desc: "Full access — add notes, videos and quiz questions." }
+  student: { label: "Student", icon: GraduationCap, desc: "Browse notes, videos, files, quizzes, flashcards and past papers." },
+  admin: { label: "Admin", icon: ShieldCheck, desc: "Full access — add notes, videos, files and quiz questions." }
 };
 
 function SetupNeededScreen() {
@@ -558,7 +640,7 @@ function RoleGate({ onSelectRole, theme, setTheme }) {
         <div className="pp-tape" />
         <div style={{ textAlign: "center", marginBottom: 22 }}>
           <div className="pp-serif" style={{ fontSize: 26, fontWeight: 700 }}>PrepList Pro</div>
-          <div style={{ fontSize: 13.5, color: "var(--muted)", marginTop: 4 }}>Notes, videos and past papers, all in one place.</div>
+          <div style={{ fontSize: 13.5, color: "var(--muted)", marginTop: 4 }}>Notes, videos, files and past papers, all in one place.</div>
         </div>
 
         {!pendingRole ? (
@@ -1084,6 +1166,228 @@ function NoteImage({ note, style, noZoom }) {
 }
 
 /* ---------------------------------------------------------------------- */
+/* Files — admins upload any file up to 25 MB; listing stays light and    */
+/* the bytes are fetched only when someone opens or downloads it.         */
+/* ---------------------------------------------------------------------- */
+
+function fileKind(meta) {
+  const mime = meta.mimeType || "";
+  const name = meta.fileName || "";
+  if (mime.startsWith("image/")) return "image";
+  if (mime === "application/pdf" || /\.pdf$/i.test(name)) return "pdf";
+  if (mime.startsWith("text/") || /\.(txt|csv|md|log)$/i.test(name)) return "text";
+  return "other";
+}
+function fileKindIcon(meta) { return fileKind(meta) === "image" ? ImageIcon : FileText; }
+function fileTypeLabel(meta) {
+  const kind = fileKind(meta);
+  if (kind === "image") return "Image";
+  if (kind === "pdf") return "PDF";
+  if (kind === "text") return "Text";
+  const ext = String(meta.fileName || "").split(".");
+  return ext.length > 1 ? ext.pop().toUpperCase() : "File";
+}
+
+function FilesView({ files, user, onAddFile, onDeleteFile, onDownloadFile, lastFileId, setLastFileId, savedFileIds, onToggleSavedFile }) {
+  const [showForm, setShowForm] = useState(false);
+  const [query, setQuery] = useState("");
+  const [subject, setSubject] = useState("");
+  const [grade, setGrade] = useState("");
+  const [openId, setOpenId] = useState(null);
+  const canUpload = hasElevatedAccess(user);
+
+  const filtered = useMemo(() => {
+    let list = files;
+    if (subject) list = list.filter((f) => f.subject === subject);
+    if (grade) list = list.filter((f) => f.grade === grade);
+    if (query.trim()) {
+      const s = query.trim().toLowerCase();
+      list = list.filter((f) => (f.title || "").toLowerCase().includes(s) || (f.fileName || "").toLowerCase().includes(s) || (f.subject || "").toLowerCase().includes(s));
+    }
+    return [...list].sort((a, b) => b.createdAt - a.createdAt);
+  }, [files, query, subject, grade]);
+
+  const lastFile = files.find((f) => f.id === lastFileId);
+
+  return (
+    <div>
+      <FilterBar query={query} setQuery={setQuery} subject={subject} setSubject={setSubject} grade={grade} setGrade={setGrade} placeholder="Search files…"
+        extra={canUpload && <button className="pp-btn pp-btn-primary" style={{ padding: "9px 14px", fontSize: 13.5, display: "flex", alignItems: "center", gap: 6 }} onClick={() => setShowForm(true)}><Plus size={15} /> Upload file</button>} />
+      {lastFile && (
+        <ContinueBanner title={lastFile.title} subtitle={lastFile.subject}
+          onClick={() => document.getElementById(`file-${lastFile.id}`)?.scrollIntoView({ behavior: "smooth", block: "center" })} />
+      )}
+      {filtered.length === 0 ? (
+        <EmptyState icon={Folder} title="No files yet" body={canUpload ? "Upload the first file for students to open or download." : "Only admins can upload files — check back soon."} />
+      ) : (
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(240px, 1fr))", gap: 14 }}>
+          {filtered.map((f) => {
+            const isSaved = savedFileIds.includes(f.id);
+            const KindIcon = fileKindIcon(f);
+            const c = subjectColor(f.subject || "x");
+            const open = () => { setLastFileId(f.id); setOpenId(f.id); };
+            return (
+              <div key={f.id} id={`file-${f.id}`} className="pp-card" role="button" tabIndex={0}
+                onClick={open} onKeyDown={(e) => { if (e.key === "Enter") open(); }}
+                style={{ borderRadius: 10, padding: 14, cursor: "pointer", display: "flex", flexDirection: "column", outline: f.id === lastFileId ? "2px solid var(--accent)" : "none", outlineOffset: 2 }}>
+                <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                  <div style={{ display: "flex", gap: 6, flexWrap: "wrap", flex: 1, minWidth: 0 }}><Tag text={f.subject} /><GradeTag text={f.grade} /></div>
+                  <button className="pp-btn pp-btn-ghost" style={{ padding: 5, borderRadius: 999, flexShrink: 0 }} onClick={(e) => { e.stopPropagation(); onDownloadFile(f); }} aria-label="Download file" title="Download file"><Download size={14} /></button>
+                  {canUpload && <button className="pp-btn pp-btn-ghost" style={{ padding: 5, borderRadius: 999, flexShrink: 0 }} onClick={(e) => { e.stopPropagation(); if (window.confirm(`Delete "${f.title}"? You can undo for a few seconds afterwards.`)) onDeleteFile(f); }} aria-label="Delete file" title="Delete file"><Trash size={14} /></button>}
+                  <button className="pp-btn pp-btn-ghost" style={{ padding: 5, borderRadius: 999, flexShrink: 0 }} onClick={(e) => { e.stopPropagation(); onToggleSavedFile(f.id); }} aria-label={isSaved ? "Remove bookmark" : "Add bookmark"}>
+                    <Bookmark size={14} fill={isSaved ? "var(--accent)" : "none"} style={{ color: "var(--accent)" }} />
+                  </button>
+                </div>
+                <div className="pp-serif" style={{ fontSize: 15.5, fontWeight: 600, marginTop: 8, wordBreak: "break-word" }}>{f.title}</div>
+                <div style={{ display: "flex", alignItems: "center", gap: 9, marginTop: 9, minWidth: 0 }}>
+                  <div style={{ width: 36, height: 36, borderRadius: 8, background: c.bg, color: c.fg, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                    <KindIcon size={18} />
+                  </div>
+                  <div style={{ minWidth: 0, flex: 1 }}>
+                    <div style={{ fontSize: 12.5, fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={f.fileName}>{f.fileName}</div>
+                    <div style={{ fontSize: 11.5, color: "var(--muted)" }}>{fileTypeLabel(f)} · {formatBytes(f.size)}</div>
+                  </div>
+                </div>
+                <div style={{ fontSize: 11.5, color: "var(--muted)", marginTop: 10 }}>Added by {roleLabel(f.addedByRole)} · {timeAgo(f.createdAt)} · Tap to open</div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+      {openId && files.find((f) => f.id === openId) && (() => { const f = files.find((x) => x.id === openId); return <FileViewer file={f} onClose={() => setOpenId(null)} onDownload={onDownloadFile} />; })()}
+      {showForm && <AddFileModal onClose={() => setShowForm(false)} onSubmit={async (payload, onProgress) => { const ok = await onAddFile(payload, onProgress); if (ok) setShowForm(false); }} />}
+    </div>
+  );
+}
+
+function AddFileModal({ onClose, onSubmit }) {
+  const [title, setTitle] = useState("");
+  const [subject, setSubject] = useState("");
+  const [grade, setGrade] = useState("");
+  const [file, setFile] = useState(null);
+  const [error, setError] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [progress, setProgress] = useState(0);
+  const canSubmit = title.trim() && subject && grade && file && file.size > 0 && file.size <= MAX_LIBRARY_FILE_BYTES && !busy;
+
+  function pickFile(e) {
+    const f = e.target.files && e.target.files[0];
+    e.target.value = "";
+    if (!f) return;
+    setFile(f);
+    if (!f.size) setError("That file is empty — pick another one.");
+    else if (f.size > MAX_LIBRARY_FILE_BYTES) setError(`That file is ${formatBytes(f.size)} — the limit is ${formatBytes(MAX_LIBRARY_FILE_BYTES)}.`);
+    else setError("");
+  }
+
+  return (
+    <Modal title="Upload a file" onClose={() => { if (!busy) onClose(); }}>
+      <Field label="Title"><input className="pp-input" style={{ width: "100%", padding: "9px 12px", fontSize: 14.5 }} value={title} onChange={(e) => setTitle(e.target.value)} placeholder="e.g. Physics formula booklet" /></Field>
+      <TwoUp>
+        <Field label="Subject"><SubjectSelect value={subject} onChange={setSubject} /></Field>
+        <Field label="Grade"><GradeSelect value={grade} onChange={setGrade} /></Field>
+      </TwoUp>
+      <Field label="File (any type, up to 25 MB)">
+        <div className="pp-file-slot">
+          <div style={{ fontSize: 11.5, fontWeight: 600, color: "var(--muted)", marginBottom: 5, display: "flex", alignItems: "center", gap: 5 }}><Upload size={12} /> Choose a file</div>
+          <input type="file" onChange={pickFile} disabled={busy} className="pp-file-input" aria-label="File to upload" />
+        </div>
+        {file && (
+          <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 8, fontSize: 12.5 }}>
+            <FileText size={14} style={{ color: "var(--muted)", flexShrink: 0 }} />
+            <span style={{ minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{file.name}</span>
+            <span style={{ color: "var(--muted)", flexShrink: 0 }}>{formatBytes(file.size)}</span>
+          </div>
+        )}
+        {error && <div style={{ fontSize: 12, color: "#8A3434", marginTop: 6 }}>{error}</div>}
+      </Field>
+      <div style={{ fontSize: 12, color: "var(--muted)", marginBottom: 12 }}>Large files are stored in parts and only downloaded when someone opens them. PDFs, images and text can preview here; other types download to open in the right app.</div>
+      <button className="pp-btn pp-btn-primary" style={{ width: "100%", padding: "10px 0", opacity: canSubmit ? 1 : 0.5 }} disabled={!canSubmit}
+        onClick={async () => { setBusy(true); setProgress(0); try { await onSubmit({ title: title.trim(), subject, grade, file }, setProgress); } finally { setBusy(false); } }}>
+        {busy ? `Uploading… ${progress}%` : "Upload file"}
+      </button>
+    </Modal>
+  );
+}
+
+function FileViewer({ file, onClose, onDownload }) {
+  const kind = fileKind(file);
+  const [state, setState] = useState({ loading: true, url: null, text: null, tooBig: false, failed: false });
+
+  useEffect(() => {
+    let live = true;
+    let objectUrl = null;
+    setState({ loading: true, url: null, text: null, tooBig: false, failed: false });
+    (async () => {
+      try {
+        const blob = await fetchLibraryFileBlob(file);
+        if (!live) return;
+        if (kind === "text" && blob.size <= MAX_TEXT_PREVIEW_BYTES) {
+          const text = await blob.text();
+          if (live) setState({ loading: false, url: null, text, tooBig: false, failed: false });
+          return;
+        }
+        objectUrl = URL.createObjectURL(blob);
+        if (live) setState({ loading: false, url: objectUrl, text: null, tooBig: kind === "text", failed: false });
+      } catch {
+        if (live) setState({ loading: false, url: null, text: null, tooBig: false, failed: true });
+      }
+    })();
+    return () => { live = false; if (objectUrl) URL.revokeObjectURL(objectUrl); };
+  }, [file.id, kind]);
+
+  useEffect(() => {
+    const onKey = (e) => { if (e.key === "Escape") onClose(); };
+    window.addEventListener("keydown", onKey);
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => { window.removeEventListener("keydown", onKey); document.body.style.overflow = prev; };
+  }, [onClose]);
+
+  return (
+    <div role="dialog" aria-label={file.title} style={{ position: "fixed", inset: 0, zIndex: 85, background: "var(--bg)", display: "flex", flexDirection: "column" }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 14px", borderBottom: "1px solid var(--border)" }}>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div className="pp-serif" style={{ fontSize: 17, fontWeight: 700, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{file.title}</div>
+          <div style={{ display: "flex", gap: 6, marginTop: 4, flexWrap: "wrap" }}><Tag text={file.subject} /><GradeTag text={file.grade} /></div>
+        </div>
+        <button className="pp-btn pp-btn-ghost" style={{ padding: "7px 12px", fontSize: 13, display: "flex", alignItems: "center", gap: 6, flexShrink: 0 }} onClick={() => onDownload(file)}>
+          <Download size={14} /> Download
+        </button>
+        <button className="pp-btn pp-btn-ghost" style={{ padding: 8, borderRadius: 999, flexShrink: 0 }} onClick={onClose} aria-label="Close file"><X size={18} /></button>
+      </div>
+      <div style={{ flex: 1, minHeight: 0, overflowY: "auto", WebkitOverflowScrolling: "touch", padding: "16px 14px 40px" }}>
+        <div style={{ maxWidth: 980, margin: "0 auto", minHeight: "100%", display: "flex", flexDirection: "column" }}>
+          {state.loading ? <Loading label="Loading file…" /> : state.failed ? (
+            <EmptyState icon={FileText} title="Couldn't load this file" body="It may have been removed, or the connection dropped. Try again, or use Download." />
+          ) : kind === "image" ? (
+            <img src={state.url} alt={file.fileName} style={{ maxWidth: "100%", margin: "0 auto", borderRadius: 6, border: "1px solid var(--border)", display: "block" }} />
+          ) : kind === "pdf" ? (
+            <div style={{ flex: 1, minHeight: "70dvh", display: "flex", flexDirection: "column" }}>
+              <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap", fontSize: 12.5, color: "var(--muted)", marginBottom: 8 }}>
+                <span style={{ flex: 1, minWidth: 180 }}>If the preview stays blank, use Download or open it in a new tab.</span>
+                {state.url && <a className="pp-btn pp-btn-ghost" href={state.url} target="_blank" rel="noopener noreferrer" style={{ padding: "5px 10px", fontSize: 12, textDecoration: "none" }}>Open in new tab</a>}
+              </div>
+              <iframe title={file.fileName} src={state.url} style={{ flex: 1, width: "100%", minHeight: "65dvh", border: "1px solid var(--border)", borderRadius: 8, background: "#fff" }} />
+            </div>
+          ) : kind === "text" && state.text != null ? (
+            <pre style={{ margin: 0, padding: 14, fontSize: 13.5, lineHeight: 1.55, whiteSpace: "pre-wrap", wordBreak: "break-word", background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 8, fontFamily: "monospace" }}>{state.text}</pre>
+          ) : (
+            <div className="pp-card" style={{ borderRadius: 10, padding: 26, textAlign: "center", margin: "auto", maxWidth: 420 }}>
+              <Folder size={34} style={{ color: "var(--muted)", margin: "0 auto 10px" }} />
+              <div className="pp-serif" style={{ fontSize: 18, fontWeight: 700, marginBottom: 4 }}>{state.tooBig ? "Too large to preview here" : "No preview for this file type"}</div>
+              <div style={{ fontSize: 13.5, color: "var(--muted)", marginBottom: 14 }}>Download it to open it in the right app.</div>
+              <button className="pp-btn pp-btn-primary" style={{ padding: "9px 18px" }} onClick={() => onDownload(file)}><Download size={14} style={{ marginRight: 6, display: "inline" }} />Download file</button>
+              {state.url && <div style={{ marginTop: 10 }}><a className="pp-btn pp-btn-ghost" href={state.url} target="_blank" rel="noopener noreferrer" style={{ padding: "6px 12px", fontSize: 12.5, textDecoration: "none", display: "inline-block" }}>Open in new tab</a></div>}
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ---------------------------------------------------------------------- */
 /* Saved — everything bookmarked, plus what you were last reading/       */
 /* watching/opening in each tab.                                         */
 /* ---------------------------------------------------------------------- */
@@ -1113,23 +1417,26 @@ function BookmarkSection({ label, icon: SectionIcon, items, children }) {
   );
 }
 
-function SavedView({ notes, videos, lastNoteId, lastVideoId, savedNoteIds, savedVideoIds, onToggleSavedNote, onToggleSavedVideo, onJump }) {
+function SavedView({ notes, videos, files, lastNoteId, lastVideoId, lastFileId, savedNoteIds, savedVideoIds, savedFileIds, onToggleSavedNote, onToggleSavedVideo, onToggleSavedFile, onJump }) {
   const lastNote = notes.find((n) => n.id === lastNoteId);
   const lastVideo = videos.find((v) => v.id === lastVideoId);
+  const lastFile = files.find((f) => f.id === lastFileId);
   const recents = [
     lastNote && { tab: "notes", elId: `note-${lastNote.id}`, title: lastNote.title, subtitle: lastNote.subject },
-    lastVideo && { tab: "videos", elId: `video-${lastVideo.id}`, title: lastVideo.title, subtitle: lastVideo.subject }
+    lastVideo && { tab: "videos", elId: `video-${lastVideo.id}`, title: lastVideo.title, subtitle: lastVideo.subject },
+    lastFile && { tab: "files", elId: `file-${lastFile.id}`, title: lastFile.title, subtitle: lastFile.subject }
   ].filter(Boolean);
 
   const savedNotes = notes.filter((n) => savedNoteIds.includes(n.id));
   const savedVideos = videos.filter((v) => savedVideoIds.includes(v.id));
-  const hasSaved = savedNotes.length || savedVideos.length;
+  const savedFiles = files.filter((f) => savedFileIds.includes(f.id));
+  const hasSaved = savedNotes.length || savedVideos.length || savedFiles.length;
 
   return (
     <div>
       <div className="pp-serif" style={{ fontSize: 16.5, fontWeight: 700, marginBottom: 10 }}>Continue where you left off</div>
       {recents.length === 0 ? (
-        <div style={{ fontSize: 13, color: "var(--muted)", marginBottom: 24 }}>Nothing opened yet — browse Notes or Videos to get started.</div>
+        <div style={{ fontSize: 13, color: "var(--muted)", marginBottom: 24 }}>Nothing opened yet — browse Notes, Videos or Files to get started.</div>
       ) : (
         <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 24 }}>
           {recents.map((r) => <ContinueBanner key={r.tab} title={r.title} subtitle={r.subtitle} onClick={() => onJump(r.tab, r.elId)} />)}
@@ -1138,7 +1445,7 @@ function SavedView({ notes, videos, lastNoteId, lastVideoId, savedNoteIds, saved
 
       <div className="pp-serif" style={{ fontSize: 16.5, fontWeight: 700, marginBottom: 10 }}>Bookmarked</div>
       {!hasSaved ? (
-        <EmptyState icon={Bookmark} title="Nothing bookmarked yet" body="Tap the bookmark icon on any note or video to save it here." />
+        <EmptyState icon={Bookmark} title="Nothing bookmarked yet" body="Tap the bookmark icon on any note, video or file to save it here." />
       ) : (
         <>
           <BookmarkSection label="Notes" icon={BookOpen} items={savedNotes}>
@@ -1151,6 +1458,12 @@ function SavedView({ notes, videos, lastNoteId, lastVideoId, savedNoteIds, saved
             {savedVideos.map((v) => (
               <BookmarkRow key={v.id} title={v.title} tags={<><Tag text={v.subject} /><GradeTag text={v.grade} /></>}
                 onOpen={() => onJump("videos", `video-${v.id}`)} onRemove={() => onToggleSavedVideo(v.id)} />
+            ))}
+          </BookmarkSection>
+          <BookmarkSection label="Files" icon={Folder} items={savedFiles}>
+            {savedFiles.map((f) => (
+              <BookmarkRow key={f.id} title={f.title} tags={<><Tag text={f.subject} /><GradeTag text={f.grade} /></>}
+                onOpen={() => onJump("files", `file-${f.id}`)} onRemove={() => onToggleSavedFile(f.id)} />
             ))}
           </BookmarkSection>
         </>
@@ -2429,12 +2742,13 @@ function SearchResultGroup({ label, icon: SectionIcon, items, labelKey, onPick }
   );
 }
 
-function GlobalSearchModal({ notes, videos, onClose, onJump }) {
+function GlobalSearchModal({ notes, videos, files, onClose, onJump }) {
   const [q, setQ] = useState("");
   const s = q.trim().toLowerCase();
   const noteMatches = s ? notes.filter((n) => n.title.toLowerCase().includes(s) || n.subject.toLowerCase().includes(s)) : [];
   const videoMatches = s ? videos.filter((v) => v.title.toLowerCase().includes(s) || v.subject.toLowerCase().includes(s)) : [];
-  const totalMatches = noteMatches.length + videoMatches.length;
+  const fileMatches = s ? files.filter((f) => (f.title || "").toLowerCase().includes(s) || (f.fileName || "").toLowerCase().includes(s) || (f.subject || "").toLowerCase().includes(s)) : [];
+  const totalMatches = noteMatches.length + videoMatches.length + fileMatches.length;
 
   function pick(tabId, elId) { onJump(tabId, elId); onClose(); }
 
@@ -2443,7 +2757,7 @@ function GlobalSearchModal({ notes, videos, onClose, onJump }) {
       <div className="pp-card pp-pop" onClick={(e) => e.stopPropagation()} style={{ width: "100%", maxWidth: 560, maxHeight: "75vh", overflowY: "auto", borderRadius: 14, padding: 18 }}>
         <div style={{ position: "relative" }}>
           <Search size={15} style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)", color: "var(--muted)" }} />
-          <input autoFocus className="pp-input" style={{ width: "100%", padding: "10px 12px 10px 34px", fontSize: 15 }} placeholder="Search notes and videos…" value={q} onChange={(e) => setQ(e.target.value)} />
+          <input autoFocus className="pp-input" style={{ width: "100%", padding: "10px 12px 10px 34px", fontSize: 15 }} placeholder="Search notes, videos and files…" value={q} onChange={(e) => setQ(e.target.value)} />
         </div>
         {s && (
           <div style={{ marginTop: 14 }}>
@@ -2453,6 +2767,7 @@ function GlobalSearchModal({ notes, videos, onClose, onJump }) {
               <>
                 <SearchResultGroup label="Notes" icon={BookOpen} items={noteMatches} onPick={(n) => pick("notes", `note-${n.id}`)} />
                 <SearchResultGroup label="Videos" icon={VideoIcon} items={videoMatches} onPick={(v) => pick("videos", `video-${v.id}`)} />
+                <SearchResultGroup label="Files" icon={Folder} items={fileMatches} onPick={(f) => pick("files", `file-${f.id}`)} />
               </>
             )}
           </div>
@@ -2546,6 +2861,7 @@ function ContactView({ isAdmin, feedback }) {
 const TABS = [
   { id: "notes", label: "Notes", icon: BookOpen },
   { id: "videos", label: "Videos", icon: VideoIcon },
+  { id: "files", label: "Files", icon: Folder },
   { id: "papers", label: "Past Papers", icon: FileText },
   { id: "quiz", label: "Quiz", icon: HelpCircle },
   { id: "flashcards", label: "Flashcards", icon: Star },
@@ -2561,14 +2877,15 @@ function MainApp({ user, onSwitchRole, theme, setTheme }) {
   const want = useCallback((...names) => setWanted((prev) => (names.every((n) => prev.has(n)) ? prev : new Set([...prev, ...names]))), []);
   const [notes, notesReady] = useCollection("notes", undefined, wanted.has("notes"));
   const [videos, videosReady] = useCollection("videos", undefined, wanted.has("videos"));
+  const [libraryFiles, libraryFilesReady] = useCollection("libraryFiles", undefined, wanted.has("files"));
   const [quizQuestions, quizReady] = useCollection("quizQuestions", undefined, wanted.has("quiz"));
   const [feedbackList] = useCollection("feedback", undefined, wanted.has("feedback"));
 
   const [tab, setTab] = useState("notes");
   const [showSearch, setShowSearch] = useState(false);
-  const TAB_NEEDS = { notes: ["notes"], videos: ["videos"], papers: [], quiz: ["quiz"], saved: ["notes", "videos"], tools: [], flashcards: [], contact: [] };
+  const TAB_NEEDS = { notes: ["notes"], videos: ["videos"], files: ["files"], papers: [], quiz: ["quiz"], saved: ["notes", "videos", "files"], tools: [], flashcards: [], contact: [] };
   useEffect(() => { want(...(TAB_NEEDS[tab] || [])); if (tab === "contact" && user.role === "admin") want("feedback"); }, [tab, want]);
-  useEffect(() => { if (showSearch) want("notes", "videos"); }, [showSearch, want]);
+  useEffect(() => { if (showSearch) want("notes", "videos", "files"); }, [showSearch, want]);
   const [toast, setToast] = useState(null);
   const notify = useCallback((t) => setToast(t), []);
   useEffect(() => {
@@ -2579,11 +2896,14 @@ function MainApp({ user, onSwitchRole, theme, setTheme }) {
 
   const [lastNoteId, setLastNoteId] = useLocalState("preplist:lastNote", null);
   const [lastVideoId, setLastVideoId] = useLocalState("preplist:lastVideo", null);
+  const [lastFileId, setLastFileId] = useLocalState("preplist:lastFile", null);
   const [savedNoteIds, setSavedNoteIds] = useLocalState("preplist:savedNotes", []);
   const [savedVideoIds, setSavedVideoIds] = useLocalState("preplist:savedVideos", []);
+  const [savedFileIds, setSavedFileIds] = useLocalState("preplist:savedFiles", []);
   const toggleSaved = (setList) => (id) => setList((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
   const onToggleSavedNote = useCallback(toggleSaved(setSavedNoteIds), [setSavedNoteIds]);
   const onToggleSavedVideo = useCallback(toggleSaved(setSavedVideoIds), [setSavedVideoIds]);
+  const onToggleSavedFile = useCallback(toggleSaved(setSavedFileIds), [setSavedFileIds]);
 
   const [pendingScroll, setPendingScroll] = useState(null);
   useEffect(() => {
@@ -2611,6 +2931,108 @@ function MainApp({ user, onSwitchRole, theme, setTheme }) {
   async function addVideo(payload) {
     try { await db.collection("videos").add({ ...payload, addedByRole: user.role, createdAt: Date.now() }); return true; }
     catch (e) { notify({ kind: "error", text: friendlyDbError(e) }); return false; }
+  }
+  async function addLibraryFile(payload, onProgress) {
+    let fileId = null;
+    let chunkCount = 0;
+    const writtenIndexes = [];
+    try {
+      const file = payload.file;
+      if (!file) return false;
+      if (!file.size) { notify({ kind: "error", text: "That file is empty — pick another one." }); return false; }
+      if (file.size > MAX_LIBRARY_FILE_BYTES) {
+        notify({ kind: "error", text: `That file is too large — the limit is ${formatBytes(MAX_LIBRARY_FILE_BYTES)}.` });
+        return false;
+      }
+      const ref = db.collection("libraryFiles").doc();
+      fileId = ref.id;
+      chunkCount = Math.max(1, Math.ceil(file.size / LIBRARY_CHUNK_BYTES));
+      for (let start = 0; start < chunkCount; start += 6) {
+        const end = Math.min(start + 6, chunkCount);
+        const batch = db.batch();
+        for (let i = start; i < end; i++) {
+          const from = i * LIBRARY_CHUNK_BYTES;
+          const chunk = file.slice(from, Math.min(from + LIBRARY_CHUNK_BYTES, file.size));
+          const data = await readBlobChunkBase64(chunk);
+          batch.set(db.collection("libraryFileChunks").doc(libraryChunkId(fileId, i)), { fileId, index: i, data, createdAt: Date.now() });
+          writtenIndexes.push(i);
+        }
+        await batch.commit();
+        if (onProgress) onProgress(Math.round((end / chunkCount) * 100));
+      }
+      await ref.set({
+        title: payload.title,
+        subject: payload.subject,
+        grade: payload.grade,
+        fileName: file.name,
+        mimeType: guessMimeType(file),
+        size: file.size,
+        chunkCount,
+        addedByRole: user.role,
+        createdAt: Date.now()
+      });
+      notify({ kind: "ok", text: "File uploaded." });
+      return true;
+    } catch (e) {
+      if (fileId) {
+        try {
+          for (let i = 0; i < writtenIndexes.length; i += 400) {
+            const batch = db.batch();
+            writtenIndexes.slice(i, i + 400).forEach((idx) => batch.delete(db.collection("libraryFileChunks").doc(libraryChunkId(fileId, idx))));
+            await batch.commit().catch(() => {});
+          }
+        } catch { /* best-effort cleanup */ }
+      }
+      notify({ kind: "error", text: friendlyDbError(e) });
+      return false;
+    }
+  }
+  async function downloadLibraryFile(file) {
+    try {
+      const blob = await fetchLibraryFileBlob(file);
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = file.fileName || "file";
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 10000);
+    } catch {
+      notify({ kind: "error", text: "Couldn't download that file — check your connection and try again." });
+    }
+  }
+  async function deleteLibraryFile(file) {
+    try {
+      const { id, ...data } = file;
+      await db.collection("libraryFiles").doc(id).delete();
+      const chunkCount = Math.min(100, Math.max(1, Number(file.chunkCount) || 1));
+      function purgeChunks() {
+        libraryBlobCache.delete(id);
+        for (let i = 0; i < chunkCount; i += 400) {
+          const batch = db.batch();
+          for (let j = i; j < Math.min(i + 400, chunkCount); j++) batch.delete(db.collection("libraryFileChunks").doc(libraryChunkId(id, j)));
+          batch.commit().catch(() => {});
+        }
+      }
+      const timer = setTimeout(purgeChunks, 12000);
+      notify({
+        kind: "ok", text: `Deleted "${file.title}".`,
+        action: {
+          label: "Undo",
+          onClick: async () => {
+            clearTimeout(timer);
+            try {
+              await db.collection("libraryFiles").doc(id).set(data);
+              notify({ kind: "ok", text: `Restored "${file.title}".` });
+            } catch (e) {
+              purgeChunks();
+              notify({ kind: "error", text: friendlyDbError(e) });
+            }
+          }
+        }
+      });
+    } catch (e) { notify({ kind: "error", text: friendlyDbError(e) }); }
   }
   async function addQuizQuestion(payload) {
     try { await db.collection("quizQuestions").add({ ...payload, addedByRole: user.role, createdAt: Date.now() }); return true; }
@@ -2661,7 +3083,7 @@ function MainApp({ user, onSwitchRole, theme, setTheme }) {
   }
   const deleteQuizQuestion = (id) => deleteWithUndo("quizQuestions", quizQuestions.filter((q) => q.id === id), "question");
 
-  const READY = { notes: notesReady, videos: videosReady, quiz: quizReady };
+  const READY = { notes: notesReady, videos: videosReady, files: libraryFilesReady, quiz: quizReady };
   const dataReady = (TAB_NEEDS[tab] || []).every((n) => READY[n]);
 
   return (
@@ -2694,21 +3116,22 @@ function MainApp({ user, onSwitchRole, theme, setTheme }) {
             <>
               {tab === "notes" && <NotesView notes={notes} user={user} onAddNote={addNote} onDeleteNote={deleteNote} lastNoteId={lastNoteId} setLastNoteId={setLastNoteId} savedNoteIds={savedNoteIds} onToggleSavedNote={onToggleSavedNote} />}
               {tab === "videos" && <VideosView videos={videos} user={user} onAddVideo={addVideo} onDeleteVideo={deleteVideo} lastVideoId={lastVideoId} setLastVideoId={setLastVideoId} savedVideoIds={savedVideoIds} onToggleSavedVideo={onToggleSavedVideo} />}
+              {tab === "files" && <FilesView files={libraryFiles} user={user} onAddFile={addLibraryFile} onDeleteFile={deleteLibraryFile} onDownloadFile={downloadLibraryFile} lastFileId={lastFileId} setLastFileId={setLastFileId} savedFileIds={savedFileIds} onToggleSavedFile={onToggleSavedFile} />}
               {tab === "papers" && <PastPapersView />}
               {tab === "quiz" && <QuizView questions={quizQuestions} user={user} notes={notes} onNeedRefs={() => want("notes")} onAddQuestion={addQuizQuestion} onImportQuestions={importQuizQuestions} onDeleteQuestion={deleteQuizQuestion} onDeleteMany={deleteManyQuiz} />}
               {tab === "tools" && <ToolsView />}
               {tab === "flashcards" && <FlashcardsView />}
               {tab === "contact" && <ContactView isAdmin={user.role === "admin"} feedback={feedbackList} />}
-              {tab === "saved" && <SavedView notes={notes} videos={videos}
-                lastNoteId={lastNoteId} lastVideoId={lastVideoId}
-                savedNoteIds={savedNoteIds} savedVideoIds={savedVideoIds}
-                onToggleSavedNote={onToggleSavedNote} onToggleSavedVideo={onToggleSavedVideo}
+              {tab === "saved" && <SavedView notes={notes} videos={videos} files={libraryFiles}
+                lastNoteId={lastNoteId} lastVideoId={lastVideoId} lastFileId={lastFileId}
+                savedNoteIds={savedNoteIds} savedVideoIds={savedVideoIds} savedFileIds={savedFileIds}
+                onToggleSavedNote={onToggleSavedNote} onToggleSavedVideo={onToggleSavedVideo} onToggleSavedFile={onToggleSavedFile}
                 onJump={jumpTo} />}
             </>
           )}
         </main>
 
-        {showSearch && <GlobalSearchModal notes={notes} videos={videos} onClose={() => setShowSearch(false)} onJump={jumpTo} />}
+        {showSearch && <GlobalSearchModal notes={notes} videos={videos} files={libraryFiles} onClose={() => setShowSearch(false)} onJump={jumpTo} />}
         {window.__ppVersion && <div style={{ textAlign: "center", fontSize: 11, color: "var(--muted)", padding: "0 0 18px" }}>PrepList Pro · updated {window.__ppVersion}</div>}
         <Toast toast={toast} onClose={() => setToast(null)} />
       </div>

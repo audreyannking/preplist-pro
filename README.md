@@ -1,6 +1,6 @@
 # PrepList Pro
 
-A shared study website: notes, videos, and past exam papers. Past papers are
+A shared study website: notes, videos, files, and past exam papers. Past papers are
 organized by subject, exam type (IGCSE / AS Level / A Level), zone, and
 variant, matching how Cambridge papers are labeled. No accounts, no sign-up —
 pick a role (Student / Admin) and go. Public to anyone worldwide.
@@ -75,12 +75,22 @@ your behalf.
   KaTeX wherever that text is shown.
 - **Photos** (note scans) are resized and stored as compressed JPEG data
   directly in Firestore documents — no paid storage plan needed.
+- **Files tab.** Admins can upload any file up to 25 MB — PDFs, photos,
+  documents, slides, archives. PDFs, images and text preview inside the
+  site; other types show a Download button. Files support subject/grade
+  filters, bookmarks, the Saved tab and global search like Notes and Videos.
+  The listing stores only small metadata documents (`libraryFiles`); the
+  bytes are split into 512 KiB chunks in `libraryFileChunks` and fetched
+  only when someone opens or downloads a file. Base64 storage adds about a
+  third to the file size, so keep the free Spark plan's 1 GiB storage limit
+  in mind for large uploads.
 - **Built to handle many visitors.** The site itself is static files on
   GitHub Pages (served from a CDN), so page loads scale easily. The database
   work is kept light: each tab only reads its own collection the first time
-  it's opened, big files (PDFs, scanned notes) sit in a separate `files`
-  collection and are fetched only when someone opens them, and Firestore's
-  local cache means returning visitors re-download only what changed.
+  it's opened, note photos sit in a separate `files` collection, Files-tab
+  bytes stay in `libraryFileChunks`, and both are fetched only when someone
+  opens them. Firestore's local cache means returning visitors re-download
+  only what changed.
   `firestore.rules` allows reading without signing in (everything is public
   study material), so a whole school on one network can't be blocked by
   Firebase's limit on new anonymous sign-ins per IP. The real ceiling is
@@ -131,17 +141,14 @@ your behalf.
   Cambridge's public pages only list the latest series plus specimens, and
   the list needs rebuilding when Cambridge publishes a new series.
 - **Global search.** The search icon in the header opens one search box
-  that looks across Notes, Videos, Past Papers, and the Checklist at once
-  and jumps straight to whatever you pick.
-- **Continue where you left off, and a Saved tab.** Notes, Videos, and Past
-  Papers each remember the last item you opened on this device (stored in
+  that looks across Notes, Videos, and Files at once and jumps straight to
+  whatever you pick.
+- **Continue where you left off, and a Saved tab.** Notes, Videos and Files
+  each remember the last item you opened on this device (stored in
   `localStorage`, since there are no accounts) and show a "Continue where
-  you left off" shortcut back to it. For past papers this jumps straight
-  back to the same PDF — it can't resume mid-document, since PDFs open in
-  the browser's own viewer rather than an embedded one the app can track.
-  Every note, video, and past paper also has a bookmark button, and the
-  **Saved** tab lists everything you've bookmarked (grouped by type)
-  alongside the most recent item from each of the other three tabs —
+  you left off" shortcut back to it. Every note, video and file also has a
+  bookmark button, and the **Saved** tab lists everything you've bookmarked
+  (grouped by type) alongside the most recent item from each of those tabs —
   tapping any entry jumps straight back to it.
 - **No AI PDF-to-quiz conversion (yet).** That would need a real AI model
   reading the PDF, which needs an API key kept secret on a small backend —
@@ -163,7 +170,7 @@ your behalf.
 - **Quizzes are uploaded, not built in.** The Quiz tab ships with no questions. Admins use "Upload a quiz" to add a whole quiz from a CSV file (or pasted text) with columns question, option A-D, correct answer (A-D), explanation, or "Add one question" for single ones. "Delete all shown" clears the questions in the current filter. Only upload questions you wrote yourself.
 - **Feedback.** The Contact tab has a 1-5 star rating with an optional comment, saved in Firestore (`feedback`, one entry per device, so re-rating updates it instead of adding another). Admins see the average and recent comments there. Comments can be read by anyone with access to the database, so the form asks people not to include personal details.
 - **If the site can't load a required library** (for example a blocked or weak connection), index.html shows a message and a Reload button instead of a blank page.
-- **Delete with Undo.** Admins see a bin icon on every note and video (and on quiz questions under Manage questions). A confirmation appears first, and after deleting there is an Undo button for about 10 seconds that puts it back. A note image is only really removed once that window passes. Bookmarks can always be undone by tapping the bookmark again, or the x on the Saved tab.
+- **Delete with Undo.** Admins see a bin icon on every note, video and file (and on quiz questions under Manage questions). A confirmation appears first, and after deleting there is an Undo button for about 10 seconds that puts it back. A note image or file chunk is only really removed once that window passes. Bookmarks can always be undone by tapping the bookmark again, or the x on the Saved tab.
 - Notes can now have up to 10 photos (reorderable); older single-photo notes still work.
 - Added the Islamic subject; tapping a note picture opens it full-screen in the site (no download prompt).
 - Notes open full-screen when tapped (saving only via the Save button); cards show a small cover with a page count; publishing uploads photos in parallel.
