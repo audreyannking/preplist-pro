@@ -333,6 +333,49 @@ async function fetchLibraryFileBlob(meta) {
   }
 }
 
+// Keeps note photos sharp: start big and high quality, and only step down if the
+// result would be too large for one Firestore document (1 MiB).
+const PHOTO_STEPS = [[2000, 0.9], [1800, 0.85], [1600, 0.8], [1400, 0.75], [1200, 0.7], [1000, 0.65]];
+const PHOTO_MAX_CHARS = 920000;
+function loadImageFile(file) {
+  return new Promise((resolve, reject) => {
+    const url = URL.createObjectURL(file);
+    const img = new Image();
+    img.onload = () => resolve({ img, url });
+    img.onerror = () => { URL.revokeObjectURL(url); reject(new Error("bad image")); };
+    img.src = url;
+  });
+}
+function drawScaled(img, maxW, quality) {
+  const scale = Math.min(1, maxW / img.width);
+  const canvas = document.createElement("canvas");
+  canvas.width = Math.round(img.width * scale);
+  canvas.height = Math.round(img.height * scale);
+  const ctx = canvas.getContext("2d");
+  ctx.imageSmoothingQuality = "high";
+  ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+  return canvas.toDataURL("image/jpeg", quality);
+}
+async function resizeImageAdaptive(file) {
+  const { img, url } = await loadImageFile(file);
+  try {
+    let out = "";
+    for (const [w, q] of PHOTO_STEPS) {
+      out = drawScaled(img, w, q);
+      if (out.length <= PHOTO_MAX_CHARS) break;
+    }
+    return out;
+  } finally { URL.revokeObjectURL(url); }
+}
+function makeThumb(dataUrl) {
+  return new Promise((resolve) => {
+    const img = new Image();
+    img.onload = () => resolve(drawScaled(img, 520, 0.72));
+    img.onerror = () => resolve(null);
+    img.src = dataUrl;
+  });
+}
+
 function resizeImageToDataUrl(file, maxW = 900, quality = 0.68) {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
@@ -836,7 +879,7 @@ function PhotoPicker({ value, onChange, required }) {
 }
 
 const MAX_NOTE_PHOTOS = 10;
-function MultiPhotoPicker({ value, onChange }) {
+function MultiPhotoPicker({ value, onChange, max = MAX_NOTE_PHOTOS }) {
   const [busy, setBusy] = useState(false);
   const [failed, setFailed] = useState(0);
 
@@ -846,11 +889,11 @@ function MultiPhotoPicker({ value, onChange }) {
     if (!files.length) return;
     setBusy(true);
     setFailed(0);
-    const room = MAX_NOTE_PHOTOS - value.length;
+    const room = max - value.length;
     const added = [];
     let bad = 0;
     for (const file of files.slice(0, Math.max(room, 0))) {
-      try { added.push(await resizeImageToDataUrl(file)); } catch { bad++; }
+      try { added.push(await resizeImageAdaptive(file)); } catch { bad++; }
     }
     if (files.length > room) bad += files.length - Math.max(room, 0);
     setFailed(bad);
@@ -880,7 +923,7 @@ function MultiPhotoPicker({ value, onChange }) {
         <div className="pp-btn pp-btn-ghost" style={{ display: "inline-flex", alignItems: "center", gap: 8, padding: "9px 14px", fontSize: 13.5 }}>
           <Loader2 size={15} style={{ animation: "pp-spin 0.9s linear infinite" }} /> Processing…
         </div>
-      ) : value.length >= MAX_NOTE_PHOTOS ? (
+      ) : value.length >= max ? (
         <div style={{ fontSize: 12.5, color: "var(--muted)" }}>That's the maximum of {MAX_NOTE_PHOTOS} photos for one note.</div>
       ) : (
         <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
@@ -894,7 +937,7 @@ function MultiPhotoPicker({ value, onChange }) {
           </div>
         </div>
       )}
-      {failed > 0 && <div style={{ fontSize: 12, color: "#8A3434", marginTop: 6 }}>{failed} photo{failed > 1 ? "s" : ""} couldn't be added (unreadable, or over the {MAX_NOTE_PHOTOS}-photo limit).</div>}
+      {failed > 0 && <div style={{ fontSize: 12, color: "#8A3434", marginTop: 6 }}>{failed} photo{failed > 1 ? "s" : ""} couldn't be added (unreadable, or over the photo limit).</div>}
     </div>
   );
 }
@@ -907,12 +950,13 @@ function MultiPhotoPicker({ value, onChange }) {
 /* Notes                                                                   */
 /* ---------------------------------------------------------------------- */
 
-function NotesView({ notes, user, onAddNote, onDeleteNote, lastNoteId, setLastNoteId, savedNoteIds, onToggleSavedNote }) {
+function NotesView({ notes, user, onAddNote, onDeleteNote, onEditNote, lastNoteId, setLastNoteId, savedNoteIds, onToggleSavedNote }) {
   const [showForm, setShowForm] = useState(false);
   const [query, setQuery] = useState("");
   const [subject, setSubject] = useState("");
   const [grade, setGrade] = useState("");
   const [openId, setOpenId] = useState(null);
+  const [editId, setEditId] = useState(null);
   const canUpload = hasElevatedAccess(user);
 
   const filtered = useMemo(() => {
@@ -946,15 +990,17 @@ function NotesView({ notes, user, onAddNote, onDeleteNote, lastNoteId, setLastNo
                 style={{ borderRadius: 10, padding: 14, cursor: "pointer", display: "flex", flexDirection: "column", outline: n.id === lastNoteId ? "2px solid var(--accent)" : "none", outlineOffset: 2 }}>
                 <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
                   <div style={{ display: "flex", gap: 6, flexWrap: "wrap", flex: 1 }}><Tag text={n.subject} /><GradeTag text={n.grade} /></div>
+                  {canUpload && <button className="pp-btn pp-btn-ghost" style={{ padding: 5, borderRadius: 999, flexShrink: 0 }} onClick={(e) => { e.stopPropagation(); setEditId(n.id); }} aria-label="Edit" title="Edit"><Pencil size={14} /></button>}
                   {canUpload && <button className="pp-btn pp-btn-ghost" style={{ padding: 5, borderRadius: 999, flexShrink: 0 }} onClick={(e) => { e.stopPropagation(); if (window.confirm(`Delete "${n.title}"? You can undo for a few seconds afterwards.`)) onDeleteNote(n); }} aria-label="Delete note" title="Delete note"><Trash size={14} /></button>}
                   <button className="pp-btn pp-btn-ghost" style={{ padding: 5, borderRadius: 999, flexShrink: 0 }} onClick={(e) => { e.stopPropagation(); onToggleSavedNote(n.id); }} aria-label={isSaved ? "Remove bookmark" : "Add bookmark"}>
                     <Bookmark size={14} fill={isSaved ? "var(--accent)" : "none"} style={{ color: "var(--accent)" }} />
                   </button>
                 </div>
                 <div className="pp-serif" style={{ fontSize: 15.5, fontWeight: 600, marginTop: 8 }}>{n.title}</div>
+                <Desc text={n.description} />
                 {n.type === "image" ? (
                   <div style={{ position: "relative", marginTop: 8 }}>
-                    <NoteImage note={{ ...n, fileId: noteFileIds(n)[0] }} noZoom style={{ width: "100%", height: 150, objectFit: "cover", objectPosition: "top", borderRadius: 6, border: "1px solid var(--border)", display: "block" }} />
+                    <NoteImage note={n.thumb ? { content: n.thumb } : { ...n, fileId: noteFileIds(n)[0] }} noZoom style={{ width: "100%", height: 150, objectFit: "cover", objectPosition: "top", borderRadius: 6, border: "1px solid var(--border)", display: "block" }} />
                     {noteFileIds(n).length > 1 && <span style={{ position: "absolute", right: 6, bottom: 6, fontSize: 11, fontWeight: 700, background: "var(--bg)", color: "var(--text)", borderRadius: 999, padding: "2px 9px", border: "1px solid var(--border)" }}>{noteFileIds(n).length} pages</span>}
                   </div>
                 ) : <p style={{ fontSize: 13.5, marginTop: 8, lineHeight: 1.5, color: "var(--text)", whiteSpace: "pre-wrap", overflow: "hidden", display: "-webkit-box", WebkitLineClamp: 5, WebkitBoxOrient: "vertical" }}><MathText text={n.content} /></p>}
@@ -964,7 +1010,8 @@ function NotesView({ notes, user, onAddNote, onDeleteNote, lastNoteId, setLastNo
           })}
         </div>
       )}
-      {openId && notes.find((n) => n.id === openId) && (() => { const n = notes.find((x) => x.id === openId); return <NoteViewer note={n} saved={savedNoteIds.includes(n.id)} onToggleSaved={() => onToggleSavedNote(n.id)} onClose={() => setOpenId(null)} />; })()}
+      {openId && notes.find((n) => n.id === openId) && (() => { const n = notes.find((x) => x.id === openId); return <NoteViewer note={n} saved={savedNoteIds.includes(n.id)} onToggleSaved={() => onToggleSavedNote(n.id)} onEdit={canUpload ? () => { setOpenId(null); setEditId(n.id); } : null} onClose={() => setOpenId(null)} />; })()}
+      {editId && notes.find((n) => n.id === editId) && (() => { const n = notes.find((x) => x.id === editId); return <EditNoteModal key={n.id} note={n} onClose={() => setEditId(null)} onSave={(v) => onEditNote(n, v)} />; })()}
       {showForm && <AddNoteModal onClose={() => setShowForm(false)} onSubmit={async (payload) => { const ok = await onAddNote(payload); if (ok) setShowForm(false); }} />}
     </div>
   );
@@ -978,6 +1025,7 @@ function AddNoteModal({ onClose, onSubmit }) {
   const [text, setText] = useState("");
   const textRef = useRef(null);
   const [images, setImages] = useState([]);
+  const [description, setDescription] = useState("");
   const [busy, setBusy] = useState(false);
   const canSubmit = title.trim() && subject && grade && (type === "text" ? text.trim() : images.length > 0);
 
@@ -988,6 +1036,7 @@ function AddNoteModal({ onClose, onSubmit }) {
         <Field label="Subject"><SubjectSelect value={subject} onChange={setSubject} /></Field>
         <Field label="Grade"><GradeSelect value={grade} onChange={setGrade} /></Field>
       </TwoUp>
+      <DescriptionField value={description} onChange={setDescription} />
       <Field label="Format">
         <div style={{ display: "flex", gap: 8 }}>
           <button className="pp-btn pp-btn-ghost" style={{ padding: "7px 14px", fontSize: 13, background: type === "text" ? "var(--surface)" : "transparent", borderColor: type === "text" ? "var(--accent)" : "var(--border)" }} onClick={() => setType("text")}><FileText size={13} style={{ marginRight: 5, display: "inline" }} /> Text</button>
@@ -997,7 +1046,7 @@ function AddNoteModal({ onClose, onSubmit }) {
       {type === "text" ? <Field label="Notes"><MathToolbar textareaRef={textRef} value={text} setValue={setText} /><textarea ref={textRef} className="pp-input" style={{ width: "100%", padding: "9px 12px", fontSize: 14, minHeight: 110, resize: "vertical", fontFamily: "inherit" }} value={text} onChange={(e) => setText(e.target.value)} placeholder="Paste or write the notes…" /></Field>
         : <Field label="Photos or scanned pages (up to 10)"><MultiPhotoPicker value={images} onChange={setImages} /></Field>}
       <button className="pp-btn pp-btn-primary" style={{ width: "100%", padding: "10px 0", opacity: canSubmit ? 1 : 0.5 }} disabled={!canSubmit || busy}
-        onClick={async () => { setBusy(true); try { await onSubmit({ title: title.trim(), subject, grade, type, content: type === "text" ? text.trim() : images }); } finally { setBusy(false); } }}>
+        onClick={async () => { setBusy(true); try { await onSubmit({ title: title.trim(), subject, grade, description: description.trim(), type, content: type === "text" ? text.trim() : images }); } finally { setBusy(false); } }}>
         {busy ? "Publishing… please keep this open" : "Publish note"}
       </button>
     </Modal>
@@ -1008,11 +1057,12 @@ function AddNoteModal({ onClose, onSubmit }) {
 /* Videos                                                                  */
 /* ---------------------------------------------------------------------- */
 
-function VideosView({ videos, user, onAddVideo, onDeleteVideo, lastVideoId, setLastVideoId, savedVideoIds, onToggleSavedVideo }) {
+function VideosView({ videos, user, onAddVideo, onDeleteVideo, onEditVideo, lastVideoId, setLastVideoId, savedVideoIds, onToggleSavedVideo }) {
   const [showForm, setShowForm] = useState(false);
   const [query, setQuery] = useState("");
   const [subject, setSubject] = useState("");
   const [grade, setGrade] = useState("");
+  const [editId, setEditId] = useState(null);
   const isAdmin = canLeadDepartment(user);
 
   const filtered = useMemo(() => {
@@ -1048,12 +1098,14 @@ function VideosView({ videos, user, onAddVideo, onDeleteVideo, lastVideoId, setL
                 <div style={{ padding: 12 }}>
                   <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
                     <div style={{ display: "flex", gap: 6, flexWrap: "wrap", flex: 1 }}><Tag text={v.subject} /><GradeTag text={v.grade} /></div>
+                    {isAdmin && <button className="pp-btn pp-btn-ghost" style={{ padding: 5, borderRadius: 999, flexShrink: 0 }} onClick={(e) => { e.stopPropagation(); setEditId(v.id); }} aria-label="Edit" title="Edit"><Pencil size={14} /></button>}
                     {isAdmin && <button className="pp-btn pp-btn-ghost" style={{ padding: 5, borderRadius: 999, flexShrink: 0 }} onClick={(e) => { e.stopPropagation(); if (window.confirm(`Delete "${v.title}"? You can undo for a few seconds afterwards.`)) onDeleteVideo(v); }} aria-label="Delete video" title="Delete video"><Trash size={14} /></button>}
                     <button className="pp-btn pp-btn-ghost" style={{ padding: 5, borderRadius: 999, flexShrink: 0 }} onClick={(e) => { e.stopPropagation(); onToggleSavedVideo(v.id); }} aria-label={isSaved ? "Remove bookmark" : "Add bookmark"}>
                       <Bookmark size={14} fill={isSaved ? "var(--accent)" : "none"} style={{ color: "var(--accent)" }} />
                     </button>
                   </div>
                   <div className="pp-serif" style={{ fontSize: 14.5, fontWeight: 600, marginTop: 8 }}>{v.title}</div>
+                  <Desc text={v.description} lines={3} />
                   <div style={{ fontSize: 11.5, color: "var(--muted)", marginTop: 6 }}>Added by {roleLabel(v.addedByRole)} · {timeAgo(v.createdAt)}</div>
                 </div>
               </div>
@@ -1061,6 +1113,7 @@ function VideosView({ videos, user, onAddVideo, onDeleteVideo, lastVideoId, setL
           })}
         </div>
       )}
+      {editId && videos.find((v) => v.id === editId) && (() => { const v = videos.find((x) => x.id === editId); return <EditItemModal key={v.id} heading="Edit video" item={v} onClose={() => setEditId(null)} onSave={(patch) => onEditVideo(v, patch)} />; })()}
       {showForm && <AddVideoModal onClose={() => setShowForm(false)} onSubmit={async (payload) => { const ok = await onAddVideo(payload); if (ok) setShowForm(false); }} />}
     </div>
   );
@@ -1071,6 +1124,7 @@ function AddVideoModal({ onClose, onSubmit }) {
   const [subject, setSubject] = useState("");
   const [grade, setGrade] = useState("");
   const [url, setUrl] = useState("");
+  const [description, setDescription] = useState("");
   const videoId = extractYouTubeId(url);
   const canSubmit = title.trim() && subject && grade && videoId;
 
@@ -1081,6 +1135,7 @@ function AddVideoModal({ onClose, onSubmit }) {
         <Field label="Subject"><SubjectSelect value={subject} onChange={setSubject} /></Field>
         <Field label="Grade"><GradeSelect value={grade} onChange={setGrade} /></Field>
       </TwoUp>
+      <DescriptionField value={description} onChange={setDescription} />
       <Field label="YouTube link">
         <input className="pp-input" style={{ width: "100%", padding: "9px 12px", fontSize: 14.5 }} value={url} onChange={(e) => setUrl(e.target.value)} placeholder="https://www.youtube.com/watch?v=…" />
         {url && !videoId && <div style={{ fontSize: 12, color: "#8A3434", marginTop: 6 }}>Couldn't read a video ID from that link.</div>}
@@ -1090,7 +1145,96 @@ function AddVideoModal({ onClose, onSubmit }) {
           <iframe title="preview" src={`https://www.youtube.com/embed/${videoId}`} style={{ position: "absolute", inset: 0, width: "100%", height: "100%", border: 0 }} allowFullScreen />
         </div>
       )}
-      <button className="pp-btn pp-btn-primary" style={{ width: "100%", padding: "10px 0", opacity: canSubmit ? 1 : 0.5 }} disabled={!canSubmit} onClick={() => onSubmit({ title: title.trim(), subject, grade, youtubeId: videoId })}>Add video</button>
+      <button className="pp-btn pp-btn-primary" style={{ width: "100%", padding: "10px 0", opacity: canSubmit ? 1 : 0.5 }} disabled={!canSubmit} onClick={() => onSubmit({ title: title.trim(), subject, grade, description: description.trim(), youtubeId: videoId })}>Add video</button>
+    </Modal>
+  );
+}
+
+function Desc({ text, lines = 2, style }) {
+  if (!text) return null;
+  return <div style={{ fontSize: 12.5, lineHeight: 1.45, color: "var(--muted)", marginTop: 5, whiteSpace: "pre-wrap", overflow: "hidden", display: "-webkit-box", WebkitLineClamp: lines, WebkitBoxOrient: "vertical", ...style }}>{text}</div>;
+}
+function DescriptionField({ value, onChange }) {
+  return (
+    <Field label="Description (optional)">
+      <textarea className="pp-input" style={{ width: "100%", padding: "9px 12px", fontSize: 14, minHeight: 64, resize: "vertical", fontFamily: "inherit" }} value={value} onChange={(e) => onChange(e.target.value)} maxLength={600} placeholder="e.g. Made by Sara, Grade 10. Covers chapters 4–5." />
+    </Field>
+  );
+}
+function EditItemModal({ heading, item, onClose, onSave }) {
+  const [title, setTitle] = useState(item.title || "");
+  const [subject, setSubject] = useState(item.subject || "");
+  const [grade, setGrade] = useState(item.grade || "");
+  const [description, setDescription] = useState(item.description || "");
+  const [busy, setBusy] = useState(false);
+  const canSave = title.trim() && subject && grade && !busy;
+  return (
+    <Modal title={heading} onClose={() => { if (!busy) onClose(); }}>
+      <Field label="Title"><input className="pp-input" style={{ width: "100%", padding: "9px 12px", fontSize: 14.5 }} value={title} onChange={(e) => setTitle(e.target.value)} /></Field>
+      <TwoUp>
+        <Field label="Subject"><SubjectSelect value={subject} onChange={setSubject} /></Field>
+        <Field label="Grade"><GradeSelect value={grade} onChange={setGrade} /></Field>
+      </TwoUp>
+      <DescriptionField value={description} onChange={setDescription} />
+      <button className="pp-btn pp-btn-primary" style={{ width: "100%", padding: "10px 0", opacity: canSave ? 1 : 0.5 }} disabled={!canSave}
+        onClick={async () => { setBusy(true); try { const ok = await onSave({ title: title.trim(), subject, grade, description: description.trim() }); if (ok) onClose(); } finally { setBusy(false); } }}>
+        {busy ? "Saving…" : "Save changes"}
+      </button>
+    </Modal>
+  );
+}
+function ExistingPhoto({ id, inline }) {
+  const [src] = useFileData(inline, id, true);
+  return src ? <img src={src} alt="" style={{ height: 96, borderRadius: 8, border: "1px solid var(--border)", display: "block" }} /> : <div style={{ height: 96, width: 72, borderRadius: 8, border: "1px solid var(--border)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11, color: "var(--muted)" }}>Loading…</div>;
+}
+function EditNoteModal({ note, onClose, onSave }) {
+  const [title, setTitle] = useState(note.title || "");
+  const [subject, setSubject] = useState(note.subject || "");
+  const [grade, setGrade] = useState(note.grade || "");
+  const [description, setDescription] = useState(note.description || "");
+  const [text, setText] = useState(note.type === "text" ? note.content || "" : "");
+  const textRef = useRef(null);
+  const [existing, setExisting] = useState(() => note.type !== "image" ? [] : noteFileIds(note).length ? noteFileIds(note).map((id) => ({ id })) : note.content ? [{ inline: note.content }] : []);
+  const [added, setAdded] = useState([]);
+  const [busy, setBusy] = useState(false);
+  const photoCount = existing.length + added.length;
+  const canSave = title.trim() && subject && grade && !busy && (note.type === "text" ? text.trim() : photoCount > 0);
+  const move = (i, d) => { const j = i + d; if (j < 0 || j >= existing.length) return; const next = [...existing]; [next[i], next[j]] = [next[j], next[i]]; setExisting(next); };
+  return (
+    <Modal title="Edit note" onClose={() => { if (!busy) onClose(); }}>
+      <Field label="Title"><input className="pp-input" style={{ width: "100%", padding: "9px 12px", fontSize: 14.5 }} value={title} onChange={(e) => setTitle(e.target.value)} /></Field>
+      <TwoUp>
+        <Field label="Subject"><SubjectSelect value={subject} onChange={setSubject} /></Field>
+        <Field label="Grade"><GradeSelect value={grade} onChange={setGrade} /></Field>
+      </TwoUp>
+      <DescriptionField value={description} onChange={setDescription} />
+      {note.type === "text" ? (
+        <Field label="Notes"><MathToolbar textareaRef={textRef} value={text} setValue={setText} /><textarea ref={textRef} className="pp-input" style={{ width: "100%", padding: "9px 12px", fontSize: 14, minHeight: 110, resize: "vertical", fontFamily: "inherit" }} value={text} onChange={(e) => setText(e.target.value)} /></Field>
+      ) : (
+        <Field label={`Photos (${photoCount} of ${MAX_NOTE_PHOTOS})`}>
+          {existing.length > 0 && (
+            <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginBottom: 10 }}>
+              {existing.map((x, i) => (
+                <div key={x.id || "inline"} style={{ position: "relative" }}>
+                  <ExistingPhoto id={x.id} inline={x.inline} />
+                  <div style={{ position: "absolute", left: 4, bottom: 4, display: "flex", gap: 3, alignItems: "center" }}>
+                    <span style={{ fontSize: 11, fontWeight: 700, background: "var(--bg)", borderRadius: 999, padding: "1px 7px" }}>{i + 1}</span>
+                    {i > 0 && <button type="button" className="pp-btn pp-btn-ghost" style={{ padding: "0 6px", fontSize: 12, background: "var(--bg)", borderRadius: 999 }} onClick={() => move(i, -1)} aria-label="Move earlier">←</button>}
+                    {i < existing.length - 1 && <button type="button" className="pp-btn pp-btn-ghost" style={{ padding: "0 6px", fontSize: 12, background: "var(--bg)", borderRadius: 999 }} onClick={() => move(i, 1)} aria-label="Move later">→</button>}
+                  </div>
+                  <button type="button" className="pp-btn pp-btn-ghost" style={{ position: "absolute", top: 4, right: 4, padding: 4, borderRadius: 999, background: "var(--bg)" }} onClick={() => setExisting(existing.filter((_, k) => k !== i))} aria-label={`Remove photo ${i + 1}`}><X size={13} /></button>
+                </div>
+              ))}
+            </div>
+          )}
+          <MultiPhotoPicker value={added} onChange={setAdded} max={MAX_NOTE_PHOTOS - existing.length} />
+          <div style={{ fontSize: 11.5, color: "var(--muted)", marginTop: 6 }}>New photos are added after the existing ones.</div>
+        </Field>
+      )}
+      <button className="pp-btn pp-btn-primary" style={{ width: "100%", padding: "10px 0", opacity: canSave ? 1 : 0.5 }} disabled={!canSave}
+        onClick={async () => { setBusy(true); try { const ok = await onSave({ title: title.trim(), subject, grade, description: description.trim(), text: text.trim(), existing, added }); if (ok) onClose(); } finally { setBusy(false); } }}>
+        {busy ? "Saving… please keep this open" : "Save changes"}
+      </button>
     </Modal>
   );
 }
@@ -1102,7 +1246,7 @@ function NoteImages({ note, style, noZoom }) {
   return <div>{ids.map((id, i) => <div key={id} style={{ marginTop: i ? 8 : 0 }}><NoteImage note={{ fileId: id }} style={style} noZoom={noZoom} /></div>)}</div>;
 }
 
-function NoteViewer({ note, saved, onToggleSaved, onClose }) {
+function NoteViewer({ note, saved, onToggleSaved, onEdit, onClose }) {
   useEffect(() => {
     const onKey = (e) => { if (e.key === "Escape") onClose(); };
     window.addEventListener("keydown", onKey);
@@ -1117,13 +1261,15 @@ function NoteViewer({ note, saved, onToggleSaved, onClose }) {
           <div className="pp-serif" style={{ fontSize: 17, fontWeight: 700, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{note.title}</div>
           <div style={{ display: "flex", gap: 6, marginTop: 4 }}><Tag text={note.subject} /><GradeTag text={note.grade} /></div>
         </div>
+        {onEdit && <button className="pp-btn pp-btn-ghost" style={{ padding: "7px 12px", fontSize: 13, display: "flex", alignItems: "center", gap: 6, flexShrink: 0 }} onClick={onEdit}><Pencil size={14} /> Edit</button>}
         <button className="pp-btn pp-btn-ghost" style={{ padding: "7px 12px", fontSize: 13, display: "flex", alignItems: "center", gap: 6, flexShrink: 0 }} onClick={onToggleSaved}>
           <Bookmark size={14} fill={saved ? "var(--accent)" : "none"} style={{ color: "var(--accent)" }} /> {saved ? "Saved" : "Save"}
         </button>
         <button className="pp-btn pp-btn-ghost" style={{ padding: 8, borderRadius: 999, flexShrink: 0 }} onClick={onClose} aria-label="Close note"><X size={18} /></button>
       </div>
       <div style={{ flex: 1, minHeight: 0, overflowY: "auto", WebkitOverflowScrolling: "touch", padding: "16px 14px 40px" }}>
-        <div style={{ maxWidth: 900, margin: "0 auto" }}>
+        <div style={{ maxWidth: 1100, margin: "0 auto" }}>
+          {note.description && <p style={{ fontSize: 14, lineHeight: 1.55, color: "var(--muted)", whiteSpace: "pre-wrap", margin: "0 0 14px" }}>{note.description}</p>}
           {note.type === "image"
             ? <NoteImages note={note} noZoom style={{ width: "100%", borderRadius: 6, border: "1px solid var(--border)", display: "block" }} />
             : <p style={{ fontSize: 16, lineHeight: 1.65, whiteSpace: "pre-wrap" }}><MathText text={note.content} /></p>}
@@ -1188,12 +1334,13 @@ function fileTypeLabel(meta) {
   return ext.length > 1 ? ext.pop().toUpperCase() : "File";
 }
 
-function FilesView({ files, user, onAddFile, onDeleteFile, onDownloadFile, lastFileId, setLastFileId, savedFileIds, onToggleSavedFile }) {
+function FilesView({ files, user, onAddFile, onDeleteFile, onEditFile, onDownloadFile, lastFileId, setLastFileId, savedFileIds, onToggleSavedFile }) {
   const [showForm, setShowForm] = useState(false);
   const [query, setQuery] = useState("");
   const [subject, setSubject] = useState("");
   const [grade, setGrade] = useState("");
   const [openId, setOpenId] = useState(null);
+  const [editId, setEditId] = useState(null);
   const canUpload = hasElevatedAccess(user);
 
   const filtered = useMemo(() => {
@@ -1233,12 +1380,14 @@ function FilesView({ files, user, onAddFile, onDeleteFile, onDownloadFile, lastF
                 <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
                   <div style={{ display: "flex", gap: 6, flexWrap: "wrap", flex: 1, minWidth: 0 }}><Tag text={f.subject} /><GradeTag text={f.grade} /></div>
                   <button className="pp-btn pp-btn-ghost" style={{ padding: 5, borderRadius: 999, flexShrink: 0 }} onClick={(e) => { e.stopPropagation(); onDownloadFile(f); }} aria-label="Download file" title="Download file"><Download size={14} /></button>
+                  {canUpload && <button className="pp-btn pp-btn-ghost" style={{ padding: 5, borderRadius: 999, flexShrink: 0 }} onClick={(e) => { e.stopPropagation(); setEditId(f.id); }} aria-label="Edit" title="Edit"><Pencil size={14} /></button>}
                   {canUpload && <button className="pp-btn pp-btn-ghost" style={{ padding: 5, borderRadius: 999, flexShrink: 0 }} onClick={(e) => { e.stopPropagation(); if (window.confirm(`Delete "${f.title}"? You can undo for a few seconds afterwards.`)) onDeleteFile(f); }} aria-label="Delete file" title="Delete file"><Trash size={14} /></button>}
                   <button className="pp-btn pp-btn-ghost" style={{ padding: 5, borderRadius: 999, flexShrink: 0 }} onClick={(e) => { e.stopPropagation(); onToggleSavedFile(f.id); }} aria-label={isSaved ? "Remove bookmark" : "Add bookmark"}>
                     <Bookmark size={14} fill={isSaved ? "var(--accent)" : "none"} style={{ color: "var(--accent)" }} />
                   </button>
                 </div>
                 <div className="pp-serif" style={{ fontSize: 15.5, fontWeight: 600, marginTop: 8, wordBreak: "break-word" }}>{f.title}</div>
+                <Desc text={f.description} />
                 <div style={{ display: "flex", alignItems: "center", gap: 9, marginTop: 9, minWidth: 0 }}>
                   <div style={{ width: 36, height: 36, borderRadius: 8, background: c.bg, color: c.fg, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
                     <KindIcon size={18} />
@@ -1255,6 +1404,7 @@ function FilesView({ files, user, onAddFile, onDeleteFile, onDownloadFile, lastF
         </div>
       )}
       {openId && files.find((f) => f.id === openId) && (() => { const f = files.find((x) => x.id === openId); return <FileViewer file={f} onClose={() => setOpenId(null)} onDownload={onDownloadFile} />; })()}
+      {editId && files.find((f) => f.id === editId) && (() => { const f = files.find((x) => x.id === editId); return <EditItemModal key={f.id} heading="Edit file" item={f} onClose={() => setEditId(null)} onSave={(patch) => onEditFile(f, patch)} />; })()}
       {showForm && <AddFileModal onClose={() => setShowForm(false)} onSubmit={async (payload, onProgress) => { const ok = await onAddFile(payload, onProgress); if (ok) setShowForm(false); }} />}
     </div>
   );
@@ -1265,6 +1415,7 @@ function AddFileModal({ onClose, onSubmit }) {
   const [subject, setSubject] = useState("");
   const [grade, setGrade] = useState("");
   const [file, setFile] = useState(null);
+  const [description, setDescription] = useState("");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const [progress, setProgress] = useState(0);
@@ -1287,6 +1438,7 @@ function AddFileModal({ onClose, onSubmit }) {
         <Field label="Subject"><SubjectSelect value={subject} onChange={setSubject} /></Field>
         <Field label="Grade"><GradeSelect value={grade} onChange={setGrade} /></Field>
       </TwoUp>
+      <DescriptionField value={description} onChange={setDescription} />
       <Field label="File (any type, up to 25 MB)">
         <div className="pp-file-slot">
           <div style={{ fontSize: 11.5, fontWeight: 600, color: "var(--muted)", marginBottom: 5, display: "flex", alignItems: "center", gap: 5 }}><Upload size={12} /> Choose a file</div>
@@ -1303,7 +1455,7 @@ function AddFileModal({ onClose, onSubmit }) {
       </Field>
       <div style={{ fontSize: 12, color: "var(--muted)", marginBottom: 12 }}>Large files are stored in parts and only downloaded when someone opens them. PDFs, images and text can preview here; other types download to open in the right app.</div>
       <button className="pp-btn pp-btn-primary" style={{ width: "100%", padding: "10px 0", opacity: canSubmit ? 1 : 0.5 }} disabled={!canSubmit}
-        onClick={async () => { setBusy(true); setProgress(0); try { await onSubmit({ title: title.trim(), subject, grade, file }, setProgress); } finally { setBusy(false); } }}>
+        onClick={async () => { setBusy(true); setProgress(0); try { await onSubmit({ title: title.trim(), subject, grade, description: description.trim(), file }, setProgress); } finally { setBusy(false); } }}>
         {busy ? `Uploading… ${progress}%` : "Upload file"}
       </button>
     </Modal>
@@ -1358,6 +1510,7 @@ function FileViewer({ file, onClose, onDownload }) {
       </div>
       <div style={{ flex: 1, minHeight: 0, overflowY: "auto", WebkitOverflowScrolling: "touch", padding: "16px 14px 40px" }}>
         <div style={{ maxWidth: 980, margin: "0 auto", minHeight: "100%", display: "flex", flexDirection: "column" }}>
+          {file.description && <p style={{ fontSize: 14, lineHeight: 1.55, color: "var(--muted)", whiteSpace: "pre-wrap", margin: "0 0 14px" }}>{file.description}</p>}
           {state.loading ? <Loading label="Loading file…" /> : state.failed ? (
             <EmptyState icon={FileText} title="Couldn't load this file" body="It may have been removed, or the connection dropped. Try again, or use Download." />
           ) : kind === "image" ? (
@@ -2920,13 +3073,45 @@ function MainApp({ user, onSwitchRole, theme, setTheme }) {
     try {
       let doc = { ...payload };
       if (payload.type === "image") {
-        const fileIds = await Promise.all(payload.content.map((d) => saveFile(d)));
+        const [fileIds, thumb] = await Promise.all([Promise.all(payload.content.map((d) => saveFile(d))), makeThumb(payload.content[0])]);
         doc = { ...payload, fileId: fileIds[0], fileIds }; delete doc.content;
+        if (thumb) doc.thumb = thumb;
       }
       await db.collection("notes").add({ ...doc, authorRole: user.role, createdAt: Date.now() });
       return true;
     }
     catch (e) { notify({ kind: "error", text: friendlyDbError(e) }); return false; }
+  }
+  async function updateItem(coll, id, patch) {
+    try { await db.collection(coll).doc(id).update(patch); notify({ kind: "ok", text: "Changes saved." }); return true; }
+    catch (e) { notify({ kind: "error", text: friendlyDbError(e) }); return false; }
+  }
+  async function editNote(note, v) {
+    try {
+      const patch = { title: v.title, subject: v.subject, grade: v.grade, description: v.description };
+      let removedIds = [];
+      if (note.type === "text") patch.content = v.text;
+      else {
+        const keptIds = [];
+        for (const x of v.existing) keptIds.push(x.id || await saveFile(x.inline));
+        const newIds = await Promise.all(v.added.map((d) => saveFile(d)));
+        const finalIds = [...keptIds, ...newIds];
+        if (!finalIds.length) { notify({ kind: "error", text: "A photo note needs at least one photo." }); return false; }
+        patch.fileIds = finalIds; patch.fileId = finalIds[0];
+        if (note.content) patch.content = firebase.firestore.FieldValue.delete();
+        const oldIds = noteFileIds(note);
+        removedIds = oldIds.filter((id) => !finalIds.includes(id));
+        if (finalIds[0] !== oldIds[0] || !note.thumb) {
+          const firstSrc = (v.existing[0] && v.existing[0].inline) || fileCache.get(finalIds[0]) || (!v.existing.length ? v.added[0] : null);
+          const thumb = firstSrc ? await makeThumb(firstSrc) : null;
+          if (thumb) patch.thumb = thumb;
+        }
+      }
+      await db.collection("notes").doc(note.id).update(patch);
+      removedIds.forEach((id) => { fileCache.delete(id); db.collection("files").doc(id).delete().catch(() => {}); });
+      notify({ kind: "ok", text: "Changes saved." });
+      return true;
+    } catch (e) { notify({ kind: "error", text: friendlyDbError(e) }); return false; }
   }
   async function addVideo(payload) {
     try { await db.collection("videos").add({ ...payload, addedByRole: user.role, createdAt: Date.now() }); return true; }
@@ -2964,6 +3149,7 @@ function MainApp({ user, onSwitchRole, theme, setTheme }) {
         title: payload.title,
         subject: payload.subject,
         grade: payload.grade,
+        description: payload.description || "",
         fileName: file.name,
         mimeType: guessMimeType(file),
         size: file.size,
@@ -3114,9 +3300,9 @@ function MainApp({ user, onSwitchRole, theme, setTheme }) {
         <main style={{ maxWidth: 960, margin: "0 auto", padding: "22px 18px 90px" }}>
           {!dataReady ? <Loading label="Loading…" /> : (
             <>
-              {tab === "notes" && <NotesView notes={notes} user={user} onAddNote={addNote} onDeleteNote={deleteNote} lastNoteId={lastNoteId} setLastNoteId={setLastNoteId} savedNoteIds={savedNoteIds} onToggleSavedNote={onToggleSavedNote} />}
-              {tab === "videos" && <VideosView videos={videos} user={user} onAddVideo={addVideo} onDeleteVideo={deleteVideo} lastVideoId={lastVideoId} setLastVideoId={setLastVideoId} savedVideoIds={savedVideoIds} onToggleSavedVideo={onToggleSavedVideo} />}
-              {tab === "files" && <FilesView files={libraryFiles} user={user} onAddFile={addLibraryFile} onDeleteFile={deleteLibraryFile} onDownloadFile={downloadLibraryFile} lastFileId={lastFileId} setLastFileId={setLastFileId} savedFileIds={savedFileIds} onToggleSavedFile={onToggleSavedFile} />}
+              {tab === "notes" && <NotesView notes={notes} user={user} onAddNote={addNote} onDeleteNote={deleteNote} onEditNote={editNote} lastNoteId={lastNoteId} setLastNoteId={setLastNoteId} savedNoteIds={savedNoteIds} onToggleSavedNote={onToggleSavedNote} />}
+              {tab === "videos" && <VideosView videos={videos} user={user} onAddVideo={addVideo} onDeleteVideo={deleteVideo} onEditVideo={(v, patch) => updateItem("videos", v.id, patch)} lastVideoId={lastVideoId} setLastVideoId={setLastVideoId} savedVideoIds={savedVideoIds} onToggleSavedVideo={onToggleSavedVideo} />}
+              {tab === "files" && <FilesView files={libraryFiles} user={user} onAddFile={addLibraryFile} onDeleteFile={deleteLibraryFile} onEditFile={(f, patch) => updateItem("libraryFiles", f.id, patch)} onDownloadFile={downloadLibraryFile} lastFileId={lastFileId} setLastFileId={setLastFileId} savedFileIds={savedFileIds} onToggleSavedFile={onToggleSavedFile} />}
               {tab === "papers" && <PastPapersView />}
               {tab === "quiz" && <QuizView questions={quizQuestions} user={user} notes={notes} onNeedRefs={() => want("notes")} onAddQuestion={addQuizQuestion} onImportQuestions={importQuizQuestions} onDeleteQuestion={deleteQuizQuestion} onDeleteMany={deleteManyQuiz} />}
               {tab === "tools" && <ToolsView />}

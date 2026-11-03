@@ -813,6 +813,60 @@ async function fetchLibraryFileBlob(meta) {
     throw e;
   }
 }
+
+// Keeps note photos sharp: start big and high quality, and only step down if the
+// result would be too large for one Firestore document (1 MiB).
+const PHOTO_STEPS = [[2000, 0.9], [1800, 0.85], [1600, 0.8], [1400, 0.75], [1200, 0.7], [1000, 0.65]];
+const PHOTO_MAX_CHARS = 920000;
+function loadImageFile(file) {
+  return new Promise((resolve, reject) => {
+    const url = URL.createObjectURL(file);
+    const img = new Image();
+    img.onload = () => resolve({
+      img,
+      url
+    });
+    img.onerror = () => {
+      URL.revokeObjectURL(url);
+      reject(new Error("bad image"));
+    };
+    img.src = url;
+  });
+}
+function drawScaled(img, maxW, quality) {
+  const scale = Math.min(1, maxW / img.width);
+  const canvas = document.createElement("canvas");
+  canvas.width = Math.round(img.width * scale);
+  canvas.height = Math.round(img.height * scale);
+  const ctx = canvas.getContext("2d");
+  ctx.imageSmoothingQuality = "high";
+  ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+  return canvas.toDataURL("image/jpeg", quality);
+}
+async function resizeImageAdaptive(file) {
+  const {
+    img,
+    url
+  } = await loadImageFile(file);
+  try {
+    let out = "";
+    for (const [w, q] of PHOTO_STEPS) {
+      out = drawScaled(img, w, q);
+      if (out.length <= PHOTO_MAX_CHARS) break;
+    }
+    return out;
+  } finally {
+    URL.revokeObjectURL(url);
+  }
+}
+function makeThumb(dataUrl) {
+  return new Promise(resolve => {
+    const img = new Image();
+    img.onload = () => resolve(drawScaled(img, 520, 0.72));
+    img.onerror = () => resolve(null);
+    img.src = dataUrl;
+  });
+}
 function resizeImageToDataUrl(file, maxW = 900, quality = 0.68) {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
@@ -1946,7 +2000,8 @@ function PhotoPicker({
 const MAX_NOTE_PHOTOS = 10;
 function MultiPhotoPicker({
   value,
-  onChange
+  onChange,
+  max = MAX_NOTE_PHOTOS
 }) {
   const [busy, setBusy] = useState(false);
   const [failed, setFailed] = useState(0);
@@ -1956,12 +2011,12 @@ function MultiPhotoPicker({
     if (!files.length) return;
     setBusy(true);
     setFailed(0);
-    const room = MAX_NOTE_PHOTOS - value.length;
+    const room = max - value.length;
     const added = [];
     let bad = 0;
     for (const file of files.slice(0, Math.max(room, 0))) {
       try {
-        added.push(await resizeImageToDataUrl(file));
+        added.push(await resizeImageAdaptive(file));
       } catch {
         bad++;
       }
@@ -2067,7 +2122,7 @@ function MultiPhotoPicker({
     style: {
       animation: "pp-spin 0.9s linear infinite"
     }
-  }), " Processing…") : value.length >= MAX_NOTE_PHOTOS ? /*#__PURE__*/React.createElement("div", {
+  }), " Processing…") : value.length >= max ? /*#__PURE__*/React.createElement("div", {
     style: {
       fontSize: 12.5,
       color: "var(--muted)"
@@ -2126,7 +2181,7 @@ function MultiPhotoPicker({
       color: "#8A3434",
       marginTop: 6
     }
-  }, failed, " photo", failed > 1 ? "s" : "", " couldn't be added (unreadable, or over the ", MAX_NOTE_PHOTOS, "-photo limit)."));
+  }, failed, " photo", failed > 1 ? "s" : "", " couldn't be added (unreadable, or over the photo limit)."));
 }
 
 /* ---------------------------------------------------------------------- */
@@ -2142,6 +2197,7 @@ function NotesView({
   user,
   onAddNote,
   onDeleteNote,
+  onEditNote,
   lastNoteId,
   setLastNoteId,
   savedNoteIds,
@@ -2152,6 +2208,7 @@ function NotesView({
   const [subject, setSubject] = useState("");
   const [grade, setGrade] = useState("");
   const [openId, setOpenId] = useState(null);
+  const [editId, setEditId] = useState(null);
   const canUpload = hasElevatedAccess(user);
   const filtered = useMemo(() => {
     let list = notes;
@@ -2255,6 +2312,21 @@ function NotesView({
       },
       onClick: e => {
         e.stopPropagation();
+        setEditId(n.id);
+      },
+      "aria-label": "Edit",
+      title: "Edit"
+    }, /*#__PURE__*/React.createElement(Pencil, {
+      size: 14
+    })), canUpload && /*#__PURE__*/React.createElement("button", {
+      className: "pp-btn pp-btn-ghost",
+      style: {
+        padding: 5,
+        borderRadius: 999,
+        flexShrink: 0
+      },
+      onClick: e => {
+        e.stopPropagation();
         if (window.confirm(`Delete "${n.title}"? You can undo for a few seconds afterwards.`)) onDeleteNote(n);
       },
       "aria-label": "Delete note",
@@ -2286,13 +2358,17 @@ function NotesView({
         fontWeight: 600,
         marginTop: 8
       }
-    }, n.title), n.type === "image" ? /*#__PURE__*/React.createElement("div", {
+    }, n.title), /*#__PURE__*/React.createElement(Desc, {
+      text: n.description
+    }), n.type === "image" ? /*#__PURE__*/React.createElement("div", {
       style: {
         position: "relative",
         marginTop: 8
       }
     }, /*#__PURE__*/React.createElement(NoteImage, {
-      note: {
+      note: n.thumb ? {
+        content: n.thumb
+      } : {
         ...n,
         fileId: noteFileIds(n)[0]
       },
@@ -2346,7 +2422,19 @@ function NotesView({
       note: n,
       saved: savedNoteIds.includes(n.id),
       onToggleSaved: () => onToggleSavedNote(n.id),
+      onEdit: canUpload ? () => {
+        setOpenId(null);
+        setEditId(n.id);
+      } : null,
       onClose: () => setOpenId(null)
+    });
+  })(), editId && notes.find(n => n.id === editId) && (() => {
+    const n = notes.find(x => x.id === editId);
+    return /*#__PURE__*/React.createElement(EditNoteModal, {
+      key: n.id,
+      note: n,
+      onClose: () => setEditId(null),
+      onSave: v => onEditNote(n, v)
     });
   })(), showForm && /*#__PURE__*/React.createElement(AddNoteModal, {
     onClose: () => setShowForm(false),
@@ -2367,6 +2455,7 @@ function AddNoteModal({
   const [text, setText] = useState("");
   const textRef = useRef(null);
   const [images, setImages] = useState([]);
+  const [description, setDescription] = useState("");
   const [busy, setBusy] = useState(false);
   const canSubmit = title.trim() && subject && grade && (type === "text" ? text.trim() : images.length > 0);
   return /*#__PURE__*/React.createElement(Modal, {
@@ -2394,7 +2483,10 @@ function AddNoteModal({
   }, /*#__PURE__*/React.createElement(GradeSelect, {
     value: grade,
     onChange: setGrade
-  }))), /*#__PURE__*/React.createElement(Field, {
+  }))), /*#__PURE__*/React.createElement(DescriptionField, {
+    value: description,
+    onChange: setDescription
+  }), /*#__PURE__*/React.createElement(Field, {
     label: "Format"
   }, /*#__PURE__*/React.createElement("div", {
     style: {
@@ -2471,6 +2563,7 @@ function AddNoteModal({
           title: title.trim(),
           subject,
           grade,
+          description: description.trim(),
           type,
           content: type === "text" ? text.trim() : images
         });
@@ -2490,6 +2583,7 @@ function VideosView({
   user,
   onAddVideo,
   onDeleteVideo,
+  onEditVideo,
   lastVideoId,
   setLastVideoId,
   savedVideoIds,
@@ -2499,6 +2593,7 @@ function VideosView({
   const [query, setQuery] = useState("");
   const [subject, setSubject] = useState("");
   const [grade, setGrade] = useState("");
+  const [editId, setEditId] = useState(null);
   const isAdmin = canLeadDepartment(user);
   const filtered = useMemo(() => {
     let list = videos;
@@ -2610,6 +2705,21 @@ function VideosView({
       },
       onClick: e => {
         e.stopPropagation();
+        setEditId(v.id);
+      },
+      "aria-label": "Edit",
+      title: "Edit"
+    }, /*#__PURE__*/React.createElement(Pencil, {
+      size: 14
+    })), isAdmin && /*#__PURE__*/React.createElement("button", {
+      className: "pp-btn pp-btn-ghost",
+      style: {
+        padding: 5,
+        borderRadius: 999,
+        flexShrink: 0
+      },
+      onClick: e => {
+        e.stopPropagation();
         if (window.confirm(`Delete "${v.title}"? You can undo for a few seconds afterwards.`)) onDeleteVideo(v);
       },
       "aria-label": "Delete video",
@@ -2641,14 +2751,26 @@ function VideosView({
         fontWeight: 600,
         marginTop: 8
       }
-    }, v.title), /*#__PURE__*/React.createElement("div", {
+    }, v.title), /*#__PURE__*/React.createElement(Desc, {
+      text: v.description,
+      lines: 3
+    }), /*#__PURE__*/React.createElement("div", {
       style: {
         fontSize: 11.5,
         color: "var(--muted)",
         marginTop: 6
       }
     }, "Added by ", roleLabel(v.addedByRole), " · ", timeAgo(v.createdAt))));
-  })), showForm && /*#__PURE__*/React.createElement(AddVideoModal, {
+  })), editId && videos.find(v => v.id === editId) && (() => {
+    const v = videos.find(x => x.id === editId);
+    return /*#__PURE__*/React.createElement(EditItemModal, {
+      key: v.id,
+      heading: "Edit video",
+      item: v,
+      onClose: () => setEditId(null),
+      onSave: patch => onEditVideo(v, patch)
+    });
+  })(), showForm && /*#__PURE__*/React.createElement(AddVideoModal, {
     onClose: () => setShowForm(false),
     onSubmit: async payload => {
       const ok = await onAddVideo(payload);
@@ -2664,6 +2786,7 @@ function AddVideoModal({
   const [subject, setSubject] = useState("");
   const [grade, setGrade] = useState("");
   const [url, setUrl] = useState("");
+  const [description, setDescription] = useState("");
   const videoId = extractYouTubeId(url);
   const canSubmit = title.trim() && subject && grade && videoId;
   return /*#__PURE__*/React.createElement(Modal, {
@@ -2691,7 +2814,10 @@ function AddVideoModal({
   }, /*#__PURE__*/React.createElement(GradeSelect, {
     value: grade,
     onChange: setGrade
-  }))), /*#__PURE__*/React.createElement(Field, {
+  }))), /*#__PURE__*/React.createElement(DescriptionField, {
+    value: description,
+    onChange: setDescription
+  }), /*#__PURE__*/React.createElement(Field, {
     label: "YouTube link"
   }, /*#__PURE__*/React.createElement("input", {
     className: "pp-input",
@@ -2741,9 +2867,329 @@ function AddVideoModal({
       title: title.trim(),
       subject,
       grade,
+      description: description.trim(),
       youtubeId: videoId
     })
   }, "Add video"));
+}
+function Desc({
+  text,
+  lines = 2,
+  style
+}) {
+  if (!text) return null;
+  return /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 12.5,
+      lineHeight: 1.45,
+      color: "var(--muted)",
+      marginTop: 5,
+      whiteSpace: "pre-wrap",
+      overflow: "hidden",
+      display: "-webkit-box",
+      WebkitLineClamp: lines,
+      WebkitBoxOrient: "vertical",
+      ...style
+    }
+  }, text);
+}
+function DescriptionField({
+  value,
+  onChange
+}) {
+  return /*#__PURE__*/React.createElement(Field, {
+    label: "Description (optional)"
+  }, /*#__PURE__*/React.createElement("textarea", {
+    className: "pp-input",
+    style: {
+      width: "100%",
+      padding: "9px 12px",
+      fontSize: 14,
+      minHeight: 64,
+      resize: "vertical",
+      fontFamily: "inherit"
+    },
+    value: value,
+    onChange: e => onChange(e.target.value),
+    maxLength: 600,
+    placeholder: "e.g. Made by Sara, Grade 10. Covers chapters 4–5."
+  }));
+}
+function EditItemModal({
+  heading,
+  item,
+  onClose,
+  onSave
+}) {
+  const [title, setTitle] = useState(item.title || "");
+  const [subject, setSubject] = useState(item.subject || "");
+  const [grade, setGrade] = useState(item.grade || "");
+  const [description, setDescription] = useState(item.description || "");
+  const [busy, setBusy] = useState(false);
+  const canSave = title.trim() && subject && grade && !busy;
+  return /*#__PURE__*/React.createElement(Modal, {
+    title: heading,
+    onClose: () => {
+      if (!busy) onClose();
+    }
+  }, /*#__PURE__*/React.createElement(Field, {
+    label: "Title"
+  }, /*#__PURE__*/React.createElement("input", {
+    className: "pp-input",
+    style: {
+      width: "100%",
+      padding: "9px 12px",
+      fontSize: 14.5
+    },
+    value: title,
+    onChange: e => setTitle(e.target.value)
+  })), /*#__PURE__*/React.createElement(TwoUp, null, /*#__PURE__*/React.createElement(Field, {
+    label: "Subject"
+  }, /*#__PURE__*/React.createElement(SubjectSelect, {
+    value: subject,
+    onChange: setSubject
+  })), /*#__PURE__*/React.createElement(Field, {
+    label: "Grade"
+  }, /*#__PURE__*/React.createElement(GradeSelect, {
+    value: grade,
+    onChange: setGrade
+  }))), /*#__PURE__*/React.createElement(DescriptionField, {
+    value: description,
+    onChange: setDescription
+  }), /*#__PURE__*/React.createElement("button", {
+    className: "pp-btn pp-btn-primary",
+    style: {
+      width: "100%",
+      padding: "10px 0",
+      opacity: canSave ? 1 : 0.5
+    },
+    disabled: !canSave,
+    onClick: async () => {
+      setBusy(true);
+      try {
+        const ok = await onSave({
+          title: title.trim(),
+          subject,
+          grade,
+          description: description.trim()
+        });
+        if (ok) onClose();
+      } finally {
+        setBusy(false);
+      }
+    }
+  }, busy ? "Saving…" : "Save changes"));
+}
+function ExistingPhoto({
+  id,
+  inline
+}) {
+  const [src] = useFileData(inline, id, true);
+  return src ? /*#__PURE__*/React.createElement("img", {
+    src: src,
+    alt: "",
+    style: {
+      height: 96,
+      borderRadius: 8,
+      border: "1px solid var(--border)",
+      display: "block"
+    }
+  }) : /*#__PURE__*/React.createElement("div", {
+    style: {
+      height: 96,
+      width: 72,
+      borderRadius: 8,
+      border: "1px solid var(--border)",
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      fontSize: 11,
+      color: "var(--muted)"
+    }
+  }, "Loading…");
+}
+function EditNoteModal({
+  note,
+  onClose,
+  onSave
+}) {
+  const [title, setTitle] = useState(note.title || "");
+  const [subject, setSubject] = useState(note.subject || "");
+  const [grade, setGrade] = useState(note.grade || "");
+  const [description, setDescription] = useState(note.description || "");
+  const [text, setText] = useState(note.type === "text" ? note.content || "" : "");
+  const textRef = useRef(null);
+  const [existing, setExisting] = useState(() => note.type !== "image" ? [] : noteFileIds(note).length ? noteFileIds(note).map(id => ({
+    id
+  })) : note.content ? [{
+    inline: note.content
+  }] : []);
+  const [added, setAdded] = useState([]);
+  const [busy, setBusy] = useState(false);
+  const photoCount = existing.length + added.length;
+  const canSave = title.trim() && subject && grade && !busy && (note.type === "text" ? text.trim() : photoCount > 0);
+  const move = (i, d) => {
+    const j = i + d;
+    if (j < 0 || j >= existing.length) return;
+    const next = [...existing];
+    [next[i], next[j]] = [next[j], next[i]];
+    setExisting(next);
+  };
+  return /*#__PURE__*/React.createElement(Modal, {
+    title: "Edit note",
+    onClose: () => {
+      if (!busy) onClose();
+    }
+  }, /*#__PURE__*/React.createElement(Field, {
+    label: "Title"
+  }, /*#__PURE__*/React.createElement("input", {
+    className: "pp-input",
+    style: {
+      width: "100%",
+      padding: "9px 12px",
+      fontSize: 14.5
+    },
+    value: title,
+    onChange: e => setTitle(e.target.value)
+  })), /*#__PURE__*/React.createElement(TwoUp, null, /*#__PURE__*/React.createElement(Field, {
+    label: "Subject"
+  }, /*#__PURE__*/React.createElement(SubjectSelect, {
+    value: subject,
+    onChange: setSubject
+  })), /*#__PURE__*/React.createElement(Field, {
+    label: "Grade"
+  }, /*#__PURE__*/React.createElement(GradeSelect, {
+    value: grade,
+    onChange: setGrade
+  }))), /*#__PURE__*/React.createElement(DescriptionField, {
+    value: description,
+    onChange: setDescription
+  }), note.type === "text" ? /*#__PURE__*/React.createElement(Field, {
+    label: "Notes"
+  }, /*#__PURE__*/React.createElement(MathToolbar, {
+    textareaRef: textRef,
+    value: text,
+    setValue: setText
+  }), /*#__PURE__*/React.createElement("textarea", {
+    ref: textRef,
+    className: "pp-input",
+    style: {
+      width: "100%",
+      padding: "9px 12px",
+      fontSize: 14,
+      minHeight: 110,
+      resize: "vertical",
+      fontFamily: "inherit"
+    },
+    value: text,
+    onChange: e => setText(e.target.value)
+  })) : /*#__PURE__*/React.createElement(Field, {
+    label: `Photos (${photoCount} of ${MAX_NOTE_PHOTOS})`
+  }, existing.length > 0 && /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      gap: 10,
+      flexWrap: "wrap",
+      marginBottom: 10
+    }
+  }, existing.map((x, i) => /*#__PURE__*/React.createElement("div", {
+    key: x.id || "inline",
+    style: {
+      position: "relative"
+    }
+  }, /*#__PURE__*/React.createElement(ExistingPhoto, {
+    id: x.id,
+    inline: x.inline
+  }), /*#__PURE__*/React.createElement("div", {
+    style: {
+      position: "absolute",
+      left: 4,
+      bottom: 4,
+      display: "flex",
+      gap: 3,
+      alignItems: "center"
+    }
+  }, /*#__PURE__*/React.createElement("span", {
+    style: {
+      fontSize: 11,
+      fontWeight: 700,
+      background: "var(--bg)",
+      borderRadius: 999,
+      padding: "1px 7px"
+    }
+  }, i + 1), i > 0 && /*#__PURE__*/React.createElement("button", {
+    type: "button",
+    className: "pp-btn pp-btn-ghost",
+    style: {
+      padding: "0 6px",
+      fontSize: 12,
+      background: "var(--bg)",
+      borderRadius: 999
+    },
+    onClick: () => move(i, -1),
+    "aria-label": "Move earlier"
+  }, "←"), i < existing.length - 1 && /*#__PURE__*/React.createElement("button", {
+    type: "button",
+    className: "pp-btn pp-btn-ghost",
+    style: {
+      padding: "0 6px",
+      fontSize: 12,
+      background: "var(--bg)",
+      borderRadius: 999
+    },
+    onClick: () => move(i, 1),
+    "aria-label": "Move later"
+  }, "→")), /*#__PURE__*/React.createElement("button", {
+    type: "button",
+    className: "pp-btn pp-btn-ghost",
+    style: {
+      position: "absolute",
+      top: 4,
+      right: 4,
+      padding: 4,
+      borderRadius: 999,
+      background: "var(--bg)"
+    },
+    onClick: () => setExisting(existing.filter((_, k) => k !== i)),
+    "aria-label": `Remove photo ${i + 1}`
+  }, /*#__PURE__*/React.createElement(X, {
+    size: 13
+  }))))), /*#__PURE__*/React.createElement(MultiPhotoPicker, {
+    value: added,
+    onChange: setAdded,
+    max: MAX_NOTE_PHOTOS - existing.length
+  }), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 11.5,
+      color: "var(--muted)",
+      marginTop: 6
+    }
+  }, "New photos are added after the existing ones.")), /*#__PURE__*/React.createElement("button", {
+    className: "pp-btn pp-btn-primary",
+    style: {
+      width: "100%",
+      padding: "10px 0",
+      opacity: canSave ? 1 : 0.5
+    },
+    disabled: !canSave,
+    onClick: async () => {
+      setBusy(true);
+      try {
+        const ok = await onSave({
+          title: title.trim(),
+          subject,
+          grade,
+          description: description.trim(),
+          text: text.trim(),
+          existing,
+          added
+        });
+        if (ok) onClose();
+      } finally {
+        setBusy(false);
+      }
+    }
+  }, busy ? "Saving… please keep this open" : "Save changes"));
 }
 function noteFileIds(n) {
   return n.fileIds && n.fileIds.length ? n.fileIds : n.fileId ? [n.fileId] : [];
@@ -2776,6 +3222,7 @@ function NoteViewer({
   note,
   saved,
   onToggleSaved,
+  onEdit,
   onClose
 }) {
   useEffect(() => {
@@ -2833,7 +3280,20 @@ function NoteViewer({
     text: note.subject
   }), /*#__PURE__*/React.createElement(GradeTag, {
     text: note.grade
-  }))), /*#__PURE__*/React.createElement("button", {
+  }))), onEdit && /*#__PURE__*/React.createElement("button", {
+    className: "pp-btn pp-btn-ghost",
+    style: {
+      padding: "7px 12px",
+      fontSize: 13,
+      display: "flex",
+      alignItems: "center",
+      gap: 6,
+      flexShrink: 0
+    },
+    onClick: onEdit
+  }, /*#__PURE__*/React.createElement(Pencil, {
+    size: 14
+  }), " Edit"), /*#__PURE__*/React.createElement("button", {
     className: "pp-btn pp-btn-ghost",
     style: {
       padding: "7px 12px",
@@ -2871,10 +3331,18 @@ function NoteViewer({
     }
   }, /*#__PURE__*/React.createElement("div", {
     style: {
-      maxWidth: 900,
+      maxWidth: 1100,
       margin: "0 auto"
     }
-  }, note.type === "image" ? /*#__PURE__*/React.createElement(NoteImages, {
+  }, note.description && /*#__PURE__*/React.createElement("p", {
+    style: {
+      fontSize: 14,
+      lineHeight: 1.55,
+      color: "var(--muted)",
+      whiteSpace: "pre-wrap",
+      margin: "0 0 14px"
+    }
+  }, note.description), note.type === "image" ? /*#__PURE__*/React.createElement(NoteImages, {
     note: note,
     noZoom: true,
     style: {
@@ -3017,6 +3485,7 @@ function FilesView({
   user,
   onAddFile,
   onDeleteFile,
+  onEditFile,
   onDownloadFile,
   lastFileId,
   setLastFileId,
@@ -3028,6 +3497,7 @@ function FilesView({
   const [subject, setSubject] = useState("");
   const [grade, setGrade] = useState("");
   const [openId, setOpenId] = useState(null);
+  const [editId, setEditId] = useState(null);
   const canUpload = hasElevatedAccess(user);
   const filtered = useMemo(() => {
     let list = files;
@@ -3147,6 +3617,21 @@ function FilesView({
       },
       onClick: e => {
         e.stopPropagation();
+        setEditId(f.id);
+      },
+      "aria-label": "Edit",
+      title: "Edit"
+    }, /*#__PURE__*/React.createElement(Pencil, {
+      size: 14
+    })), canUpload && /*#__PURE__*/React.createElement("button", {
+      className: "pp-btn pp-btn-ghost",
+      style: {
+        padding: 5,
+        borderRadius: 999,
+        flexShrink: 0
+      },
+      onClick: e => {
+        e.stopPropagation();
         if (window.confirm(`Delete "${f.title}"? You can undo for a few seconds afterwards.`)) onDeleteFile(f);
       },
       "aria-label": "Delete file",
@@ -3179,7 +3664,9 @@ function FilesView({
         marginTop: 8,
         wordBreak: "break-word"
       }
-    }, f.title), /*#__PURE__*/React.createElement("div", {
+    }, f.title), /*#__PURE__*/React.createElement(Desc, {
+      text: f.description
+    }), /*#__PURE__*/React.createElement("div", {
       style: {
         display: "flex",
         alignItems: "center",
@@ -3234,6 +3721,15 @@ function FilesView({
       onClose: () => setOpenId(null),
       onDownload: onDownloadFile
     });
+  })(), editId && files.find(f => f.id === editId) && (() => {
+    const f = files.find(x => x.id === editId);
+    return /*#__PURE__*/React.createElement(EditItemModal, {
+      key: f.id,
+      heading: "Edit file",
+      item: f,
+      onClose: () => setEditId(null),
+      onSave: patch => onEditFile(f, patch)
+    });
   })(), showForm && /*#__PURE__*/React.createElement(AddFileModal, {
     onClose: () => setShowForm(false),
     onSubmit: async (payload, onProgress) => {
@@ -3250,6 +3746,7 @@ function AddFileModal({
   const [subject, setSubject] = useState("");
   const [grade, setGrade] = useState("");
   const [file, setFile] = useState(null);
+  const [description, setDescription] = useState("");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const [progress, setProgress] = useState(0);
@@ -3288,7 +3785,10 @@ function AddFileModal({
   }, /*#__PURE__*/React.createElement(GradeSelect, {
     value: grade,
     onChange: setGrade
-  }))), /*#__PURE__*/React.createElement(Field, {
+  }))), /*#__PURE__*/React.createElement(DescriptionField, {
+    value: description,
+    onChange: setDescription
+  }), /*#__PURE__*/React.createElement(Field, {
     label: "File (any type, up to 25 MB)"
   }, /*#__PURE__*/React.createElement("div", {
     className: "pp-file-slot"
@@ -3364,6 +3864,7 @@ function AddFileModal({
           title: title.trim(),
           subject,
           grade,
+          description: description.trim(),
           file
         }, setProgress);
       } finally {
@@ -3529,7 +4030,15 @@ function FileViewer({
       display: "flex",
       flexDirection: "column"
     }
-  }, state.loading ? /*#__PURE__*/React.createElement(Loading, {
+  }, file.description && /*#__PURE__*/React.createElement("p", {
+    style: {
+      fontSize: 14,
+      lineHeight: 1.55,
+      color: "var(--muted)",
+      whiteSpace: "pre-wrap",
+      margin: "0 0 14px"
+    }
+  }, file.description), state.loading ? /*#__PURE__*/React.createElement(Loading, {
     label: "Loading file…"
   }) : state.failed ? /*#__PURE__*/React.createElement(EmptyState, {
     icon: FileText,
@@ -7665,18 +8174,85 @@ function MainApp({
         ...payload
       };
       if (payload.type === "image") {
-        const fileIds = await Promise.all(payload.content.map(d => saveFile(d)));
+        const [fileIds, thumb] = await Promise.all([Promise.all(payload.content.map(d => saveFile(d))), makeThumb(payload.content[0])]);
         doc = {
           ...payload,
           fileId: fileIds[0],
           fileIds
         };
         delete doc.content;
+        if (thumb) doc.thumb = thumb;
       }
       await db.collection("notes").add({
         ...doc,
         authorRole: user.role,
         createdAt: Date.now()
+      });
+      return true;
+    } catch (e) {
+      notify({
+        kind: "error",
+        text: friendlyDbError(e)
+      });
+      return false;
+    }
+  }
+  async function updateItem(coll, id, patch) {
+    try {
+      await db.collection(coll).doc(id).update(patch);
+      notify({
+        kind: "ok",
+        text: "Changes saved."
+      });
+      return true;
+    } catch (e) {
+      notify({
+        kind: "error",
+        text: friendlyDbError(e)
+      });
+      return false;
+    }
+  }
+  async function editNote(note, v) {
+    try {
+      const patch = {
+        title: v.title,
+        subject: v.subject,
+        grade: v.grade,
+        description: v.description
+      };
+      let removedIds = [];
+      if (note.type === "text") patch.content = v.text;else {
+        const keptIds = [];
+        for (const x of v.existing) keptIds.push(x.id || (await saveFile(x.inline)));
+        const newIds = await Promise.all(v.added.map(d => saveFile(d)));
+        const finalIds = [...keptIds, ...newIds];
+        if (!finalIds.length) {
+          notify({
+            kind: "error",
+            text: "A photo note needs at least one photo."
+          });
+          return false;
+        }
+        patch.fileIds = finalIds;
+        patch.fileId = finalIds[0];
+        if (note.content) patch.content = firebase.firestore.FieldValue.delete();
+        const oldIds = noteFileIds(note);
+        removedIds = oldIds.filter(id => !finalIds.includes(id));
+        if (finalIds[0] !== oldIds[0] || !note.thumb) {
+          const firstSrc = v.existing[0] && v.existing[0].inline || fileCache.get(finalIds[0]) || (!v.existing.length ? v.added[0] : null);
+          const thumb = firstSrc ? await makeThumb(firstSrc) : null;
+          if (thumb) patch.thumb = thumb;
+        }
+      }
+      await db.collection("notes").doc(note.id).update(patch);
+      removedIds.forEach(id => {
+        fileCache.delete(id);
+        db.collection("files").doc(id).delete().catch(() => {});
+      });
+      notify({
+        kind: "ok",
+        text: "Changes saved."
       });
       return true;
     } catch (e) {
@@ -7749,6 +8325,7 @@ function MainApp({
         title: payload.title,
         subject: payload.subject,
         grade: payload.grade,
+        description: payload.description || "",
         fileName: file.name,
         mimeType: guessMimeType(file),
         size: file.size,
@@ -8068,6 +8645,7 @@ function MainApp({
     user: user,
     onAddNote: addNote,
     onDeleteNote: deleteNote,
+    onEditNote: editNote,
     lastNoteId: lastNoteId,
     setLastNoteId: setLastNoteId,
     savedNoteIds: savedNoteIds,
@@ -8077,6 +8655,7 @@ function MainApp({
     user: user,
     onAddVideo: addVideo,
     onDeleteVideo: deleteVideo,
+    onEditVideo: (v, patch) => updateItem("videos", v.id, patch),
     lastVideoId: lastVideoId,
     setLastVideoId: setLastVideoId,
     savedVideoIds: savedVideoIds,
@@ -8086,6 +8665,7 @@ function MainApp({
     user: user,
     onAddFile: addLibraryFile,
     onDeleteFile: deleteLibraryFile,
+    onEditFile: (f, patch) => updateItem("libraryFiles", f.id, patch),
     onDownloadFile: downloadLibraryFile,
     lastFileId: lastFileId,
     setLastFileId: setLastFileId,

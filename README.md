@@ -174,3 +174,5 @@ your behalf.
 - Notes can now have up to 10 photos (reorderable); older single-photo notes still work.
 - Added the Islamic subject; tapping a note picture opens it full-screen in the site (no download prompt).
 - Notes open full-screen when tapped (saving only via the Save button); cards show a small cover with a page count; publishing uploads photos in parallel.
+- Notes, videos and files can have a description (for example who made them) and can be edited after posting (title, subject, grade, description; notes also text and photos).
+- Note photos are kept sharp (up to 2000px wide, stepping down only if too big for one Firestore document); cards use a small stored cover image.
