@@ -460,8 +460,8 @@ function GlobalStyle() {
         --bg-light: #F4F1DE; --surface-light: #EBE6CE; --accent-light: #415A77; --field-light: #FAF8EC;
         --text-light: #0D1B2A; --muted-light: #5B6B7C; --border-light: #D4C4A8;
         --sage-light: #778D7A; --sage-ink-light: #4F6B54; --accent-fg-light: #F4F1DE; --accent-ink-light: #415A77;
-        --bg-dark: #17181B; --surface-dark: #1B263B; --accent-dark: #4F6D8F; --field-dark: #0D1B2A;
-        --text-dark: #F4F1DE; --muted-dark: #9AA8B8; --border-dark: #2C3E57;
+        --bg-dark: #17181B; --surface-dark: #212327; --accent-dark: #4F6D8F; --field-dark: #0D1B2A;
+        --text-dark: #F4F1DE; --muted-dark: #9AA8B8; --border-dark: #32353B;
         --sage-dark: #8FAA93; --sage-ink-dark: #A3BFA7; --accent-fg-dark: #F4F1DE; --accent-ink-dark: #8FA9C6;
       }
       .pp-root[data-theme='light'] {
