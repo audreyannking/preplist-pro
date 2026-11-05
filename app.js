@@ -7286,36 +7286,69 @@ function StudyTimerCard() {
     }
   }))));
 }
-const DEFAULT_FINAL_WEIGHT = 50;
+const DEFAULT_GRADE_SETUP = {
+  final: 50,
+  ca: 30,
+  nCA: 2,
+  nP: 4
+};
+const MARK_TYPES = [{
+  id: "periodic",
+  label: "Periodic"
+}, {
+  id: "ca",
+  label: "CA"
+}];
 
-// Term grade = (100 - f)% term exams + f% final. You enter your term average so far (and how many marks it
-// covers); every mark you add later is averaged in, then we work out what the final must be to hit the target.
-function planResult(plan, finalPct) {
-  const wf = finalPct / 100;
-  const count = Math.max(1, Number(plan.count) || 1);
-  const marks = plan.marks || [];
-  const sum = Number(plan.avg) * count + marks.reduce((a, m) => a + m.score / m.max * 100, 0);
-  const term = sum / (count + marks.length);
-  const best = (1 - wf) * term + wf * 100;
-  const worst = (1 - wf) * term;
-  const need = wf > 0 ? (Number(plan.target) - (1 - wf) * term) / wf : null;
+// Term grade = final (default 50%) + term exams (50%). Term exams = CAs (30%) + periodics (70%).
+// One mark's worth = its category's share of the grade divided by how many of that category the term has
+// (e.g. 4 periodics share 35%, so each is worth 8.75% of the whole grade).
+// Marks you haven't entered yet are assumed to match the term average you started with.
+function gradeSetup(s) {
+  const n = (v, d, lo, hi) => {
+    const x = Number(v);
+    return Number.isFinite(x) ? Math.min(hi, Math.max(lo, x)) : d;
+  };
+  const final = n(s && s.final, 50, 0, 100),
+    ca = n(s && s.ca, 30, 0, 100);
   return {
-    term,
-    best,
-    worst,
-    need,
-    wf
+    final,
+    ca,
+    nCA: Math.round(n(s && s.nCA, 2, 1, 20)),
+    nP: Math.round(n(s && s.nP, 4, 1, 20))
+  };
+}
+function markWorth(type, s) {
+  const termW = 100 - s.final;
+  return type === "ca" ? termW * s.ca / 100 / s.nCA : termW * (100 - s.ca) / 100 / s.nP;
+}
+function planResult(plan, s) {
+  const termW = 100 - s.final;
+  const X = Number(plan.avg);
+  const marks = (plan.marks || []).map(m => ({
+    ...m,
+    pct: m.score / m.max * 100,
+    worth: markWorth(m.type, s)
+  }));
+  const delta = marks.reduce((a, m) => a + m.worth * (m.pct - X) / 100, 0);
+  const termPoints = termW * X / 100 + delta;
+  const finalW = s.final / 100;
+  return {
+    marks,
+    term: termW > 0 ? termPoints / termW * 100 : X,
+    best: termPoints + s.final,
+    worst: termPoints,
+    need: finalW > 0 ? (Number(plan.target) - termPoints) / finalW : null
   };
 }
 function GradeTrackerCard() {
   const [plans, setPlans] = useLocalState("preplist:gradePlans", []);
-  const [finalPct, setFinalPct] = useLocalState("preplist:finalWeight", DEFAULT_FINAL_WEIGHT);
+  const [setupRaw, setSetupRaw] = useLocalState("preplist:gradeSetup", DEFAULT_GRADE_SETUP);
   const [subject, setSubject] = useState("");
   const [target, setTarget] = useState("90");
   const [avg, setAvg] = useState("");
-  const [count, setCount] = useState("3");
-  const fw = Math.min(100, Math.max(0, Number(finalPct) || 0));
-  const fmt = n => (Math.round(n * 10) / 10).toString();
+  const s = gradeSetup(setupRaw);
+  const fmt = n => (Math.round(n * 100) / 100).toString();
   const canAdd = subject.trim() && avg !== "" && Number(avg) >= 0 && Number(avg) <= 100 && target !== "" && Number(target) > 0;
   function addPlan() {
     if (!canAdd) return;
@@ -7324,13 +7357,20 @@ function GradeTrackerCard() {
       subject: subject.trim(),
       target: Number(target),
       avg: Number(avg),
-      count: Math.max(1, Number(count) || 1),
       marks: []
     }]);
     setSubject("");
     setAvg("");
   }
-  const patchPlan = (id, fn) => setPlans(prev => prev.map(p => p.id === id ? fn(p) : p));
+  const setField = key => e => setSetupRaw({
+    ...setupRaw,
+    [key]: e.target.value === "" ? "" : Number(e.target.value)
+  });
+  const numBox = {
+    width: 62,
+    padding: "6px 8px",
+    fontSize: 13
+  };
   return /*#__PURE__*/React.createElement("div", {
     className: "pp-card",
     style: {
@@ -7352,7 +7392,7 @@ function GradeTrackerCard() {
       marginBottom: 6,
       lineHeight: 1.5
     }
-  }, "Put in the grade you're aiming for and your term average so far, then add each mark as you get it back. It works out what you'd need on the final, and whether your target is still possible. Your term grade is ", /*#__PURE__*/React.createElement("b", null, fmt(100 - fw), "% term exams"), " + ", /*#__PURE__*/React.createElement("b", null, fmt(fw), "% final"), ". This is your own estimate, not an official grade."), /*#__PURE__*/React.createElement("details", {
+  }, "Put in your target and your term average right now, then add each mark as it comes back. Every mark only counts for its share: the final is ", /*#__PURE__*/React.createElement("b", null, fmt(s.final), "%"), ", CAs ", /*#__PURE__*/React.createElement("b", null, fmt(markWorth("ca", s) * s.nCA), "%"), " (so ", /*#__PURE__*/React.createElement("b", null, fmt(markWorth("ca", s)), "%"), " each), periodics ", /*#__PURE__*/React.createElement("b", null, fmt(markWorth("periodic", s) * s.nP), "%"), " (", /*#__PURE__*/React.createElement("b", null, fmt(markWorth("periodic", s)), "%"), " each). This is your own estimate, not an official grade."), /*#__PURE__*/React.createElement("details", {
     style: {
       marginBottom: 10
     }
@@ -7362,35 +7402,61 @@ function GradeTrackerCard() {
       cursor: "pointer",
       color: "var(--muted)"
     }
-  }, "Change the final's weight"), /*#__PURE__*/React.createElement("div", {
+  }, "Change the weights and how many marks there are"), /*#__PURE__*/React.createElement("div", {
     style: {
       display: "flex",
-      gap: 10,
+      gap: 12,
       flexWrap: "wrap",
       marginTop: 6,
       fontSize: 13,
       alignItems: "center"
     }
-  }, /*#__PURE__*/React.createElement("label", null, "Final counts for % of term grade ", /*#__PURE__*/React.createElement("input", {
+  }, /*#__PURE__*/React.createElement("label", null, "Final % ", /*#__PURE__*/React.createElement("input", {
     className: "pp-input",
     type: "number",
     min: "0",
     max: "100",
-    value: finalPct,
-    onChange: e => setFinalPct(e.target.value === "" ? "" : Math.min(100, Math.max(0, Number(e.target.value)))),
-    style: {
-      width: 65,
-      padding: "6px 8px",
-      fontSize: 13
-    }
+    value: setupRaw.final,
+    onChange: setField("final"),
+    style: numBox
+  })), /*#__PURE__*/React.createElement("label", null, "CAs % of term exams ", /*#__PURE__*/React.createElement("input", {
+    className: "pp-input",
+    type: "number",
+    min: "0",
+    max: "100",
+    value: setupRaw.ca,
+    onChange: setField("ca"),
+    style: numBox
+  })), /*#__PURE__*/React.createElement("label", null, "CAs in the term ", /*#__PURE__*/React.createElement("input", {
+    className: "pp-input",
+    type: "number",
+    min: "1",
+    max: "20",
+    value: setupRaw.nCA,
+    onChange: setField("nCA"),
+    style: numBox
+  })), /*#__PURE__*/React.createElement("label", null, "Periodics in the term ", /*#__PURE__*/React.createElement("input", {
+    className: "pp-input",
+    type: "number",
+    min: "1",
+    max: "20",
+    value: setupRaw.nP,
+    onChange: setField("nP"),
+    style: numBox
   })), /*#__PURE__*/React.createElement("button", {
     className: "pp-btn pp-btn-ghost",
     style: {
       padding: "5px 10px",
       fontSize: 12.5
     },
-    onClick: () => setFinalPct(DEFAULT_FINAL_WEIGHT)
-  }, "Reset to 50"))), /*#__PURE__*/React.createElement("div", {
+    onClick: () => setSetupRaw(DEFAULT_GRADE_SETUP)
+  }, "Reset")), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 12,
+      color: "var(--muted)",
+      marginTop: 6
+    }
+  }, "Set these to match your school: if you have 5 periodics a term, put 5 so each one is worth less.")), /*#__PURE__*/React.createElement("div", {
     style: {
       display: "flex",
       gap: 8,
@@ -7416,9 +7482,9 @@ function GradeTrackerCard() {
     onChange: e => setSubject(e.target.value)
   })), /*#__PURE__*/React.createElement("datalist", {
     id: "pp-grade-subjects"
-  }, PAPER_SUBJECTS.map(s => /*#__PURE__*/React.createElement("option", {
-    key: s,
-    value: s
+  }, PAPER_SUBJECTS.map(x => /*#__PURE__*/React.createElement("option", {
+    key: x,
+    value: x
   }))), /*#__PURE__*/React.createElement("label", {
     style: {
       fontSize: 11.5,
@@ -7450,23 +7516,6 @@ function GradeTrackerCard() {
     placeholder: "e.g. 78",
     value: avg,
     onChange: e => setAvg(e.target.value)
-  })), /*#__PURE__*/React.createElement("label", {
-    style: {
-      fontSize: 11.5,
-      color: "var(--muted)"
-    },
-    title: "How many marks that average is made from"
-  }, "From how many marks?", /*#__PURE__*/React.createElement("br", null), /*#__PURE__*/React.createElement("input", {
-    className: "pp-input",
-    type: "number",
-    min: "1",
-    style: {
-      width: 80,
-      padding: "8px 10px",
-      fontSize: 14
-    },
-    value: count,
-    onChange: e => setCount(e.target.value)
   })), /*#__PURE__*/React.createElement("button", {
     className: "pp-btn pp-btn-primary",
     style: {
@@ -7483,23 +7532,24 @@ function GradeTrackerCard() {
   }, "No subjects yet. Add one above.") : plans.map(pl => /*#__PURE__*/React.createElement(PlanCard, {
     key: pl.id,
     plan: pl,
-    finalPct: fw,
+    setup: s,
     fmt: fmt,
-    onPatch: fn => patchPlan(pl.id, fn),
+    onPatch: fn => setPlans(prev => prev.map(p => p.id === pl.id ? fn(p) : p)),
     onRemove: () => setPlans(prev => prev.filter(p => p.id !== pl.id))
   })));
 }
 function PlanCard({
   plan,
-  finalPct,
+  setup,
   fmt,
   onPatch,
   onRemove
 }) {
   const [name, setName] = useState("");
+  const [type, setType] = useState("periodic");
   const [score, setScore] = useState("");
   const [max, setMax] = useState("100");
-  const r = planResult(plan, finalPct);
+  const r = planResult(plan, setup);
   const canAdd = name.trim() && score !== "" && Number(max) > 0;
   function addMark() {
     if (!canAdd) return;
@@ -7508,6 +7558,7 @@ function PlanCard({
       marks: [...(p.marks || []), {
         id: uid(),
         name: name.trim(),
+        type,
         score: Number(score),
         max: Number(max)
       }]
@@ -7515,6 +7566,7 @@ function PlanCard({
     setName("");
     setScore("");
   }
+  const r1 = n => Math.round(n * 10) / 10;
   let verdict, tone;
   if (r.need === null) {
     verdict = r.term >= plan.target ? "Your term average is already at your target." : "With no final, your target isn't reachable.";
@@ -7523,7 +7575,7 @@ function PlanCard({
     verdict = `You've already secured ${plan.target}%. Even a 0% final would keep you there.`;
     tone = "ok";
   } else if (r.need > 100) {
-    verdict = `Out of reach. Even a perfect final gives you about ${fmt(r.best)}%.`;
+    verdict = `Out of reach. Even a perfect final gives you about ${r1(r.best)}%.`;
     tone = "bad";
   } else if (r.need >= 90) {
     verdict = `Possible, but tough: you'd need about ${Math.ceil(r.need)}% on the final.`;
@@ -7533,6 +7585,8 @@ function PlanCard({
     tone = "ok";
   }
   const color = tone === "ok" ? "#2F6B3F" : tone === "warn" ? "#8A6A12" : "#8A3434";
+  const count = ty => r.marks.filter(m => m.type === ty).length;
+  const tooMany = count("periodic") > setup.nP ? "periodics" : count("ca") > setup.nCA ? "CAs" : null;
   return /*#__PURE__*/React.createElement("div", {
     style: {
       borderTop: "1px solid var(--border)",
@@ -7554,13 +7608,13 @@ function PlanCard({
       fontSize: 12.5,
       color: "var(--muted)"
     }
-  }, "Target ", plan.target, "% · term average now"), /*#__PURE__*/React.createElement("span", {
+  }, "Target ", plan.target, "% · started at ", plan.avg, "% · term average now"), /*#__PURE__*/React.createElement("span", {
     className: "pp-serif",
     style: {
       fontSize: 20,
       fontWeight: 700
     }
-  }, fmt(r.term), "%"), /*#__PURE__*/React.createElement("button", {
+  }, r1(r.term), "%"), /*#__PURE__*/React.createElement("button", {
     className: "pp-btn pp-btn-ghost",
     style: {
       padding: 4,
@@ -7586,50 +7640,77 @@ function PlanCard({
       color: "var(--muted)",
       marginBottom: 6
     }
-  }, "Best case with a 100% final: ", fmt(r.best), "% · worst case with a 0% final: ", fmt(r.worst), "%."), /*#__PURE__*/React.createElement("div", {
+  }, "Best case with a 100% final: ", r1(r.best), "% · worst case with a 0% final: ", r1(r.worst), "%."), tooMany && /*#__PURE__*/React.createElement("div", {
     style: {
       fontSize: 12,
-      color: "var(--muted)",
-      marginBottom: 4
+      color: "#8A6A12",
+      marginBottom: 6
     }
-  }, "Started at ", plan.avg, "% from ", plan.count, " mark", plan.count === 1 ? "" : "s", ". Marks you add are averaged in."), (plan.marks || []).map(m => /*#__PURE__*/React.createElement("div", {
-    key: m.id,
-    style: {
-      display: "flex",
-      alignItems: "center",
-      gap: 8,
-      fontSize: 12.5,
-      padding: "2px 0"
-    }
-  }, /*#__PURE__*/React.createElement("span", {
-    style: {
-      flex: 1
-    }
-  }, m.name), /*#__PURE__*/React.createElement("span", null, m.score, "/", m.max, " (", Math.round(m.score / m.max * 100), "%)"), /*#__PURE__*/React.createElement("button", {
-    className: "pp-btn pp-btn-ghost",
-    style: {
-      padding: 4,
-      borderRadius: 999
-    },
-    onClick: () => onPatch(p => ({
-      ...p,
-      marks: p.marks.filter(x => x.id !== m.id)
-    })),
-    "aria-label": "Remove mark"
-  }, /*#__PURE__*/React.createElement(X, {
-    size: 12
-  })))), /*#__PURE__*/React.createElement("div", {
+  }, "You've added more ", tooMany, " than the term has. Check the numbers under \"Change the weights\"."), r.marks.map(m => {
+    const effect = m.worth * (m.pct - Number(plan.avg)) / 100;
+    return /*#__PURE__*/React.createElement("div", {
+      key: m.id,
+      style: {
+        display: "flex",
+        alignItems: "center",
+        gap: 8,
+        fontSize: 12.5,
+        padding: "2px 0",
+        flexWrap: "wrap"
+      }
+    }, /*#__PURE__*/React.createElement("span", {
+      style: {
+        flex: 1,
+        minWidth: 120
+      }
+    }, m.name, " ", /*#__PURE__*/React.createElement("span", {
+      style: {
+        color: "var(--muted)"
+      }
+    }, "· ", m.type === "ca" ? "CA" : "Periodic", ", worth ", fmt(m.worth), "% of your grade")), /*#__PURE__*/React.createElement("span", null, m.score, "/", m.max, " (", Math.round(m.pct), "%)"), /*#__PURE__*/React.createElement("span", {
+      style: {
+        color: effect >= 0 ? "#2F6B3F" : "#8A3434",
+        minWidth: 52,
+        textAlign: "right"
+      }
+    }, effect >= 0 ? "+" : "", fmt(effect), "%"), /*#__PURE__*/React.createElement("button", {
+      className: "pp-btn pp-btn-ghost",
+      style: {
+        padding: 4,
+        borderRadius: 999
+      },
+      onClick: () => onPatch(p => ({
+        ...p,
+        marks: p.marks.filter(x => x.id !== m.id)
+      })),
+      "aria-label": "Remove mark"
+    }, /*#__PURE__*/React.createElement(X, {
+      size: 12
+    })));
+  }), /*#__PURE__*/React.createElement("div", {
     style: {
       display: "flex",
       gap: 8,
       flexWrap: "wrap",
       marginTop: 8
     }
-  }, /*#__PURE__*/React.createElement("input", {
+  }, /*#__PURE__*/React.createElement("select", {
+    className: "pp-select",
+    "aria-label": "Type of mark",
+    style: {
+      padding: "7px 10px",
+      fontSize: 13.5
+    },
+    value: type,
+    onChange: e => setType(e.target.value)
+  }, MARK_TYPES.map(x => /*#__PURE__*/React.createElement("option", {
+    key: x.id,
+    value: x.id
+  }, x.label))), /*#__PURE__*/React.createElement("input", {
     className: "pp-input",
     style: {
       flex: 1,
-      minWidth: 130,
+      minWidth: 120,
       padding: "7px 10px",
       fontSize: 13.5
     },

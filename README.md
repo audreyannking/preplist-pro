@@ -178,3 +178,4 @@ your behalf.
 - Note photos are kept sharp (up to 2000px wide, stepping down only if too big for one Firestore document); cards use a small stored cover image.
 - Grade tracker uses CA / Periodic / Final categories (finals 50%, term exams 50% = CAs 30% + periodics 70%; weights editable) and shows what the final must be to hit a target.
 - Grade tracker is now a target planner: enter a target and your term average so far, add marks as they come back, and see what the final must be (50% weight by default, editable).
+- Target planner weights each mark by its share (CAs 15% and periodics 35% of the grade, split by how many there are per term, editable).

@@ -2745,110 +2745,138 @@ function StudyTimerCard() {
   );
 }
 
-const DEFAULT_FINAL_WEIGHT = 50;
+const DEFAULT_GRADE_SETUP = { final: 50, ca: 30, nCA: 2, nP: 4 };
+const MARK_TYPES = [{ id: "periodic", label: "Periodic" }, { id: "ca", label: "CA" }];
 
-// Term grade = (100 - f)% term exams + f% final. You enter your term average so far (and how many marks it
-// covers); every mark you add later is averaged in, then we work out what the final must be to hit the target.
-function planResult(plan, finalPct) {
-  const wf = finalPct / 100;
-  const count = Math.max(1, Number(plan.count) || 1);
-  const marks = plan.marks || [];
-  const sum = Number(plan.avg) * count + marks.reduce((a, m) => a + (m.score / m.max) * 100, 0);
-  const term = sum / (count + marks.length);
-  const best = (1 - wf) * term + wf * 100;
-  const worst = (1 - wf) * term;
-  const need = wf > 0 ? (Number(plan.target) - (1 - wf) * term) / wf : null;
-  return { term, best, worst, need, wf };
+// Term grade = final (default 50%) + term exams (50%). Term exams = CAs (30%) + periodics (70%).
+// One mark's worth = its category's share of the grade divided by how many of that category the term has
+// (e.g. 4 periodics share 35%, so each is worth 8.75% of the whole grade).
+// Marks you haven't entered yet are assumed to match the term average you started with.
+function gradeSetup(s) {
+  const n = (v, d, lo, hi) => { const x = Number(v); return Number.isFinite(x) ? Math.min(hi, Math.max(lo, x)) : d; };
+  const final = n(s && s.final, 50, 0, 100), ca = n(s && s.ca, 30, 0, 100);
+  return { final, ca, nCA: Math.round(n(s && s.nCA, 2, 1, 20)), nP: Math.round(n(s && s.nP, 4, 1, 20)) };
+}
+function markWorth(type, s) {
+  const termW = 100 - s.final;
+  return type === "ca" ? (termW * s.ca) / 100 / s.nCA : (termW * (100 - s.ca)) / 100 / s.nP;
+}
+function planResult(plan, s) {
+  const termW = 100 - s.final;
+  const X = Number(plan.avg);
+  const marks = (plan.marks || []).map((m) => ({ ...m, pct: (m.score / m.max) * 100, worth: markWorth(m.type, s) }));
+  const delta = marks.reduce((a, m) => a + (m.worth * (m.pct - X)) / 100, 0);
+  const termPoints = (termW * X) / 100 + delta;
+  const finalW = s.final / 100;
+  return {
+    marks,
+    term: termW > 0 ? (termPoints / termW) * 100 : X,
+    best: termPoints + s.final,
+    worst: termPoints,
+    need: finalW > 0 ? (Number(plan.target) - termPoints) / finalW : null
+  };
 }
 
 function GradeTrackerCard() {
   const [plans, setPlans] = useLocalState("preplist:gradePlans", []);
-  const [finalPct, setFinalPct] = useLocalState("preplist:finalWeight", DEFAULT_FINAL_WEIGHT);
+  const [setupRaw, setSetupRaw] = useLocalState("preplist:gradeSetup", DEFAULT_GRADE_SETUP);
   const [subject, setSubject] = useState("");
   const [target, setTarget] = useState("90");
   const [avg, setAvg] = useState("");
-  const [count, setCount] = useState("3");
-  const fw = Math.min(100, Math.max(0, Number(finalPct) || 0));
-  const fmt = (n) => (Math.round(n * 10) / 10).toString();
+  const s = gradeSetup(setupRaw);
+  const fmt = (n) => (Math.round(n * 100) / 100).toString();
   const canAdd = subject.trim() && avg !== "" && Number(avg) >= 0 && Number(avg) <= 100 && target !== "" && Number(target) > 0;
   function addPlan() {
     if (!canAdd) return;
-    setPlans((prev) => [...(prev || []), { id: uid(), subject: subject.trim(), target: Number(target), avg: Number(avg), count: Math.max(1, Number(count) || 1), marks: [] }]);
+    setPlans((prev) => [...(prev || []), { id: uid(), subject: subject.trim(), target: Number(target), avg: Number(avg), marks: [] }]);
     setSubject(""); setAvg("");
   }
-  const patchPlan = (id, fn) => setPlans((prev) => prev.map((p) => (p.id === id ? fn(p) : p)));
+  const setField = (key) => (e) => setSetupRaw({ ...setupRaw, [key]: e.target.value === "" ? "" : Number(e.target.value) });
+  const numBox = { width: 62, padding: "6px 8px", fontSize: 13 };
   return (
     <div className="pp-card" style={{ borderRadius: 10, padding: 16, marginBottom: 16 }}>
       <div className="pp-serif" style={{ fontSize: 16, fontWeight: 700, marginBottom: 4 }}>Grade target planner</div>
       <div style={{ fontSize: 12.5, color: "var(--muted)", marginBottom: 6, lineHeight: 1.5 }}>
-        Put in the grade you're aiming for and your term average so far, then add each mark as you get it back. It works out what you'd need on the final, and whether your target is still possible. Your term grade is <b>{fmt(100 - fw)}% term exams</b> + <b>{fmt(fw)}% final</b>. This is your own estimate, not an official grade.
+        Put in your target and your term average right now, then add each mark as it comes back. Every mark only counts for its share: the final is <b>{fmt(s.final)}%</b>, CAs <b>{fmt(markWorth("ca", s) * s.nCA)}%</b> (so <b>{fmt(markWorth("ca", s))}%</b> each), periodics <b>{fmt(markWorth("periodic", s) * s.nP)}%</b> (<b>{fmt(markWorth("periodic", s))}%</b> each). This is your own estimate, not an official grade.
       </div>
       <details style={{ marginBottom: 10 }}>
-        <summary style={{ fontSize: 12.5, cursor: "pointer", color: "var(--muted)" }}>Change the final's weight</summary>
-        <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 6, fontSize: 13, alignItems: "center" }}>
-          <label>Final counts for % of term grade <input className="pp-input" type="number" min="0" max="100" value={finalPct} onChange={(e) => setFinalPct(e.target.value === "" ? "" : Math.min(100, Math.max(0, Number(e.target.value))))} style={{ width: 65, padding: "6px 8px", fontSize: 13 }} /></label>
-          <button className="pp-btn pp-btn-ghost" style={{ padding: "5px 10px", fontSize: 12.5 }} onClick={() => setFinalPct(DEFAULT_FINAL_WEIGHT)}>Reset to 50</button>
+        <summary style={{ fontSize: 12.5, cursor: "pointer", color: "var(--muted)" }}>Change the weights and how many marks there are</summary>
+        <div style={{ display: "flex", gap: 12, flexWrap: "wrap", marginTop: 6, fontSize: 13, alignItems: "center" }}>
+          <label>Final % <input className="pp-input" type="number" min="0" max="100" value={setupRaw.final} onChange={setField("final")} style={numBox} /></label>
+          <label>CAs % of term exams <input className="pp-input" type="number" min="0" max="100" value={setupRaw.ca} onChange={setField("ca")} style={numBox} /></label>
+          <label>CAs in the term <input className="pp-input" type="number" min="1" max="20" value={setupRaw.nCA} onChange={setField("nCA")} style={numBox} /></label>
+          <label>Periodics in the term <input className="pp-input" type="number" min="1" max="20" value={setupRaw.nP} onChange={setField("nP")} style={numBox} /></label>
+          <button className="pp-btn pp-btn-ghost" style={{ padding: "5px 10px", fontSize: 12.5 }} onClick={() => setSetupRaw(DEFAULT_GRADE_SETUP)}>Reset</button>
         </div>
+        <div style={{ fontSize: 12, color: "var(--muted)", marginTop: 6 }}>Set these to match your school: if you have 5 periodics a term, put 5 so each one is worth less.</div>
       </details>
       <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 12, alignItems: "flex-end" }}>
         <label style={{ fontSize: 11.5, color: "var(--muted)" }}>Subject<br />
           <input className="pp-input" list="pp-grade-subjects" style={{ width: 130, padding: "8px 10px", fontSize: 14 }} placeholder="e.g. Math" value={subject} onChange={(e) => setSubject(e.target.value)} />
         </label>
-        <datalist id="pp-grade-subjects">{PAPER_SUBJECTS.map((s) => <option key={s} value={s} />)}</datalist>
+        <datalist id="pp-grade-subjects">{PAPER_SUBJECTS.map((x) => <option key={x} value={x} />)}</datalist>
         <label style={{ fontSize: 11.5, color: "var(--muted)" }}>Target grade %<br />
           <input className="pp-input" type="number" style={{ width: 90, padding: "8px 10px", fontSize: 14 }} value={target} onChange={(e) => setTarget(e.target.value)} />
         </label>
         <label style={{ fontSize: 11.5, color: "var(--muted)" }}>Term average now %<br />
           <input className="pp-input" type="number" style={{ width: 110, padding: "8px 10px", fontSize: 14 }} placeholder="e.g. 78" value={avg} onChange={(e) => setAvg(e.target.value)} />
         </label>
-        <label style={{ fontSize: 11.5, color: "var(--muted)" }} title="How many marks that average is made from">From how many marks?<br />
-          <input className="pp-input" type="number" min="1" style={{ width: 80, padding: "8px 10px", fontSize: 14 }} value={count} onChange={(e) => setCount(e.target.value)} />
-        </label>
         <button className="pp-btn pp-btn-primary" style={{ padding: "8px 16px", opacity: canAdd ? 1 : 0.5 }} disabled={!canAdd} onClick={addPlan}>Add subject</button>
       </div>
-      {plans.length === 0 ? <div style={{ fontSize: 13, color: "var(--muted)" }}>No subjects yet. Add one above.</div> : plans.map((pl) => <PlanCard key={pl.id} plan={pl} finalPct={fw} fmt={fmt} onPatch={(fn) => patchPlan(pl.id, fn)} onRemove={() => setPlans((prev) => prev.filter((p) => p.id !== pl.id))} />)}
+      {plans.length === 0 ? <div style={{ fontSize: 13, color: "var(--muted)" }}>No subjects yet. Add one above.</div> : plans.map((pl) => <PlanCard key={pl.id} plan={pl} setup={s} fmt={fmt} onPatch={(fn) => setPlans((prev) => prev.map((p) => (p.id === pl.id ? fn(p) : p)))} onRemove={() => setPlans((prev) => prev.filter((p) => p.id !== pl.id))} />)}
     </div>
   );
 }
 
-function PlanCard({ plan, finalPct, fmt, onPatch, onRemove }) {
+function PlanCard({ plan, setup, fmt, onPatch, onRemove }) {
   const [name, setName] = useState("");
+  const [type, setType] = useState("periodic");
   const [score, setScore] = useState("");
   const [max, setMax] = useState("100");
-  const r = planResult(plan, finalPct);
+  const r = planResult(plan, setup);
   const canAdd = name.trim() && score !== "" && Number(max) > 0;
   function addMark() {
     if (!canAdd) return;
-    onPatch((p) => ({ ...p, marks: [...(p.marks || []), { id: uid(), name: name.trim(), score: Number(score), max: Number(max) }] }));
+    onPatch((p) => ({ ...p, marks: [...(p.marks || []), { id: uid(), name: name.trim(), type, score: Number(score), max: Number(max) }] }));
     setName(""); setScore("");
   }
+  const r1 = (n) => Math.round(n * 10) / 10;
   let verdict, tone;
   if (r.need === null) { verdict = r.term >= plan.target ? "Your term average is already at your target." : "With no final, your target isn't reachable."; tone = r.term >= plan.target ? "ok" : "bad"; }
   else if (r.need <= 0) { verdict = `You've already secured ${plan.target}%. Even a 0% final would keep you there.`; tone = "ok"; }
-  else if (r.need > 100) { verdict = `Out of reach. Even a perfect final gives you about ${fmt(r.best)}%.`; tone = "bad"; }
+  else if (r.need > 100) { verdict = `Out of reach. Even a perfect final gives you about ${r1(r.best)}%.`; tone = "bad"; }
   else if (r.need >= 90) { verdict = `Possible, but tough: you'd need about ${Math.ceil(r.need)}% on the final.`; tone = "warn"; }
   else { verdict = `Possible: you'd need about ${Math.ceil(r.need)}% on the final.`; tone = "ok"; }
   const color = tone === "ok" ? "#2F6B3F" : tone === "warn" ? "#8A6A12" : "#8A3434";
+  const count = (ty) => r.marks.filter((m) => m.type === ty).length;
+  const tooMany = count("periodic") > setup.nP ? "periodics" : count("ca") > setup.nCA ? "CAs" : null;
   return (
     <div style={{ borderTop: "1px solid var(--border)", padding: "12px 0" }}>
       <div style={{ display: "flex", alignItems: "baseline", gap: 10, flexWrap: "wrap" }}>
         <b style={{ fontSize: 15 }}>{plan.subject}</b>
-        <span style={{ fontSize: 12.5, color: "var(--muted)" }}>Target {plan.target}% · term average now</span>
-        <span className="pp-serif" style={{ fontSize: 20, fontWeight: 700 }}>{fmt(r.term)}%</span>
+        <span style={{ fontSize: 12.5, color: "var(--muted)" }}>Target {plan.target}% · started at {plan.avg}% · term average now</span>
+        <span className="pp-serif" style={{ fontSize: 20, fontWeight: 700 }}>{r1(r.term)}%</span>
         <button className="pp-btn pp-btn-ghost" style={{ padding: 4, borderRadius: 999, marginLeft: "auto" }} onClick={() => { if (window.confirm(`Remove ${plan.subject}?`)) onRemove(); }} aria-label={`Remove ${plan.subject}`}><X size={13} /></button>
       </div>
       <div style={{ fontSize: 13.5, fontWeight: 600, color, margin: "6px 0" }}>{verdict}</div>
-      {r.need !== null && r.need > 0 && r.need <= 100 && <div style={{ fontSize: 12, color: "var(--muted)", marginBottom: 6 }}>Best case with a 100% final: {fmt(r.best)}% · worst case with a 0% final: {fmt(r.worst)}%.</div>}
-      <div style={{ fontSize: 12, color: "var(--muted)", marginBottom: 4 }}>Started at {plan.avg}% from {plan.count} mark{plan.count === 1 ? "" : "s"}. Marks you add are averaged in.</div>
-      {(plan.marks || []).map((m) => (
-        <div key={m.id} style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12.5, padding: "2px 0" }}>
-          <span style={{ flex: 1 }}>{m.name}</span>
-          <span>{m.score}/{m.max} ({Math.round((m.score / m.max) * 100)}%)</span>
-          <button className="pp-btn pp-btn-ghost" style={{ padding: 4, borderRadius: 999 }} onClick={() => onPatch((p) => ({ ...p, marks: p.marks.filter((x) => x.id !== m.id) }))} aria-label="Remove mark"><X size={12} /></button>
-        </div>
-      ))}
+      {r.need !== null && r.need > 0 && r.need <= 100 && <div style={{ fontSize: 12, color: "var(--muted)", marginBottom: 6 }}>Best case with a 100% final: {r1(r.best)}% · worst case with a 0% final: {r1(r.worst)}%.</div>}
+      {tooMany && <div style={{ fontSize: 12, color: "#8A6A12", marginBottom: 6 }}>You've added more {tooMany} than the term has. Check the numbers under "Change the weights".</div>}
+      {r.marks.map((m) => {
+        const effect = (m.worth * (m.pct - Number(plan.avg))) / 100;
+        return (
+          <div key={m.id} style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12.5, padding: "2px 0", flexWrap: "wrap" }}>
+            <span style={{ flex: 1, minWidth: 120 }}>{m.name} <span style={{ color: "var(--muted)" }}>· {m.type === "ca" ? "CA" : "Periodic"}, worth {fmt(m.worth)}% of your grade</span></span>
+            <span>{m.score}/{m.max} ({Math.round(m.pct)}%)</span>
+            <span style={{ color: effect >= 0 ? "#2F6B3F" : "#8A3434", minWidth: 52, textAlign: "right" }}>{effect >= 0 ? "+" : ""}{fmt(effect)}%</span>
+            <button className="pp-btn pp-btn-ghost" style={{ padding: 4, borderRadius: 999 }} onClick={() => onPatch((p) => ({ ...p, marks: p.marks.filter((x) => x.id !== m.id) }))} aria-label="Remove mark"><X size={12} /></button>
+          </div>
+        );
+      })}
       <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 8 }}>
-        <input className="pp-input" style={{ flex: 1, minWidth: 130, padding: "7px 10px", fontSize: 13.5 }} placeholder="New mark, e.g. Periodic 3" value={name} onChange={(e) => setName(e.target.value)} />
+        <select className="pp-select" aria-label="Type of mark" style={{ padding: "7px 10px", fontSize: 13.5 }} value={type} onChange={(e) => setType(e.target.value)}>
+          {MARK_TYPES.map((x) => <option key={x.id} value={x.id}>{x.label}</option>)}
+        </select>
+        <input className="pp-input" style={{ flex: 1, minWidth: 120, padding: "7px 10px", fontSize: 13.5 }} placeholder="New mark, e.g. Periodic 3" value={name} onChange={(e) => setName(e.target.value)} />
         <input className="pp-input" type="number" aria-label="Score" style={{ width: 70, padding: "7px 10px", fontSize: 13.5 }} placeholder="Score" value={score} onChange={(e) => setScore(e.target.value)} />
         <input className="pp-input" type="number" aria-label="Out of" style={{ width: 70, padding: "7px 10px", fontSize: 13.5 }} placeholder="Out of" value={max} onChange={(e) => setMax(e.target.value)} />
         <button className="pp-btn pp-btn-ghost" style={{ padding: "7px 14px", fontSize: 13, opacity: canAdd ? 1 : 0.5 }} disabled={!canAdd} onClick={addMark}>Add mark</button>
