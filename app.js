@@ -1598,7 +1598,16 @@ function RoleGate({
       textAlign: "center",
       marginBottom: 22
     }
-  }, /*#__PURE__*/React.createElement("div", {
+  }, /*#__PURE__*/React.createElement("img", {
+    src: "favicon.svg",
+    alt: "",
+    width: "72",
+    height: "72",
+    style: {
+      display: "block",
+      margin: "0 auto 10px"
+    }
+  }), /*#__PURE__*/React.createElement("div", {
     className: "pp-serif",
     style: {
       fontSize: 26,
@@ -8753,10 +8762,13 @@ function MainApp({
       alignItems: "center",
       gap: 6
     }
-  }, /*#__PURE__*/React.createElement(Sparkles, {
-    size: 17,
+  }, /*#__PURE__*/React.createElement("img", {
+    src: "favicon.svg",
+    alt: "",
+    width: "26",
+    height: "26",
     style: {
-      color: "var(--accent)"
+      display: "block"
     }
   }), " PrepList Pro"), /*#__PURE__*/React.createElement("div", {
     style: {

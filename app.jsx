@@ -715,6 +715,7 @@ function RoleGate({ onSelectRole, theme, setTheme }) {
       <div className="pp-card pp-index-card" style={{ width: "100%", maxWidth: 420, padding: "34px 28px", borderRadius: 10 }}>
         <div className="pp-tape" />
         <div style={{ textAlign: "center", marginBottom: 22 }}>
+          <img src="favicon.svg" alt="" width="72" height="72" style={{ display: "block", margin: "0 auto 10px" }} />
           <div className="pp-serif" style={{ fontSize: 26, fontWeight: 700 }}>PrepList Pro</div>
           <div style={{ fontSize: 13.5, color: "var(--muted)", marginTop: 4 }}>Notes, videos, files and past papers, all in one place.</div>
         </div>
@@ -3350,7 +3351,7 @@ function MainApp({ user, onChangeGrade, onSwitchRole, theme, setTheme }) {
         <GlobalStyle />
         <header style={{ borderBottom: "1px solid var(--border)", position: "sticky", top: 0, background: "var(--bg)", zIndex: 40 }}>
           <div className="pp-header-row" style={{ maxWidth: 960, margin: "0 auto", padding: "14px 18px", display: "flex", alignItems: "center", gap: 12 }}>
-            <div className="pp-serif pp-header-title" style={{ fontSize: 19, fontWeight: 700, display: "flex", alignItems: "center", gap: 6 }}><Sparkles size={17} style={{ color: "var(--accent)" }} /> PrepList Pro</div>
+            <div className="pp-serif pp-header-title" style={{ fontSize: 19, fontWeight: 700, display: "flex", alignItems: "center", gap: 6 }}><img src="favicon.svg" alt="" width="26" height="26" style={{ display: "block" }} /> PrepList Pro</div>
             <div style={{ flex: 1 }} />
             <button className="pp-btn pp-btn-ghost" style={{ padding: 8, borderRadius: 999 }} onClick={() => setShowSearch(true)} aria-label="Search everything"><Search size={16} /></button>
             <button className="pp-btn pp-btn-ghost" style={{ padding: 8, borderRadius: 999 }} onClick={() => setTheme(theme === "light" ? "dark" : "light")} aria-label="Toggle dark mode">{theme === "light" ? <Moon size={16} /> : <Sun size={16} />}</button>
