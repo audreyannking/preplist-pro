@@ -176,3 +176,4 @@ your behalf.
 - Notes open full-screen when tapped (saving only via the Save button); cards show a small cover with a page count; publishing uploads photos in parallel.
 - Notes, videos and files can have a description (for example who made them) and can be edited after posting (title, subject, grade, description; notes also text and photos).
 - Note photos are kept sharp (up to 2000px wide, stepping down only if too big for one Firestore document); cards use a small stored cover image.
+- Grade tracker uses CA / Periodic / Final categories (finals 50%, term exams 50% = CAs 30% + periodics 70%; weights editable) and shows what the final must be to hit a target.

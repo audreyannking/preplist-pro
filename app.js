@@ -7286,104 +7286,90 @@ function StudyTimerCard() {
     }
   }))));
 }
-const GRADE_PRESETS = [{
-  id: "school-style",
-  name: "School-style (set your school's weights)",
-  note: "These weights are only a starting point — every school is different, so check your handbook and use \"Save your school's weights\" below to store the real ones.",
-  types: [{
-    label: "Quiz",
-    weight: 1
-  }, {
-    label: "Monthly exam",
-    weight: 1
-  }, {
-    label: "Term exam",
-    weight: 1
-  }]
+const GRADE_CATS = [{
+  id: "ca",
+  label: "CA",
+  long: "CAs"
 }, {
-  id: "equal",
-  name: "Everything counts equally",
-  types: [{
-    label: "Assessment",
-    weight: 1
-  }]
+  id: "periodic",
+  label: "Periodic",
+  long: "Periodics"
 }, {
-  id: "exam-heavy",
-  name: "Example: exams count more",
-  note: "Example weights for illustration only.",
-  types: [{
-    label: "Quiz",
-    weight: 1
-  }, {
-    label: "Test",
-    weight: 2
-  }, {
-    label: "Exam",
-    weight: 4
-  }]
+  id: "final",
+  label: "Final",
+  long: "Finals"
 }];
+const DEFAULT_GRADE_WEIGHTS = {
+  final: 50,
+  ca: 30
+};
+const gradeCatOf = i => i.cat === "ca" || i.cat === "final" ? i.cat : "periodic";
+
+// Term grade = finals (default 50%) + term exams (50%). Term exams = CAs (default 30%) + periodics (70%).
+// Each category is the plain average of its marks. A part with no marks yet is left out and the rest re-scaled.
+function gradeBreakdown(list, w) {
+  const avgOf = cat => {
+    const l = list.filter(i => gradeCatOf(i) === cat);
+    return l.length ? l.reduce((a, i) => a + i.score / i.max, 0) / l.length * 100 : null;
+  };
+  const blend = parts => {
+    const used = parts.filter(([v]) => v !== null);
+    const tw = used.reduce((a, [, x]) => a + x, 0);
+    return tw ? used.reduce((a, [v, x]) => a + v * x, 0) / tw : null;
+  };
+  const ca = avgOf("ca"),
+    periodic = avgOf("periodic"),
+    fin = avgOf("final");
+  const term = blend([[ca, w.ca], [periodic, 100 - w.ca]]);
+  const overall = blend([[term, 100 - w.final], [fin, w.final]]);
+  return {
+    ca,
+    periodic,
+    final: fin,
+    term,
+    overall
+  };
+}
 function GradeTrackerCard() {
   const [items, setItems] = useLocalState("preplist:grades", []);
+  const [weights, setWeights] = useLocalState("preplist:gradeWeights", DEFAULT_GRADE_WEIGHTS);
   const [subject, setSubject] = useState("");
   const [name, setName] = useState("");
+  const [cat, setCat] = useState("periodic");
   const [score, setScore] = useState("");
   const [max, setMax] = useState("100");
-  const [weight, setWeight] = useState("1");
   const [target, setTarget] = useLocalState("preplist:gradeTarget", 85);
-  const [nextWeight, setNextWeight] = useState("1");
-  const [myPresets, setMyPresets] = useLocalState("preplist:gradePresets", []);
-  const [presetId, setPresetId] = useState("");
-  const [newPresetName, setNewPresetName] = useState("");
-  const [newPresetTypes, setNewPresetTypes] = useState("");
-  const allPresets = [...GRADE_PRESETS, ...myPresets.map(p => ({
-    ...p,
-    mine: true
-  }))];
-  const activePreset = allPresets.find(p => p.id === presetId);
-  function savePreset() {
-    const types = newPresetTypes.split(",").map(t => {
-      const [label, w] = t.split(":");
-      return label && label.trim() && Number(w) > 0 ? {
-        label: label.trim(),
-        weight: Number(w)
-      } : null;
-    }).filter(Boolean);
-    if (!newPresetName.trim() || types.length === 0) return;
-    const p = {
-      id: uid(),
-      name: newPresetName.trim(),
-      types
-    };
-    setMyPresets(prev => [...(prev || []), p]);
-    setPresetId(p.id);
-    setNewPresetName("");
-    setNewPresetTypes("");
-  }
+  const w = {
+    final: Math.min(100, Math.max(0, Number(weights && weights.final))),
+    ca: Math.min(100, Math.max(0, Number(weights && weights.ca)))
+  };
+  if (Number.isNaN(w.final)) w.final = 50;
+  if (Number.isNaN(w.ca)) w.ca = 30;
+  const share = {
+    ca: (100 - w.final) * w.ca / 100,
+    periodic: (100 - w.final) * (100 - w.ca) / 100,
+    final: w.final
+  };
+  const fmt = n => (Math.round(n * 10) / 10).toString();
   const subjects = Array.from(new Set(items.map(i => i.subject))).sort();
-  const canAdd = subject.trim() && name.trim() && score !== "" && Number(max) > 0 && Number(weight) > 0;
+  const canAdd = subject.trim() && name.trim() && score !== "" && Number(max) > 0;
   function add() {
     if (!canAdd) return;
     setItems(prev => [...(prev || []), {
       id: uid(),
       subject: subject.trim(),
       name: name.trim(),
+      cat,
       score: Number(score),
-      max: Number(max),
-      weight: Number(weight)
+      max: Number(max)
     }]);
     setName("");
     setScore("");
   }
-  function stats(list) {
-    const totalW = list.reduce((a, i) => a + i.weight, 0);
-    const sum = list.reduce((a, i) => a + i.score / i.max * i.weight, 0);
-    return {
-      totalW,
-      sum,
-      avg: totalW ? sum / totalW * 100 : 0
-    };
-  }
-  const nw = Number(nextWeight) > 0 ? Number(nextWeight) : 1;
+  const setW = (key, v) => setWeights({
+    ...w,
+    [key]: v === "" ? 0 : Math.min(100, Math.max(0, Number(v)))
+  });
   return /*#__PURE__*/React.createElement("div", {
     className: "pp-card",
     style: {
@@ -7402,64 +7388,12 @@ function GradeTrackerCard() {
     style: {
       fontSize: 12.5,
       color: "var(--muted)",
+      marginBottom: 6,
+      lineHeight: 1.5
+    }
+  }, "Your term grade is ", /*#__PURE__*/React.createElement("b", null, fmt(w.final), "% finals"), " + ", /*#__PURE__*/React.createElement("b", null, fmt(100 - w.final), "% term exams"), ". The term exams are ", /*#__PURE__*/React.createElement("b", null, fmt(w.ca), "% CAs"), " + ", /*#__PURE__*/React.createElement("b", null, fmt(100 - w.ca), "% periodics"), ". So of your whole grade: CAs are ", /*#__PURE__*/React.createElement("b", null, fmt(share.ca), "%"), ", periodics ", /*#__PURE__*/React.createElement("b", null, fmt(share.periodic), "%"), ", finals ", /*#__PURE__*/React.createElement("b", null, fmt(share.final), "%"), ". If a subject has several marks of one type, they're averaged. This is your own estimate, not an official grade."), /*#__PURE__*/React.createElement("details", {
+    style: {
       marginBottom: 10
-    }
-  }, "Log your quiz, monthly and term exam marks. Weight says how much each counts (e.g. 1 for a quiz, 3 for a term exam) — use your school's own weights. This is your own estimate, not an official grade."), /*#__PURE__*/React.createElement("div", {
-    style: {
-      marginBottom: 10
-    }
-  }, /*#__PURE__*/React.createElement("div", {
-    style: {
-      display: "flex",
-      gap: 8,
-      flexWrap: "wrap",
-      alignItems: "center"
-    }
-  }, /*#__PURE__*/React.createElement("select", {
-    className: "pp-select",
-    "aria-label": "Weight preset",
-    style: {
-      padding: "7px 10px",
-      fontSize: 13,
-      maxWidth: 260
-    },
-    value: presetId,
-    onChange: e => setPresetId(e.target.value)
-  }, /*#__PURE__*/React.createElement("option", {
-    value: ""
-  }, "Weight preset (optional)…"), allPresets.map(p => /*#__PURE__*/React.createElement("option", {
-    key: p.id,
-    value: p.id
-  }, p.name))), activePreset && activePreset.types.map(t => /*#__PURE__*/React.createElement("button", {
-    key: t.label,
-    className: "pp-btn pp-btn-ghost",
-    style: {
-      padding: "5px 10px",
-      fontSize: 12.5
-    },
-    onClick: () => {
-      setName(t.label);
-      setWeight(String(t.weight));
-    }
-  }, t.label, " (wt ", t.weight, ")")), activePreset && activePreset.mine && /*#__PURE__*/React.createElement("button", {
-    className: "pp-btn pp-btn-ghost",
-    style: {
-      padding: "5px 10px",
-      fontSize: 12.5
-    },
-    onClick: () => {
-      setMyPresets(prev => prev.filter(p => p.id !== activePreset.id));
-      setPresetId("");
-    }
-  }, "Delete preset")), activePreset && activePreset.note && /*#__PURE__*/React.createElement("div", {
-    style: {
-      fontSize: 12,
-      color: "var(--muted)",
-      marginTop: 6
-    }
-  }, activePreset.note), /*#__PURE__*/React.createElement("details", {
-    style: {
-      marginTop: 6
     }
   }, /*#__PURE__*/React.createElement("summary", {
     style: {
@@ -7467,42 +7401,46 @@ function GradeTrackerCard() {
       cursor: "pointer",
       color: "var(--muted)"
     }
-  }, "Save your school's weights as a preset"), /*#__PURE__*/React.createElement("div", {
+  }, "Change the weights"), /*#__PURE__*/React.createElement("div", {
     style: {
       display: "flex",
-      gap: 8,
+      gap: 14,
       flexWrap: "wrap",
-      marginTop: 6
+      marginTop: 6,
+      fontSize: 13
     }
-  }, /*#__PURE__*/React.createElement("input", {
+  }, /*#__PURE__*/React.createElement("label", null, "Finals % of term grade ", /*#__PURE__*/React.createElement("input", {
     className: "pp-input",
+    type: "number",
+    min: "0",
+    max: "100",
+    value: w.final,
+    onChange: e => setW("final", e.target.value),
     style: {
-      width: 150,
-      padding: "7px 10px",
+      width: 65,
+      padding: "6px 8px",
       fontSize: 13
-    },
-    placeholder: "Preset name",
-    value: newPresetName,
-    onChange: e => setNewPresetName(e.target.value)
-  }), /*#__PURE__*/React.createElement("input", {
+    }
+  })), /*#__PURE__*/React.createElement("label", null, "CAs % of term exams ", /*#__PURE__*/React.createElement("input", {
     className: "pp-input",
+    type: "number",
+    min: "0",
+    max: "100",
+    value: w.ca,
+    onChange: e => setW("ca", e.target.value),
     style: {
-      flex: 1,
-      minWidth: 200,
-      padding: "7px 10px",
+      width: 65,
+      padding: "6px 8px",
       fontSize: 13
-    },
-    placeholder: "Quiz:1, Monthly exam:2, Term exam:3",
-    value: newPresetTypes,
-    onChange: e => setNewPresetTypes(e.target.value)
-  }), /*#__PURE__*/React.createElement("button", {
-    className: "pp-btn pp-btn-primary",
+    }
+  })), /*#__PURE__*/React.createElement("button", {
+    className: "pp-btn pp-btn-ghost",
     style: {
-      padding: "7px 14px",
-      fontSize: 13
+      padding: "5px 10px",
+      fontSize: 12.5
     },
-    onClick: savePreset
-  }, "Save preset")))), /*#__PURE__*/React.createElement("div", {
+    onClick: () => setWeights(DEFAULT_GRADE_WEIGHTS)
+  }, "Reset to 50 / 30"))), /*#__PURE__*/React.createElement("div", {
     style: {
       display: "flex",
       gap: 8,
@@ -7525,7 +7463,19 @@ function GradeTrackerCard() {
   }, [...subjects, ...PAPER_SUBJECTS].map(s => /*#__PURE__*/React.createElement("option", {
     key: s,
     value: s
-  }))), /*#__PURE__*/React.createElement("input", {
+  }))), /*#__PURE__*/React.createElement("select", {
+    className: "pp-select",
+    "aria-label": "Type of mark",
+    style: {
+      padding: "8px 10px",
+      fontSize: 14
+    },
+    value: cat,
+    onChange: e => setCat(e.target.value)
+  }, GRADE_CATS.map(c => /*#__PURE__*/React.createElement("option", {
+    key: c.id,
+    value: c.id
+  }, c.label, " (", fmt(share[c.id]), "%)"))), /*#__PURE__*/React.createElement("input", {
     className: "pp-input",
     style: {
       flex: 1,
@@ -7533,7 +7483,7 @@ function GradeTrackerCard() {
       padding: "8px 10px",
       fontSize: 14
     },
-    placeholder: "e.g. Monthly exam 2",
+    placeholder: "e.g. Periodic 2",
     value: name,
     onChange: e => setName(e.target.value)
   }), /*#__PURE__*/React.createElement("input", {
@@ -7560,18 +7510,6 @@ function GradeTrackerCard() {
     placeholder: "Out of",
     value: max,
     onChange: e => setMax(e.target.value)
-  }), /*#__PURE__*/React.createElement("input", {
-    className: "pp-input",
-    type: "number",
-    "aria-label": "Weight",
-    style: {
-      width: 70,
-      padding: "8px 10px",
-      fontSize: 14
-    },
-    placeholder: "Weight",
-    value: weight,
-    onChange: e => setWeight(e.target.value)
   }), /*#__PURE__*/React.createElement("button", {
     className: "pp-btn pp-btn-primary",
     style: {
@@ -7589,21 +7527,11 @@ function GradeTrackerCard() {
       marginBottom: 8,
       fontSize: 13
     }
-  }, /*#__PURE__*/React.createElement("label", null, "Target average % ", /*#__PURE__*/React.createElement("input", {
+  }, /*#__PURE__*/React.createElement("label", null, "Target term grade % ", /*#__PURE__*/React.createElement("input", {
     className: "pp-input",
     type: "number",
     value: target,
     onChange: e => setTarget(Number(e.target.value) || 0),
-    style: {
-      width: 65,
-      padding: "6px 8px",
-      fontSize: 13
-    }
-  })), /*#__PURE__*/React.createElement("label", null, "Next assessment weight ", /*#__PURE__*/React.createElement("input", {
-    className: "pp-input",
-    type: "number",
-    value: nextWeight,
-    onChange: e => setNextWeight(e.target.value),
     style: {
       width: 65,
       padding: "6px 8px",
@@ -7616,14 +7544,30 @@ function GradeTrackerCard() {
     }
   }, "No marks logged yet.") : subjects.map(sub => {
     const list = items.filter(i => i.subject === sub);
-    const st = stats(list);
-    const need = (target / 100 * (st.totalW + nw) - st.sum) / nw * 100;
-    const needText = need > 100 ? "Above 100% — out of reach with one assessment" : need <= 0 ? "You're already above target" : `${Math.ceil(need)}%`;
+    const g = gradeBreakdown(list, w);
+    const wf = w.final / 100;
+    let needText = null;
+    if (g.final === null && g.term !== null && wf > 0) {
+      const need = (target - g.term * (1 - wf)) / wf;
+      needText = need > 100 ? "Above 100%, out of reach" : need <= 0 ? "You're already above target" : `${Math.ceil(need)}%`;
+    }
+    const chip = (label, val, sh) => /*#__PURE__*/React.createElement("span", {
+      style: {
+        fontSize: 12,
+        border: "1px solid var(--border)",
+        borderRadius: 999,
+        padding: "2px 9px"
+      }
+    }, label, " ", /*#__PURE__*/React.createElement("b", null, val === null ? "–" : `${val.toFixed(1)}%`), " ", /*#__PURE__*/React.createElement("span", {
+      style: {
+        color: "var(--muted)"
+      }
+    }, "· counts ", fmt(sh), "%"));
     return /*#__PURE__*/React.createElement("div", {
       key: sub,
       style: {
         borderTop: "1px solid var(--border)",
-        padding: "8px 0"
+        padding: "10px 0"
       }
     }, /*#__PURE__*/React.createElement("div", {
       style: {
@@ -7639,38 +7583,62 @@ function GradeTrackerCard() {
     }, sub), /*#__PURE__*/React.createElement("span", {
       className: "pp-serif",
       style: {
-        fontSize: 18,
+        fontSize: 20,
         fontWeight: 700
       }
-    }, st.avg.toFixed(1), "%"), /*#__PURE__*/React.createElement("span", {
+    }, g.overall === null ? "–" : `${g.overall.toFixed(1)}%`), /*#__PURE__*/React.createElement("span", {
       style: {
-        fontSize: 12.5,
+        fontSize: 12,
         color: "var(--muted)"
       }
-    }, "Needed next for ", target, "%: ", /*#__PURE__*/React.createElement("b", null, needText))), list.map(i => /*#__PURE__*/React.createElement("div", {
-      key: i.id,
+    }, g.final === null ? "so far (no final yet)" : "term grade")), /*#__PURE__*/React.createElement("div", {
       style: {
         display: "flex",
-        alignItems: "center",
-        gap: 8,
+        gap: 6,
+        flexWrap: "wrap",
+        margin: "6px 0"
+      }
+    }, chip("CAs", g.ca, share.ca), chip("Periodics", g.periodic, share.periodic), chip("Final", g.final, share.final)), needText && /*#__PURE__*/React.createElement("div", {
+      style: {
         fontSize: 12.5,
-        padding: "2px 0"
+        color: "var(--muted)",
+        marginBottom: 4
       }
-    }, /*#__PURE__*/React.createElement("span", {
+    }, "To finish on ", target, "%, you'd need about ", /*#__PURE__*/React.createElement("b", {
       style: {
-        flex: 1
+        color: "var(--text)"
       }
-    }, i.name), /*#__PURE__*/React.createElement("span", null, i.score, "/", i.max, " (", Math.round(i.score / i.max * 100), "%) · wt ", i.weight), /*#__PURE__*/React.createElement("button", {
-      className: "pp-btn pp-btn-ghost",
-      style: {
-        padding: 4,
-        borderRadius: 999
-      },
-      onClick: () => setItems(prev => prev.filter(x => x.id !== i.id)),
-      "aria-label": "Remove mark"
-    }, /*#__PURE__*/React.createElement(X, {
-      size: 12
-    })))));
+    }, needText), " on the final (if your term marks stay as they are)."), list.map(i => {
+      const c = GRADE_CATS.find(x => x.id === gradeCatOf(i));
+      return /*#__PURE__*/React.createElement("div", {
+        key: i.id,
+        style: {
+          display: "flex",
+          alignItems: "center",
+          gap: 8,
+          fontSize: 12.5,
+          padding: "2px 0"
+        }
+      }, /*#__PURE__*/React.createElement("span", {
+        style: {
+          flex: 1
+        }
+      }, i.name, " ", /*#__PURE__*/React.createElement("span", {
+        style: {
+          color: "var(--muted)"
+        }
+      }, "· ", c.label)), /*#__PURE__*/React.createElement("span", null, i.score, "/", i.max, " (", Math.round(i.score / i.max * 100), "%)"), /*#__PURE__*/React.createElement("button", {
+        className: "pp-btn pp-btn-ghost",
+        style: {
+          padding: 4,
+          borderRadius: 999
+        },
+        onClick: () => setItems(prev => prev.filter(x => x.id !== i.id)),
+        "aria-label": "Remove mark"
+      }, /*#__PURE__*/React.createElement(X, {
+        size: 12
+      })));
+    }));
   }));
 }
 function ToolsView() {
