@@ -457,20 +457,20 @@ function GlobalStyle() {
     <style>{`
       @import url('https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=Karla:wght@400;500;600;700&display=swap');
       .pp-root {
-        --bg-light: #FBF6EA; --surface-light: #F5EEDD; --accent-light: #C3D2F7;
-        --text-light: #1F1F1F; --muted-light: #7A7368; --border-light: #E3D8C0;
-        --bg-dark: #18191C; --surface-dark: #222428; --accent-dark: #6F8CCB;
-        --text-dark: #F5F5F5; --muted-dark: #9AA0AA; --border-dark: #34373D;
+        --bg-light: #F4F1DE; --surface-light: #EBE6CE; --accent-light: #B4C3D4;
+        --text-light: #0D1B2A; --muted-light: #5B6B7C; --border-light: #D4C4A8;
+        --bg-dark: #0D1B2A; --surface-dark: #1B263B; --accent-dark: #6A89AB;
+        --text-dark: #F4F1DE; --muted-dark: #98A6B5; --border-dark: #2E4059;
       }
       .pp-root[data-theme='light'] {
         --bg: var(--bg-light); --surface: var(--surface-light); --accent: var(--accent-light);
         --text: var(--text-light); --muted: var(--muted-light); --border: var(--border-light);
-        --accent-ink: #253E8F;
+        --accent-ink: #1B263B;
       }
       .pp-root[data-theme='dark'] {
         --bg: var(--bg-dark); --surface: var(--surface-dark); --accent: var(--accent-dark);
         --text: var(--text-dark); --muted: var(--muted-dark); --border: var(--border-dark);
-        --accent-ink: #0F1730;
+        --accent-ink: #0D1B2A;
       }
       .pp-root {
         background: var(--bg); color: var(--text); font-family: 'Karla', sans-serif;
@@ -3025,7 +3025,7 @@ function MainApp({ user, onChangeGrade, onSwitchRole, theme, setTheme }) {
 
 function PreplistProRoot() {
   const [theme, setTheme] = useLocalState("preplist:theme", "light");
-  useEffect(() => { document.documentElement.style.background = document.body.style.background = theme === "dark" ? "#18191C" : "#FBF6EA"; }, [theme]);
+  useEffect(() => { document.documentElement.style.background = document.body.style.background = theme === "dark" ? "#0D1B2A" : "#F4F1DE"; }, [theme]);
   const [role, setRole] = useLocalState("preplist:role2", null);
   const [myGrade, setMyGrade] = useLocalState("preplist:myGrade", null);
   const sessionReady = useAnonymousSession();
