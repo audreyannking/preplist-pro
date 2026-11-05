@@ -1599,7 +1599,7 @@ function RoleGate({
       marginBottom: 22
     }
   }, /*#__PURE__*/React.createElement("img", {
-    src: "favicon.svg",
+    src: "favicon.svg?v=2",
     alt: "",
     width: "72",
     height: "72",
@@ -8763,7 +8763,7 @@ function MainApp({
       gap: 6
     }
   }, /*#__PURE__*/React.createElement("img", {
-    src: "favicon.svg",
+    src: "favicon.svg?v=2",
     alt: "",
     width: "26",
     height: "26",
