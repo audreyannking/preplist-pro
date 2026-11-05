@@ -419,6 +419,7 @@ const SUBJECT_PALETTE = [
 ];
 function subjectColor(subject) {
   if (!subject) return SUBJECT_PALETTE[7];
+  if (subject.trim().toLowerCase() === "chemistry") return { bg: "#FF2E9F", fg: "#FFFFFF" };
   return SUBJECT_PALETTE[hashStr(subject.trim().toLowerCase()) % SUBJECT_PALETTE.length];
 }
 function cardTilt(id) { const h = hashStr(id); return (h % 26) / 10 - 1.3; }
@@ -456,10 +457,10 @@ function GlobalStyle() {
     <style>{`
       @import url('https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=Karla:wght@400;500;600;700&display=swap');
       .pp-root {
-        --bg-light: #FFFFFF; --surface-light: #FFF6EE; --accent-light: #C3D2F7;
-        --text-light: #1F1F1F; --muted-light: #7A7368; --border-light: #EAD9C4;
-        --bg-dark: #1A1A1A; --surface-dark: #262320; --accent-dark: #92A9F2;
-        --text-dark: #F5F5F5; --muted-dark: #A99E90; --border-dark: #3A342C;
+        --bg-light: #FBF6EA; --surface-light: #F5EEDD; --accent-light: #C3D2F7;
+        --text-light: #1F1F1F; --muted-light: #7A7368; --border-light: #E3D8C0;
+        --bg-dark: #18191C; --surface-dark: #222428; --accent-dark: #92A9F2;
+        --text-dark: #F5F5F5; --muted-dark: #9AA0AA; --border-dark: #34373D;
       }
       .pp-root[data-theme='light'] {
         --bg: var(--bg-light); --surface: var(--surface-light); --accent: var(--accent-light);
@@ -638,8 +639,8 @@ function FilterBar({ query, setQuery, subject, setSubject, grade, setGrade, plac
 /* ---------------------------------------------------------------------- */
 
 const ROLE_INFO = {
-  student: { label: "Student", icon: GraduationCap, desc: "Browse notes, videos, files, quizzes, flashcards and past papers." },
-  admin: { label: "Admin", icon: ShieldCheck, desc: "Full access — add notes, videos, files and quiz questions." }
+  student: { label: "Student", icon: GraduationCap, desc: "Browse notes, videos, files, flashcards and past papers." },
+  admin: { label: "Admin", icon: ShieldCheck, desc: "Full access — add notes, videos and files." }
 };
 
 function BookLogo({ size = 26, style }) {
@@ -2070,387 +2071,9 @@ function PastPapersView() {
   );
 }
 
-/* ---------------------------------------------------------------------- */
-/* Quiz — original practice questions (written for this site, not taken   */
-/* from past papers). Admins can add more.                       */
-/* ---------------------------------------------------------------------- */
-
-function shuffled(list) {
-  const a = [...list];
-  for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; }
-  return a;
-}
-// Digital SAT pacing: Reading & Writing 64 min / 54 questions, Math 70 min / 44 questions.
-function secondsPerQuestion(examType, subject) {
-  if (examType === "SAT") return subject === "Math" ? 95 : 71;
-  return 60;
-}
 function fmtClock(total) {
   const s = Math.max(0, Math.round(total));
   return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
-}
-
-function AddQuestionModal({ onClose, onSubmit }) {
-  const [examType, setExamType] = useState("");
-  const [subject, setSubject] = useState("");
-  const [topic, setTopic] = useState("");
-  const [question, setQuestion] = useState("");
-  const [options, setOptions] = useState(["", "", "", ""]);
-  const [answer, setAnswer] = useState(0);
-  const [explanation, setExplanation] = useState("");
-  const qRef = useRef(null);
-  const canSubmit = examType && subject && question.trim() && options.every((o) => o.trim());
-  const setOpt = (i, v) => setOptions((prev) => prev.map((o, k) => (k === i ? v : o)));
-  return (
-    <Modal title="Add a quiz question" onClose={onClose} wide>
-      <TwoUp>
-        <Field label="Exam type"><ExamTypeSelect value={examType} onChange={(t) => { setExamType(t); setSubject(""); }} /></Field>
-        <Field label={examType === "SAT" ? "Section" : "Subject"}><PaperSubjectSelect value={subject} onChange={setSubject} examType={examType} /></Field>
-      </TwoUp>
-      <Field label="Topic (optional)"><input className="pp-input" style={{ width: "100%", padding: "9px 12px", fontSize: 14.5 }} value={topic} onChange={(e) => setTopic(e.target.value)} placeholder="e.g. Cells, Algebra, Grammar" /></Field>
-      <Field label="Question">
-        <MathToolbar textareaRef={qRef} value={question} setValue={setQuestion} />
-        <textarea ref={qRef} className="pp-input" style={{ width: "100%", padding: "9px 12px", fontSize: 14, minHeight: 70, resize: "vertical", fontFamily: "inherit" }} value={question} onChange={(e) => setQuestion(e.target.value)} placeholder="Write your own question — use $...$ for maths" />
-      </Field>
-      <Field label="Answer options (tick the correct one)">
-        {options.map((o, i) => (
-          <div key={i} style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
-            <input type="radio" name="correct" checked={answer === i} onChange={() => setAnswer(i)} aria-label={`Option ${i + 1} is correct`} style={{ accentColor: "var(--accent)" }} />
-            <input className="pp-input" style={{ flex: 1, padding: "8px 10px", fontSize: 14 }} value={o} onChange={(e) => setOpt(i, e.target.value)} placeholder={`Option ${i + 1}`} />
-          </div>
-        ))}
-      </Field>
-      <Field label="Explanation (shown after answering)"><textarea className="pp-input" style={{ width: "100%", padding: "9px 12px", fontSize: 14, minHeight: 56, resize: "vertical", fontFamily: "inherit" }} value={explanation} onChange={(e) => setExplanation(e.target.value)} /></Field>
-      <div style={{ fontSize: 12, color: "var(--muted)", marginBottom: 12 }}>Only add questions you wrote yourself — please don't copy questions from exam papers or books.</div>
-      <button className="pp-btn pp-btn-primary" style={{ width: "100%", padding: "10px 0", opacity: canSubmit ? 1 : 0.5 }} disabled={!canSubmit}
-        onClick={() => onSubmit({ examType, subject, topic: topic.trim(), question: question.trim(), options: options.map((o) => o.trim()), answer, explanation: explanation.trim() })}>
-        Add question
-      </button>
-    </Modal>
-  );
-}
-
-// Parses CSV (or tab-separated) text into quiz questions. Columns:
-// question, option A, option B, [option C], [option D], correct answer (A-D), [explanation]
-function parseCsvRows(text) {
-  const delim = (text.split(/\r?\n/)[0] || "").includes("\t") ? "\t" : ",";
-  const rows = []; let row = []; let cell = ""; let q = false;
-  for (let i = 0; i < text.length; i++) {
-    const c = text[i];
-    if (q) {
-      if (c === '"' && text[i + 1] === '"') { cell += '"'; i++; }
-      else if (c === '"') q = false;
-      else cell += c;
-    } else if (c === '"') q = true;
-    else if (c === delim) { row.push(cell); cell = ""; }
-    else if (c === "\n" || c === "\r") { if (c === "\r" && text[i + 1] === "\n") i++; row.push(cell); cell = ""; if (row.some((x) => x.trim())) rows.push(row); row = []; }
-    else cell += c;
-  }
-  row.push(cell); if (row.some((x) => x.trim())) rows.push(row);
-  return rows;
-}
-function quizFromCsv(text) {
-  const rows = parseCsvRows(text.replace(/^\uFEFF/, ""));
-  if (rows.length && /question/i.test(rows[0][0] || "") && /option|answer|correct/i.test(rows[0].join(" "))) rows.shift();
-  const good = []; const problems = [];
-  rows.forEach((r, i) => {
-    const cells = r.map((x) => x.trim());
-    const question = cells[0];
-    const opts = cells.slice(1, 5);
-    const options = opts.filter(Boolean);
-    const rawAnswer = (cells[5] || "").trim();
-    let answer = -1;
-    if (/^[A-D]$/i.test(rawAnswer)) answer = rawAnswer.toUpperCase().charCodeAt(0) - 65;
-    else if (/^[1-4]$/.test(rawAnswer)) answer = Number(rawAnswer) - 1;
-    else if (rawAnswer) answer = opts.findIndex((o) => o.toLowerCase() === rawAnswer.toLowerCase());
-    // keep the answer index pointing at the right option after blanks are dropped
-    const mapped = answer >= 0 && opts[answer] ? options.indexOf(opts[answer]) : -1;
-    if (!question) problems.push(`Row ${i + 1}: no question text.`);
-    else if (options.length < 2) problems.push(`Row ${i + 1}: needs at least two answer options.`);
-    else if (mapped < 0) problems.push(`Row ${i + 1}: the correct answer must be A, B, C or D (matching a filled option).`);
-    else good.push({ question, options, answer: mapped, explanation: cells[6] || "" });
-  });
-  return { good, problems };
-}
-
-function ImportQuizModal({ onClose, onImport }) {
-  const [examType, setExamType] = useState("");
-  const [subject, setSubject] = useState("");
-  const [topic, setTopic] = useState("");
-  const [text, setText] = useState("");
-  const [busy, setBusy] = useState(false);
-  const parsed = useMemo(() => (text.trim() ? quizFromCsv(text) : null), [text]);
-  const canImport = examType && subject && parsed && parsed.good.length > 0 && !busy;
-  async function readFile(e) {
-    const f = e.target.files && e.target.files[0];
-    e.target.value = "";
-    if (!f) return;
-    if (/\.xlsx?$/i.test(f.name)) { alert("Please save the spreadsheet as CSV first (File > Download > CSV), then upload that."); return; }
-    setText(await f.text());
-  }
-  function downloadTemplate() {
-    const csv = 'question,option A,option B,option C,option D,correct answer (A-D),explanation (optional)\n"What is 2 + 2?",3,4,5,6,B,"Adding 2 and 2 gives 4."\n"Which of these is a prime number?",4,6,7,9,C,"7 can only be divided by 1 and itself."\n';
-    const a = document.createElement("a");
-    a.href = URL.createObjectURL(new Blob([csv], { type: "text/csv" })); a.download = "quiz-template.csv"; a.click();
-    setTimeout(() => URL.revokeObjectURL(a.href), 2000);
-  }
-  return (
-    <Modal title="Upload a quiz" onClose={onClose} wide>
-      <div style={{ fontSize: 13, lineHeight: 1.55, marginBottom: 12 }}>
-        Upload a CSV file (or paste the same text) with one question per row: <b>question, option A, option B, option C, option D, correct answer (A–D), explanation</b>. Use questions you wrote yourself — please don't copy from exam papers or books.
-        <div style={{ marginTop: 8 }}><button className="pp-btn pp-btn-ghost" style={{ padding: "6px 12px", fontSize: 12.5 }} onClick={downloadTemplate}>Download a template</button></div>
-      </div>
-      <TwoUp>
-        <Field label="Exam type"><ExamTypeSelect value={examType} onChange={(t) => { setExamType(t); setSubject(""); }} /></Field>
-        <Field label={examType === "SAT" ? "Section" : "Subject"}><PaperSubjectSelect value={subject} onChange={setSubject} examType={examType} /></Field>
-      </TwoUp>
-      <Field label="Topic (optional)"><input className="pp-input" style={{ width: "100%", padding: "9px 12px", fontSize: 14.5 }} value={topic} onChange={(e) => setTopic(e.target.value)} placeholder="e.g. Algebra" /></Field>
-      <Field label="Quiz file (.csv)"><input type="file" accept=".csv,.txt,.tsv,text/csv,text/plain" onChange={readFile} className="pp-file-input" aria-label="Quiz file" /></Field>
-      <Field label="…or paste it here"><textarea className="pp-input" style={{ width: "100%", padding: "9px 12px", fontSize: 13, minHeight: 90, resize: "vertical", fontFamily: "monospace" }} value={text} onChange={(e) => setText(e.target.value)} placeholder='"What is 2 + 2?",3,4,5,6,B,"Adding gives 4."' /></Field>
-      {parsed && (
-        <div style={{ fontSize: 13, marginBottom: 12 }}>
-          <b>{parsed.good.length}</b> question{parsed.good.length === 1 ? "" : "s"} ready to upload.
-          {parsed.problems.length > 0 && <div style={{ color: "#8A3434", marginTop: 4 }}>{parsed.problems.slice(0, 5).map((p) => <div key={p}>{p}</div>)}{parsed.problems.length > 5 && <div>…and {parsed.problems.length - 5} more problems.</div>}</div>}
-        </div>
-      )}
-      <button className="pp-btn pp-btn-primary" style={{ width: "100%", padding: "10px 0", opacity: canImport ? 1 : 0.5 }} disabled={!canImport}
-        onClick={async () => { setBusy(true); await onImport(parsed.good.map((q) => ({ ...q, examType, subject, topic: topic.trim() }))); setBusy(false); }}>
-        Upload {parsed ? parsed.good.length : 0} question{parsed && parsed.good.length === 1 ? "" : "s"}
-      </button>
-    </Modal>
-  );
-}
-
-function QuizReference({ options, refIndex, setRefIndex }) {
-  const opt = options[Number(refIndex)];
-  return (
-    <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", height: "calc(100dvh - 190px)", minHeight: 380 }}>
-      <select className="pp-select" aria-label="Reference material" style={{ padding: "8px 10px", fontSize: 13.5, width: "100%", marginBottom: 8 }} value={refIndex} onChange={(e) => setRefIndex(e.target.value)}>
-        <option value="">Choose a note to read alongside…</option>
-        {options.map((o, i) => <option key={i} value={i}>{o.label}</option>)}
-      </select>
-      {!opt ? (
-        <div className="pp-card" style={{ borderRadius: 10, padding: 16, fontSize: 13, color: "var(--muted)" }}>Pick something above and it stays on this side while you answer questions on the other.</div>
-      ) : (
-        <div className="pp-card" style={{ borderRadius: 10, padding: 14, overflowY: "auto", flex: 1 }}>
-          <div className="pp-serif" style={{ fontSize: 15.5, fontWeight: 600, marginBottom: 8 }}>{opt.note.title}</div>
-          {opt.note.type === "image" ? <NoteImages note={opt.note} style={{ width: "100%", borderRadius: 6 }} /> : <p style={{ fontSize: 13.5, lineHeight: 1.55, whiteSpace: "pre-wrap" }}><MathText text={opt.note.content} /></p>}
-        </div>
-      )}
-    </div>
-  );
-}
-
-function QuizView({ questions, user, notes, onNeedRefs, onAddQuestion, onImportQuestions, onDeleteQuestion, onDeleteMany }) {
-  const [phase, setPhase] = useState("setup");
-  const [examType, setExamType] = useState("");
-  const [subject, setSubject] = useState("");
-  const [topic, setTopic] = useState("");
-  const [count, setCount] = useState(10);
-  const [timed, setTimed] = useState(false);
-  const [history, setHistory] = useLocalState("preplist:quizHistory", []);
-  const [showAdd, setShowAdd] = useState(false);
-  const [showImport, setShowImport] = useState(false);
-  const [run, setRun] = useState(null);
-  const [split, setSplit] = useState(false);
-  const [refIndex, setRefIndex] = useState("");
-  const canManage = hasElevatedAccess(user);
-
-  const scoped = useMemo(() => questions.filter((q) => !examType || q.examType === examType), [questions, examType]);
-  const subjectOptions = useMemo(() => Array.from(new Set(scoped.map((q) => q.subject))).sort(), [scoped]);
-  const topicOptions = useMemo(() => Array.from(new Set(scoped.filter((q) => !subject || q.subject === subject).map((q) => q.topic).filter(Boolean))).sort(), [scoped, subject]);
-  const pool = useMemo(() => scoped.filter((q) => (!subject || q.subject === subject) && (!topic || q.topic === topic)), [scoped, subject, topic]);
-
-  const refOptions = useMemo(() => {
-    const out = [];
-    notes.filter((n) => !subject || n.subject === subject).forEach((n) => out.push({ kind: "note", label: `Note: ${n.title}`, note: n }));
-    return out;
-  }, [notes, subject]);
-
-  function begin(items, secs) {
-    setRun({ items, idx: 0, picked: null, answers: [], secondsLeft: secs });
-    setPhase("run");
-  }
-  function start() {
-    const items = shuffled(pool).slice(0, Math.min(Number(count) || 10, pool.length));
-    if (items.length === 0) return;
-    begin(items, timed ? items.length * secondsPerQuestion(examType, subject) : null);
-  }
-  function finish(finalRun) {
-    const correct = finalRun.answers.filter((a) => a.correct).length;
-    setHistory((h) => [{ at: Date.now(), examType: examType || "Mixed", subject: subject || "All subjects", total: finalRun.items.length, correct, timed: finalRun.secondsLeft != null }, ...(h || [])].slice(0, 10));
-    setRun(finalRun);
-    setPhase("done");
-    markStudiedToday();
-  }
-  function choose(i) {
-    if (!run || run.picked !== null) return;
-    const q = run.items[run.idx];
-    setRun({ ...run, picked: i, answers: [...run.answers, { id: q.id, picked: i, correct: i === q.answer }] });
-  }
-  function next() {
-    if (run.idx + 1 >= run.items.length) finish(run);
-    else setRun({ ...run, idx: run.idx + 1, picked: null });
-  }
-
-  useEffect(() => {
-    if (phase !== "run" || run?.secondsLeft == null) return;
-    const t = setInterval(() => {
-      setRun((r) => {
-        if (!r || r.secondsLeft == null) return r;
-        return { ...r, secondsLeft: r.secondsLeft - 1 };
-      });
-    }, 1000);
-    return () => clearInterval(t);
-  }, [phase, run?.secondsLeft == null]);
-  useEffect(() => {
-    if (phase === "run" && run && run.secondsLeft != null && run.secondsLeft <= 0) finish(run);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [run?.secondsLeft, phase]);
-
-  const sel = { padding: "9px 10px", fontSize: 14, width: "100%" };
-
-  if (phase === "run" && run) {
-    const q = run.items[run.idx];
-    const answered = run.picked !== null;
-    return (
-      <div>
-        <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 12, flexWrap: "wrap" }}>
-          <div style={{ fontSize: 13, fontWeight: 700 }}>Question {run.idx + 1} of {run.items.length}</div>
-          {run.secondsLeft != null && <GradeTag text={`⏱ ${fmtClock(run.secondsLeft)}`} />}
-          <div style={{ flex: 1 }} />
-          <button className={`pp-btn ${split ? "pp-btn-primary" : "pp-btn-ghost"}`} style={{ padding: "6px 12px", fontSize: 12.5 }} onClick={() => { if (!split && onNeedRefs) onNeedRefs(); setSplit(!split); }}><LayoutGrid size={13} style={{ marginRight: 5, display: "inline" }} />Split screen</button>
-          <button className="pp-btn pp-btn-ghost" style={{ padding: "6px 12px", fontSize: 12.5 }} onClick={() => { setRun(null); setPhase("setup"); }}>Quit</button>
-        </div>
-        <div className="pp-split" style={{ alignItems: "flex-start" }}>
-          <div style={{ flex: 1, minWidth: 0 }}>
-            <div className="pp-card" style={{ borderRadius: 10, padding: 16 }}>
-              <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 8 }}><GradeTag text={q.examType} /><Tag text={q.subject} />{q.topic && <GradeTag text={q.topic} />}</div>
-              <div style={{ fontSize: 15.5, fontWeight: 600, lineHeight: 1.5, marginBottom: 12 }}><MathText text={q.question} /></div>
-              {q.options.map((o, i) => {
-                const isRight = answered && i === q.answer;
-                const isWrong = answered && i === run.picked && i !== q.answer;
-                return (
-                  <button key={i} className="pp-btn pp-btn-ghost" disabled={answered} onClick={() => choose(i)}
-                    style={{ display: "block", width: "100%", textAlign: "left", padding: "10px 12px", marginBottom: 8, fontSize: 14, opacity: 1,
-                      borderColor: isRight ? "#2E7D4F" : isWrong ? "#B3402F" : "var(--border)", background: isRight ? "rgba(46,125,79,0.14)" : isWrong ? "rgba(179,64,47,0.14)" : "transparent" }}>
-                    <b style={{ marginRight: 8 }}>{String.fromCharCode(65 + i)}</b><MathText text={o} />{isRight ? "  ✓" : isWrong ? "  ✗" : ""}
-                  </button>
-                );
-              })}
-              {answered && (
-                <div style={{ marginTop: 6 }}>
-                  <div style={{ fontSize: 13.5, fontWeight: 700, color: run.picked === q.answer ? "#2E7D4F" : "#B3402F" }}>{run.picked === q.answer ? "Correct" : "Not quite"}</div>
-                  {q.explanation && <div style={{ fontSize: 13, marginTop: 4, lineHeight: 1.5 }}><MathText text={q.explanation} /></div>}
-                  <button className="pp-btn pp-btn-primary" style={{ marginTop: 12, padding: "9px 18px" }} onClick={next}>{run.idx + 1 >= run.items.length ? "See results" : "Next question"}</button>
-                </div>
-              )}
-            </div>
-          </div>
-          {split && <QuizReference options={refOptions} refIndex={refIndex} setRefIndex={setRefIndex} />}
-        </div>
-      </div>
-    );
-  }
-
-  if (phase === "done" && run) {
-    const correct = run.answers.filter((a) => a.correct).length;
-    const total = run.items.length;
-    const missed = run.items.filter((q) => !run.answers.find((a) => a.id === q.id && a.correct));
-    return (
-      <div>
-        <div className="pp-card" style={{ borderRadius: 10, padding: 18, textAlign: "center", marginBottom: 16 }}>
-          <div className="pp-serif" style={{ fontSize: 30, fontWeight: 700 }}>{correct} / {total}</div>
-          <div style={{ fontSize: 14, color: "var(--muted)" }}>{Math.round((correct / total) * 100)}% correct</div>
-          <div style={{ display: "flex", gap: 10, justifyContent: "center", marginTop: 14, flexWrap: "wrap" }}>
-            {missed.length > 0 && <button className="pp-btn pp-btn-primary" style={{ padding: "9px 16px" }} onClick={() => begin(shuffled(missed), null)}>Retry the {missed.length} I missed</button>}
-            <button className="pp-btn pp-btn-ghost" style={{ padding: "9px 16px" }} onClick={() => { setRun(null); setPhase("setup"); }}>New quiz</button>
-          </div>
-        </div>
-        {missed.length > 0 && <div className="pp-serif" style={{ fontSize: 15.5, fontWeight: 700, marginBottom: 8 }}>Review</div>}
-        {missed.map((q) => {
-          const a = run.answers.find((x) => x.id === q.id);
-          return (
-            <div key={q.id} className="pp-card" style={{ borderRadius: 10, padding: 14, marginBottom: 10 }}>
-              <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 6 }}><MathText text={q.question} /></div>
-              <div style={{ fontSize: 13, color: "#B3402F" }}>Your answer: {a ? <MathText text={q.options[a.picked]} /> : "No answer (ran out of time)"}</div>
-              <div style={{ fontSize: 13, color: "#2E7D4F" }}>Correct answer: <MathText text={q.options[q.answer]} /></div>
-              {q.explanation && <div style={{ fontSize: 12.5, marginTop: 4 }}><MathText text={q.explanation} /></div>}
-            </div>
-          );
-        })}
-      </div>
-    );
-  }
-
-  return (
-    <div>
-      <div className="pp-card" style={{ borderRadius: 10, padding: 14, marginBottom: 16, fontSize: 13, lineHeight: 1.55 }}>
-        <div className="pp-serif" style={{ fontSize: 15.5, fontWeight: 700, marginBottom: 4 }}>Practice quiz</div>
-        Quizzes uploaded by the PrepList Pro team. Get instant feedback with an explanation after each question, then retry the ones you missed. (Real past papers are on the Past Papers tab.)
-      </div>
-      <div style={{ display: "flex", gap: 10, marginBottom: 12, flexWrap: "wrap", alignItems: "flex-end" }}>
-        <div style={{ width: 150 }}><ExamTypeSelect value={examType} onChange={(t) => { setExamType(t); setSubject(""); setTopic(""); }} includeAll /></div>
-        <div style={{ width: 200 }}>
-          <select className="pp-select" aria-label="Subject" style={sel} value={subject} onChange={(e) => { setSubject(e.target.value); setTopic(""); }}>
-            <option value="">All subjects</option>
-            {subjectOptions.map((s) => <option key={s} value={s}>{s}</option>)}
-          </select>
-        </div>
-        <div style={{ width: 170 }}>
-          <select className="pp-select" aria-label="Topic" style={sel} value={topic} onChange={(e) => setTopic(e.target.value)}>
-            <option value="">All topics</option>
-            {topicOptions.map((s) => <option key={s} value={s}>{s}</option>)}
-          </select>
-        </div>
-        <div style={{ width: 120 }}>
-          <select className="pp-select" aria-label="Number of questions" style={sel} value={count} onChange={(e) => setCount(e.target.value)}>
-            {[5, 10, 20, 50].map((n) => <option key={n} value={n}>{n} questions</option>)}
-          </select>
-        </div>
-        <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 13.5, paddingBottom: 9 }}>
-          <input type="checkbox" checked={timed} onChange={(e) => setTimed(e.target.checked)} style={{ accentColor: "var(--accent)" }} />
-          Timed{examType === "SAT" ? " (SAT pace)" : ""}
-        </label>
-      </div>
-      <div style={{ display: "flex", gap: 10, alignItems: "center", marginBottom: 20, flexWrap: "wrap" }}>
-        <button className="pp-btn pp-btn-primary" style={{ padding: "10px 20px", opacity: pool.length ? 1 : 0.5 }} disabled={!pool.length} onClick={start}>Start quiz</button>
-        <span style={{ fontSize: 12.5, color: "var(--muted)" }}>{pool.length} question{pool.length === 1 ? "" : "s"} available</span>
-        {canManage && <button className="pp-btn pp-btn-primary" style={{ padding: "9px 14px", fontSize: 13, marginLeft: "auto" }} onClick={() => setShowImport(true)}>Upload a quiz</button>}
-        {canManage && <button className="pp-btn pp-btn-ghost" style={{ padding: "9px 14px", fontSize: 13 }} onClick={() => setShowAdd(true)}><Plus size={14} style={{ marginRight: 5, display: "inline" }} />Add one question</button>}
-      </div>
-      {history.length > 0 && (
-        <div style={{ marginBottom: 20 }}>
-          <div className="pp-serif" style={{ fontSize: 15, fontWeight: 700, marginBottom: 6 }}>Your recent results</div>
-          {history.map((h) => (
-            <div key={h.at} style={{ fontSize: 13, display: "flex", gap: 8, padding: "4px 0", borderBottom: "1px solid var(--border)" }}>
-              <span style={{ flex: 1 }}>{h.examType} · {h.subject}{h.timed ? " · timed" : ""}</span>
-              <b>{h.correct}/{h.total}</b>
-              <span style={{ color: "var(--muted)", width: 70, textAlign: "right" }}>{timeAgo(h.at)}</span>
-            </div>
-          ))}
-        </div>
-      )}
-      {canManage && pool.length > 0 && (
-        <div>
-          <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 6, flexWrap: "wrap" }}>
-            <div className="pp-serif" style={{ fontSize: 15, fontWeight: 700 }}>Manage questions</div>
-            <button className="pp-btn pp-btn-ghost" style={{ padding: "4px 10px", fontSize: 12, marginLeft: "auto" }}
-              onClick={() => { if (window.confirm(`Delete these ${pool.length} question${pool.length === 1 ? "" : "s"}? This can't be undone.`)) onDeleteMany(pool.map((q) => q.id)); }}>Delete all {pool.length} shown</button>
-          </div>
-          {pool.slice(0, 40).map((q) => (
-            <div key={q.id} style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 0", borderBottom: "1px solid var(--border)", fontSize: 13 }}>
-              <span style={{ flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{q.subject}: {q.question}</span>
-              <button className="pp-btn pp-btn-ghost" style={{ padding: 5, borderRadius: 999 }} onClick={() => onDeleteQuestion(q.id)} aria-label="Delete question"><X size={13} /></button>
-            </div>
-          ))}
-        </div>
-      )}
-      {questions.length === 0 && <EmptyState icon={HelpCircle} title="No quizzes yet" body={canManage ? "Use Upload a quiz to add your first one from a CSV file or pasted text." : "Quizzes will appear here soon — check back later."} />}
-      {showImport && <ImportQuizModal onClose={() => setShowImport(false)} onImport={async (list) => { const ok = await onImportQuestions(list); if (ok) setShowImport(false); }} />}
-      {showAdd && <AddQuestionModal onClose={() => setShowAdd(false)} onSubmit={async (payload) => { const ok = await onAddQuestion(payload); if (ok) setShowAdd(false); }} />}
-    </div>
-  );
 }
 
 /* ---------------------------------------------------------------------- */
@@ -2701,7 +2324,7 @@ function StreakCard() {
     <div className="pp-card" style={{ borderRadius: 10, padding: 16, marginBottom: 16, display: "flex", gap: 24, alignItems: "center", flexWrap: "wrap" }}>
       <div><div className="pp-serif" style={{ fontSize: 30, fontWeight: 700, lineHeight: 1 }}>{streak}</div><div style={{ fontSize: 12.5, color: "var(--muted)" }}>day study streak</div></div>
       <div><div className="pp-serif" style={{ fontSize: 30, fontWeight: 700, lineHeight: 1 }}>{week}/7</div><div style={{ fontSize: 12.5, color: "var(--muted)" }}>days studied this week</div></div>
-      <div style={{ fontSize: 12.5, color: "var(--muted)", flex: 1, minWidth: 180 }}>A day counts when you finish a quiz, a flashcard round, or a focus block. Stored on this device.</div>
+      <div style={{ fontSize: 12.5, color: "var(--muted)", flex: 1, minWidth: 180 }}>A day counts when you finish a flashcard round or a focus block. Stored on this device.</div>
     </div>
   );
 }
@@ -2950,7 +2573,7 @@ function ToolsView() {
         <div style={{ fontSize: 13, lineHeight: 1.6 }}>
           <b>Reading and Writing:</b> 2 modules, 54 questions, 64 minutes — about 71 seconds a question.<br />
           <b>Math:</b> 2 modules, 44 questions, 70 minutes — about 95 seconds a question.<br />
-          The Quiz tab's "Timed (SAT pace)" option uses these per-question times. Always check College Board for the latest format and test dates.
+          Always check College Board for the latest format and test dates.
         </div>
       </div>
     </div>
@@ -3101,7 +2724,6 @@ const TABS = [
   { id: "videos", label: "Videos", icon: VideoIcon },
   { id: "files", label: "Files", icon: Folder },
   { id: "papers", label: "Past Papers", icon: FileText },
-  { id: "quiz", label: "Quiz", icon: HelpCircle },
   { id: "flashcards", label: "Flashcards", icon: Star },
   { id: "tools", label: "Tracker", icon: Clock },
   { id: "saved", label: "Saved", icon: Bookmark },
@@ -3116,7 +2738,6 @@ function MainApp({ user, onChangeGrade, onSwitchRole, theme, setTheme }) {
   const [notes, notesReady] = useCollection("notes", undefined, wanted.has("notes"));
   const [videos, videosReady] = useCollection("videos", undefined, wanted.has("videos"));
   const [libraryFiles, libraryFilesReady] = useCollection("libraryFiles", undefined, wanted.has("files"));
-  const [quizQuestions, quizReady] = useCollection("quizQuestions", undefined, wanted.has("quiz"));
   const [feedbackList] = useCollection("feedback", undefined, wanted.has("feedback"));
 
   const [tab, setTab] = useState("notes");
@@ -3124,7 +2745,7 @@ function MainApp({ user, onChangeGrade, onSwitchRole, theme, setTheme }) {
   const [showGrade, setShowGrade] = useState(false);
   const notesShown = useMemo(() => (user.grade ? notes.filter((n) => n.grade === user.grade) : notes), [notes, user.grade]);
   const videosShown = useMemo(() => (user.grade ? videos.filter((v) => v.grade === user.grade) : videos), [videos, user.grade]);
-  const TAB_NEEDS = { notes: ["notes"], videos: ["videos"], files: ["files"], papers: [], quiz: ["quiz"], saved: ["notes", "videos", "files"], tools: [], flashcards: [], contact: [] };
+  const TAB_NEEDS = { notes: ["notes"], videos: ["videos"], files: ["files"], papers: [], saved: ["notes", "videos", "files"], tools: [], flashcards: [], contact: [] };
   useEffect(() => { want(...(TAB_NEEDS[tab] || [])); if (tab === "contact" && user.role === "admin") want("feedback"); }, [tab, want]);
   useEffect(() => { if (showSearch) want("notes", "videos", "files"); }, [showSearch, want]);
   const [toast, setToast] = useState(null);
@@ -3310,10 +2931,6 @@ function MainApp({ user, onChangeGrade, onSwitchRole, theme, setTheme }) {
       });
     } catch (e) { notify({ kind: "error", text: friendlyDbError(e) }); }
   }
-  async function addQuizQuestion(payload) {
-    try { await db.collection("quizQuestions").add({ ...payload, addedByRole: user.role, createdAt: Date.now() }); return true; }
-    catch (e) { notify({ kind: "error", text: friendlyDbError(e) }); return false; }
-  }
   // Deletes documents but keeps a copy for ~10 seconds so "Undo" can put them back.
   async function deleteWithUndo(coll, items, label, fileIds = []) {
     if (!items.length) return;
@@ -3345,21 +2962,8 @@ function MainApp({ user, onChangeGrade, onSwitchRole, theme, setTheme }) {
   }
   const deleteNote = (n) => deleteWithUndo("notes", [n], `"${n.title}"`, noteFileIds(n));
   const deleteVideo = (v) => deleteWithUndo("videos", [v], `"${v.title}"`);
-  const deleteManyQuiz = (ids) => deleteWithUndo("quizQuestions", quizQuestions.filter((q) => ids.includes(q.id)), `${ids.length} question${ids.length === 1 ? "" : "s"}`);
-  async function importQuizQuestions(list) {
-    try {
-      for (let i = 0; i < list.length; i += 400) {
-        const batch = db.batch();
-        list.slice(i, i + 400).forEach((q) => batch.set(db.collection("quizQuestions").doc(), { ...q, addedByRole: user.role, createdAt: Date.now() }));
-        await batch.commit();
-      }
-      notify({ kind: "ok", text: `Uploaded ${list.length} question${list.length === 1 ? "" : "s"}.` });
-      return true;
-    } catch (e) { notify({ kind: "error", text: friendlyDbError(e) }); return false; }
-  }
-  const deleteQuizQuestion = (id) => deleteWithUndo("quizQuestions", quizQuestions.filter((q) => q.id === id), "question");
 
-  const READY = { notes: notesReady, videos: videosReady, files: libraryFilesReady, quiz: quizReady };
+  const READY = { notes: notesReady, videos: videosReady, files: libraryFilesReady };
   const dataReady = (TAB_NEEDS[tab] || []).every((n) => READY[n]);
 
   return (
@@ -3395,7 +2999,6 @@ function MainApp({ user, onChangeGrade, onSwitchRole, theme, setTheme }) {
               {tab === "videos" && <VideosView videos={videosShown} user={user} onAddVideo={addVideo} onDeleteVideo={deleteVideo} onEditVideo={(v, patch) => updateItem("videos", v.id, patch)} lastVideoId={lastVideoId} setLastVideoId={setLastVideoId} savedVideoIds={savedVideoIds} onToggleSavedVideo={onToggleSavedVideo} />}
               {tab === "files" && <FilesView files={libraryFiles} user={user} onAddFile={addLibraryFile} onDeleteFile={deleteLibraryFile} onEditFile={(f, patch) => updateItem("libraryFiles", f.id, patch)} onDownloadFile={downloadLibraryFile} lastFileId={lastFileId} setLastFileId={setLastFileId} savedFileIds={savedFileIds} onToggleSavedFile={onToggleSavedFile} />}
               {tab === "papers" && <PastPapersView />}
-              {tab === "quiz" && <QuizView questions={quizQuestions} user={user} notes={notes} onNeedRefs={() => want("notes")} onAddQuestion={addQuizQuestion} onImportQuestions={importQuizQuestions} onDeleteQuestion={deleteQuizQuestion} onDeleteMany={deleteManyQuiz} />}
               {tab === "tools" && <ToolsView />}
               {tab === "flashcards" && <FlashcardsView />}
               {tab === "contact" && <ContactView isAdmin={user.role === "admin"} feedback={feedbackList} />}
@@ -3422,6 +3025,7 @@ function MainApp({ user, onChangeGrade, onSwitchRole, theme, setTheme }) {
 
 function PreplistProRoot() {
   const [theme, setTheme] = useLocalState("preplist:theme", "light");
+  useEffect(() => { document.documentElement.style.background = document.body.style.background = theme === "dark" ? "#18191C" : "#FBF6EA"; }, [theme]);
   const [role, setRole] = useLocalState("preplist:role2", null);
   const [myGrade, setMyGrade] = useLocalState("preplist:myGrade", null);
   const sessionReady = useAnonymousSession();
