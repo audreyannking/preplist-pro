@@ -177,3 +177,4 @@ your behalf.
 - Notes, videos and files can have a description (for example who made them) and can be edited after posting (title, subject, grade, description; notes also text and photos).
 - Note photos are kept sharp (up to 2000px wide, stepping down only if too big for one Firestore document); cards use a small stored cover image.
 - Grade tracker uses CA / Periodic / Final categories (finals 50%, term exams 50% = CAs 30% + periodics 70%; weights editable) and shows what the final must be to hit a target.
+- Grade tracker is now a target planner: enter a target and your term average so far, add marks as they come back, and see what the final must be (50% weight by default, editable).
