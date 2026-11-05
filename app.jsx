@@ -457,20 +457,22 @@ function GlobalStyle() {
     <style>{`
       @import url('https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=Karla:wght@400;500;600;700&display=swap');
       .pp-root {
-        --bg-light: #F4F1DE; --surface-light: #EBE6CE; --accent-light: #B4C3D4; --sage-light: #778D7A; --sage-ink-light: #4F6B54;
+        --bg-light: #F4F1DE; --surface-light: #EBE6CE; --accent-light: #415A77; --field-light: #FAF8EC;
         --text-light: #0D1B2A; --muted-light: #5B6B7C; --border-light: #D4C4A8;
-        --bg-dark: #0D1B2A; --surface-dark: #1B263B; --accent-dark: #6A89AB; --sage-dark: #8FAA93; --sage-ink-dark: #A3BFA7;
-        --text-dark: #F4F1DE; --muted-dark: #98A6B5; --border-dark: #2E4059;
+        --sage-light: #778D7A; --sage-ink-light: #4F6B54; --accent-fg-light: #F4F1DE; --accent-ink-light: #415A77;
+        --bg-dark: #17181B; --surface-dark: #1B263B; --accent-dark: #4F6D8F; --field-dark: #0D1B2A;
+        --text-dark: #F4F1DE; --muted-dark: #9AA8B8; --border-dark: #2C3E57;
+        --sage-dark: #8FAA93; --sage-ink-dark: #A3BFA7; --accent-fg-dark: #F4F1DE; --accent-ink-dark: #8FA9C6;
       }
       .pp-root[data-theme='light'] {
-        --bg: var(--bg-light); --surface: var(--surface-light); --accent: var(--accent-light);
+        --bg: var(--bg-light); --surface: var(--surface-light); --accent: var(--accent-light); --field: var(--field-light);
         --text: var(--text-light); --muted: var(--muted-light); --border: var(--border-light);
-        --accent-ink: #1B263B; --sage: var(--sage-light); --sage-ink: var(--sage-ink-light);
+        --accent-fg: var(--accent-fg-light); --accent-ink: var(--accent-ink-light); --sage: var(--sage-light); --sage-ink: var(--sage-ink-light);
       }
       .pp-root[data-theme='dark'] {
-        --bg: var(--bg-dark); --surface: var(--surface-dark); --accent: var(--accent-dark);
+        --bg: var(--bg-dark); --surface: var(--surface-dark); --accent: var(--accent-dark); --field: var(--field-dark);
         --text: var(--text-dark); --muted: var(--muted-dark); --border: var(--border-dark);
-        --accent-ink: #0D1B2A; --sage: var(--sage-dark); --sage-ink: var(--sage-ink-dark);
+        --accent-fg: var(--accent-fg-dark); --accent-ink: var(--accent-ink-dark); --sage: var(--sage-dark); --sage-ink: var(--sage-ink-dark);
       }
       .pp-root {
         background: var(--bg); color: var(--text); font-family: 'Karla', sans-serif;
@@ -493,11 +495,11 @@ function GlobalStyle() {
         transition: transform 0.12s ease, background 0.15s ease, box-shadow 0.15s ease; cursor: pointer; }
       .pp-btn:active { transform: translateY(1px); }
       .pp-btn:disabled { cursor: default; opacity: 0.6; }
-      .pp-btn-primary { background: var(--accent); color: var(--accent-ink); border: 1px solid color-mix(in srgb, var(--accent) 70%, black 10%); }
+      .pp-btn-primary { background: var(--accent); color: var(--accent-fg); border: 1px solid color-mix(in srgb, var(--accent) 70%, black 10%); }
       .pp-btn-primary:hover { filter: brightness(1.04); }
       .pp-btn-ghost { background: transparent; color: var(--text); border: 1px solid var(--border); }
       .pp-btn-ghost:hover { background: var(--surface); }
-      .pp-input, .pp-select { background: var(--bg); border: 1px solid var(--border); color: var(--text); border-radius: 8px; font-family: 'Karla', sans-serif; }
+      .pp-input, .pp-select { background: var(--field); border: 1px solid var(--border); color: var(--text); border-radius: 8px; font-family: 'Karla', sans-serif; }
       .pp-input::placeholder { color: var(--muted); }
       .pp-tab { font-family: 'Karla', sans-serif; font-weight: 600; color: var(--muted); border-bottom: 2.5px solid transparent; cursor: pointer; white-space: nowrap; }
       .pp-tab.active { color: var(--text); border-bottom-color: var(--accent); }
@@ -3025,7 +3027,7 @@ function MainApp({ user, onChangeGrade, onSwitchRole, theme, setTheme }) {
 
 function PreplistProRoot() {
   const [theme, setTheme] = useLocalState("preplist:theme", "light");
-  useEffect(() => { document.documentElement.style.background = document.body.style.background = theme === "dark" ? "#0D1B2A" : "#F4F1DE"; }, [theme]);
+  useEffect(() => { document.documentElement.style.background = document.body.style.background = theme === "dark" ? "#17181B" : "#F4F1DE"; }, [theme]);
   const [role, setRole] = useLocalState("preplist:role2", null);
   const [myGrade, setMyGrade] = useLocalState("preplist:myGrade", null);
   const sessionReady = useAnonymousSession();
