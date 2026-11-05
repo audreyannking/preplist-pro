@@ -419,7 +419,7 @@ const SUBJECT_PALETTE = [
 ];
 function subjectColor(subject) {
   if (!subject) return SUBJECT_PALETTE[7];
-  if (subject.trim().toLowerCase() === "chemistry") return { bg: "#FF2E9F", fg: "#FFFFFF" };
+  if (subject.trim().toLowerCase() === "chemistry") return { bg: "#F8DCE8", fg: "#8A2F5C" };
   return SUBJECT_PALETTE[hashStr(subject.trim().toLowerCase()) % SUBJECT_PALETTE.length];
 }
 function cardTilt(id) { const h = hashStr(id); return (h % 26) / 10 - 1.3; }
@@ -459,7 +459,7 @@ function GlobalStyle() {
       .pp-root {
         --bg-light: #FBF6EA; --surface-light: #F5EEDD; --accent-light: #C3D2F7;
         --text-light: #1F1F1F; --muted-light: #7A7368; --border-light: #E3D8C0;
-        --bg-dark: #18191C; --surface-dark: #222428; --accent-dark: #92A9F2;
+        --bg-dark: #18191C; --surface-dark: #222428; --accent-dark: #6F8CCB;
         --text-dark: #F5F5F5; --muted-dark: #9AA0AA; --border-dark: #34373D;
       }
       .pp-root[data-theme='light'] {
@@ -470,7 +470,7 @@ function GlobalStyle() {
       .pp-root[data-theme='dark'] {
         --bg: var(--bg-dark); --surface: var(--surface-dark); --accent: var(--accent-dark);
         --text: var(--text-dark); --muted: var(--muted-dark); --border: var(--border-dark);
-        --accent-ink: #121B3D;
+        --accent-ink: #0F1730;
       }
       .pp-root {
         background: var(--bg); color: var(--text); font-family: 'Karla', sans-serif;
