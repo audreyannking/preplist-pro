@@ -984,20 +984,20 @@ function GlobalStyle() {
   return /*#__PURE__*/React.createElement("style", null, `
       @import url('https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=Karla:wght@400;500;600;700&display=swap');
       .pp-root {
-        --bg-light: #F4F1DE; --surface-light: #EBE6CE; --accent-light: #B4C3D4;
+        --bg-light: #F4F1DE; --surface-light: #EBE6CE; --accent-light: #B4C3D4; --sage-light: #778D7A; --sage-ink-light: #4F6B54;
         --text-light: #0D1B2A; --muted-light: #5B6B7C; --border-light: #D4C4A8;
-        --bg-dark: #0D1B2A; --surface-dark: #1B263B; --accent-dark: #6A89AB;
+        --bg-dark: #0D1B2A; --surface-dark: #1B263B; --accent-dark: #6A89AB; --sage-dark: #8FAA93; --sage-ink-dark: #A3BFA7;
         --text-dark: #F4F1DE; --muted-dark: #98A6B5; --border-dark: #2E4059;
       }
       .pp-root[data-theme='light'] {
         --bg: var(--bg-light); --surface: var(--surface-light); --accent: var(--accent-light);
         --text: var(--text-light); --muted: var(--muted-light); --border: var(--border-light);
-        --accent-ink: #1B263B;
+        --accent-ink: #1B263B; --sage: var(--sage-light); --sage-ink: var(--sage-ink-light);
       }
       .pp-root[data-theme='dark'] {
         --bg: var(--bg-dark); --surface: var(--surface-dark); --accent: var(--accent-dark);
         --text: var(--text-dark); --muted: var(--muted-dark); --border: var(--border-dark);
-        --accent-ink: #0D1B2A;
+        --accent-ink: #0D1B2A; --sage: var(--sage-dark); --sage-ink: var(--sage-ink-dark);
       }
       .pp-root {
         background: var(--bg); color: var(--text); font-family: 'Karla', sans-serif;
@@ -1009,12 +1009,12 @@ function GlobalStyle() {
       .pp-index-card { border-radius: 3px; box-shadow: 1px 2px 0 var(--border); }
       .pp-index-card::before {
         content: ''; position: absolute; top: 0; left: 22px; width: 1px; height: 100%;
-        background: color-mix(in srgb, var(--accent) 35%, transparent);
+        background: color-mix(in srgb, var(--sage) 45%, transparent);
       }
       .pp-tape {
         position: absolute; top: -10px; left: 50%; transform: translateX(-50%) rotate(-2deg);
-        width: 64px; height: 20px; background: color-mix(in srgb, var(--accent) 55%, transparent);
-        opacity: 0.8; border: 1px solid color-mix(in srgb, var(--accent) 70%, transparent);
+        width: 64px; height: 20px; background: color-mix(in srgb, var(--sage) 55%, transparent);
+        opacity: 0.8; border: 1px solid color-mix(in srgb, var(--sage) 70%, transparent);
       }
       .pp-btn { font-family: 'Karla', sans-serif; font-weight: 600; border-radius: 8px;
         transition: transform 0.12s ease, background 0.15s ease, box-shadow 0.15s ease; cursor: pointer; }
@@ -1425,14 +1425,14 @@ function BookLogo({
     }
   }, /*#__PURE__*/React.createElement("path", {
     d: "M256 156C196 122 106 120 46 148V408C106 382 196 386 256 418C316 386 406 382 466 408V148C406 120 316 122 256 156Z",
-    fill: "#6F88DE",
-    stroke: "#6F88DE",
+    fill: "#2C3F57",
+    stroke: "#2C3F57",
     strokeWidth: "8",
     strokeLinejoin: "round"
   }), /*#__PURE__*/React.createElement("path", {
     d: "M256 140C196 106 106 104 46 132V392C106 366 196 370 256 402C316 370 406 366 466 392V132C406 104 316 106 256 140Z",
-    fill: "#92A9F2",
-    stroke: "#92A9F2",
+    fill: "#415A77",
+    stroke: "#415A77",
     strokeWidth: "8",
     strokeLinejoin: "round"
   }), /*#__PURE__*/React.createElement("path", {
@@ -1443,10 +1443,10 @@ function BookLogo({
     fill: "var(--bg)"
   }), /*#__PURE__*/React.createElement("path", {
     d: "M256 160V380",
-    stroke: "#92A9F2",
+    stroke: "#778D7A",
     strokeWidth: "6"
   }), /*#__PURE__*/React.createElement("g", {
-    stroke: "#92A9F2",
+    stroke: "#778D7A",
     strokeWidth: "14",
     strokeLinecap: "round",
     fill: "none"
@@ -1456,7 +1456,7 @@ function BookLogo({
     d: "M288 212Q347 194 408 204M288 258Q347 240 408 250M288 304Q347 286 408 296M288 345Q324 335 360 342"
   })), /*#__PURE__*/React.createElement("path", {
     d: "M330 150V250L350 232L370 250V142Z",
-    fill: "#FFB347"
+    fill: "#C9AE7C"
   }));
 }
 const GRADE_CHOICES = [7, 8, 9, 10, 11, 12].map(n => ({
@@ -2505,9 +2505,9 @@ function NotesView({
       "aria-label": isSaved ? "Remove bookmark" : "Add bookmark"
     }, /*#__PURE__*/React.createElement(Bookmark, {
       size: 14,
-      fill: isSaved ? "var(--accent)" : "none",
+      fill: isSaved ? "var(--sage)" : "none",
       style: {
-        color: "var(--accent)"
+        color: isSaved ? "var(--sage)" : "var(--accent)"
       }
     }))), /*#__PURE__*/React.createElement("div", {
       className: "pp-serif",
@@ -2901,9 +2901,9 @@ function VideosView({
       "aria-label": isSaved ? "Remove bookmark" : "Add bookmark"
     }, /*#__PURE__*/React.createElement(Bookmark, {
       size: 14,
-      fill: isSaved ? "var(--accent)" : "none",
+      fill: isSaved ? "var(--sage)" : "none",
       style: {
-        color: "var(--accent)"
+        color: isSaved ? "var(--sage)" : "var(--accent)"
       }
     }))), /*#__PURE__*/React.createElement("div", {
       className: "pp-serif",
@@ -3467,9 +3467,9 @@ function NoteViewer({
     onClick: onToggleSaved
   }, /*#__PURE__*/React.createElement(Bookmark, {
     size: 14,
-    fill: saved ? "var(--accent)" : "none",
+    fill: saved ? "var(--sage)" : "none",
     style: {
-      color: "var(--accent)"
+      color: saved ? "var(--sage)" : "var(--accent)"
     }
   }), " ", saved ? "Saved" : "Save"), /*#__PURE__*/React.createElement("button", {
     className: "pp-btn pp-btn-ghost",
@@ -3813,9 +3813,9 @@ function FilesView({
       "aria-label": isSaved ? "Remove bookmark" : "Add bookmark"
     }, /*#__PURE__*/React.createElement(Bookmark, {
       size: 14,
-      fill: isSaved ? "var(--accent)" : "none",
+      fill: isSaved ? "var(--sage)" : "none",
       style: {
-        color: "var(--accent)"
+        color: isSaved ? "var(--sage)" : "var(--accent)"
       }
     }))), /*#__PURE__*/React.createElement("div", {
       className: "pp-serif",
@@ -6755,7 +6755,7 @@ function PlanCard({
     verdict = `Possible: you'd need about ${Math.ceil(r.need)}% on the final.`;
     tone = "ok";
   }
-  const color = tone === "ok" ? "#2F6B3F" : tone === "warn" ? "#8A6A12" : "#8A3434";
+  const color = tone === "ok" ? "var(--sage-ink)" : tone === "warn" ? "#8A6A12" : "#8A3434";
   const count = ty => r.marks.filter(m => m.type === ty).length;
   const tooMany = count("periodic") > setup.nP ? "periodics" : count("ca") > setup.nCA ? "CAs" : null;
   return /*#__PURE__*/React.createElement("div", {

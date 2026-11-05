@@ -457,20 +457,20 @@ function GlobalStyle() {
     <style>{`
       @import url('https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=Karla:wght@400;500;600;700&display=swap');
       .pp-root {
-        --bg-light: #F4F1DE; --surface-light: #EBE6CE; --accent-light: #B4C3D4;
+        --bg-light: #F4F1DE; --surface-light: #EBE6CE; --accent-light: #B4C3D4; --sage-light: #778D7A; --sage-ink-light: #4F6B54;
         --text-light: #0D1B2A; --muted-light: #5B6B7C; --border-light: #D4C4A8;
-        --bg-dark: #0D1B2A; --surface-dark: #1B263B; --accent-dark: #6A89AB;
+        --bg-dark: #0D1B2A; --surface-dark: #1B263B; --accent-dark: #6A89AB; --sage-dark: #8FAA93; --sage-ink-dark: #A3BFA7;
         --text-dark: #F4F1DE; --muted-dark: #98A6B5; --border-dark: #2E4059;
       }
       .pp-root[data-theme='light'] {
         --bg: var(--bg-light); --surface: var(--surface-light); --accent: var(--accent-light);
         --text: var(--text-light); --muted: var(--muted-light); --border: var(--border-light);
-        --accent-ink: #1B263B;
+        --accent-ink: #1B263B; --sage: var(--sage-light); --sage-ink: var(--sage-ink-light);
       }
       .pp-root[data-theme='dark'] {
         --bg: var(--bg-dark); --surface: var(--surface-dark); --accent: var(--accent-dark);
         --text: var(--text-dark); --muted: var(--muted-dark); --border: var(--border-dark);
-        --accent-ink: #0D1B2A;
+        --accent-ink: #0D1B2A; --sage: var(--sage-dark); --sage-ink: var(--sage-ink-dark);
       }
       .pp-root {
         background: var(--bg); color: var(--text); font-family: 'Karla', sans-serif;
@@ -482,12 +482,12 @@ function GlobalStyle() {
       .pp-index-card { border-radius: 3px; box-shadow: 1px 2px 0 var(--border); }
       .pp-index-card::before {
         content: ''; position: absolute; top: 0; left: 22px; width: 1px; height: 100%;
-        background: color-mix(in srgb, var(--accent) 35%, transparent);
+        background: color-mix(in srgb, var(--sage) 45%, transparent);
       }
       .pp-tape {
         position: absolute; top: -10px; left: 50%; transform: translateX(-50%) rotate(-2deg);
-        width: 64px; height: 20px; background: color-mix(in srgb, var(--accent) 55%, transparent);
-        opacity: 0.8; border: 1px solid color-mix(in srgb, var(--accent) 70%, transparent);
+        width: 64px; height: 20px; background: color-mix(in srgb, var(--sage) 55%, transparent);
+        opacity: 0.8; border: 1px solid color-mix(in srgb, var(--sage) 70%, transparent);
       }
       .pp-btn { font-family: 'Karla', sans-serif; font-weight: 600; border-radius: 8px;
         transition: transform 0.12s ease, background 0.15s ease, box-shadow 0.15s ease; cursor: pointer; }
@@ -646,16 +646,16 @@ const ROLE_INFO = {
 function BookLogo({ size = 26, style }) {
   return (
     <svg viewBox="0 0 512 512" width={size} height={size} aria-hidden="true" style={{ display: "block", ...style }}>
-      <path d="M256 156C196 122 106 120 46 148V408C106 382 196 386 256 418C316 386 406 382 466 408V148C406 120 316 122 256 156Z" fill="#6F88DE" stroke="#6F88DE" strokeWidth="8" strokeLinejoin="round" />
-      <path d="M256 140C196 106 106 104 46 132V392C106 366 196 370 256 402C316 370 406 366 466 392V132C406 104 316 106 256 140Z" fill="#92A9F2" stroke="#92A9F2" strokeWidth="8" strokeLinejoin="round" />
+      <path d="M256 156C196 122 106 120 46 148V408C106 382 196 386 256 418C316 386 406 382 466 408V148C406 120 316 122 256 156Z" fill="#2C3F57" stroke="#2C3F57" strokeWidth="8" strokeLinejoin="round" />
+      <path d="M256 140C196 106 106 104 46 132V392C106 366 196 370 256 402C316 370 406 366 466 392V132C406 104 316 106 256 140Z" fill="#415A77" stroke="#415A77" strokeWidth="8" strokeLinejoin="round" />
       <path d="M256 160C200 132 128 130 74 152V366C128 346 200 350 256 380Z" fill="var(--bg)" />
       <path d="M256 160C312 132 384 130 438 152V366C384 346 312 350 256 380Z" fill="var(--bg)" />
-      <path d="M256 160V380" stroke="#92A9F2" strokeWidth="6" />
-      <g stroke="#92A9F2" strokeWidth="14" strokeLinecap="round" fill="none">
+      <path d="M256 160V380" stroke="#778D7A" strokeWidth="6" />
+      <g stroke="#778D7A" strokeWidth="14" strokeLinecap="round" fill="none">
         <path d="M104 204Q165 194 224 212M104 250Q165 240 224 258M104 296Q165 286 224 304M104 342Q140 335 176 345" />
         <path d="M288 212Q347 194 408 204M288 258Q347 240 408 250M288 304Q347 286 408 296M288 345Q324 335 360 342" />
       </g>
-      <path d="M330 150V250L350 232L370 250V142Z" fill="#FFB347" />
+      <path d="M330 150V250L350 232L370 250V142Z" fill="#C9AE7C" />
     </svg>
   );
 }
@@ -1045,7 +1045,7 @@ function NotesView({ notes, user, onAddNote, onDeleteNote, onEditNote, lastNoteI
                   {canUpload && <button className="pp-btn pp-btn-ghost" style={{ padding: 5, borderRadius: 999, flexShrink: 0 }} onClick={(e) => { e.stopPropagation(); setEditId(n.id); }} aria-label="Edit" title="Edit"><Pencil size={14} /></button>}
                   {canUpload && <button className="pp-btn pp-btn-ghost" style={{ padding: 5, borderRadius: 999, flexShrink: 0 }} onClick={(e) => { e.stopPropagation(); if (window.confirm(`Delete "${n.title}"? You can undo for a few seconds afterwards.`)) onDeleteNote(n); }} aria-label="Delete note" title="Delete note"><Trash size={14} /></button>}
                   <button className="pp-btn pp-btn-ghost" style={{ padding: 5, borderRadius: 999, flexShrink: 0 }} onClick={(e) => { e.stopPropagation(); onToggleSavedNote(n.id); }} aria-label={isSaved ? "Remove bookmark" : "Add bookmark"}>
-                    <Bookmark size={14} fill={isSaved ? "var(--accent)" : "none"} style={{ color: "var(--accent)" }} />
+                    <Bookmark size={14} fill={isSaved ? "var(--sage)" : "none"} style={{ color: isSaved ? "var(--sage)" : "var(--accent)" }} />
                   </button>
                 </div>
                 <div className="pp-serif" style={{ fontSize: 15.5, fontWeight: 600, marginTop: 8 }}>{n.title}</div>
@@ -1154,7 +1154,7 @@ function VideosView({ videos, user, onAddVideo, onDeleteVideo, onEditVideo, last
                     {isAdmin && <button className="pp-btn pp-btn-ghost" style={{ padding: 5, borderRadius: 999, flexShrink: 0 }} onClick={(e) => { e.stopPropagation(); setEditId(v.id); }} aria-label="Edit" title="Edit"><Pencil size={14} /></button>}
                     {isAdmin && <button className="pp-btn pp-btn-ghost" style={{ padding: 5, borderRadius: 999, flexShrink: 0 }} onClick={(e) => { e.stopPropagation(); if (window.confirm(`Delete "${v.title}"? You can undo for a few seconds afterwards.`)) onDeleteVideo(v); }} aria-label="Delete video" title="Delete video"><Trash size={14} /></button>}
                     <button className="pp-btn pp-btn-ghost" style={{ padding: 5, borderRadius: 999, flexShrink: 0 }} onClick={(e) => { e.stopPropagation(); onToggleSavedVideo(v.id); }} aria-label={isSaved ? "Remove bookmark" : "Add bookmark"}>
-                      <Bookmark size={14} fill={isSaved ? "var(--accent)" : "none"} style={{ color: "var(--accent)" }} />
+                      <Bookmark size={14} fill={isSaved ? "var(--sage)" : "none"} style={{ color: isSaved ? "var(--sage)" : "var(--accent)" }} />
                     </button>
                   </div>
                   <div className="pp-serif" style={{ fontSize: 14.5, fontWeight: 600, marginTop: 8 }}>{v.title}</div>
@@ -1316,7 +1316,7 @@ function NoteViewer({ note, saved, onToggleSaved, onEdit, onClose }) {
         </div>
         {onEdit && <button className="pp-btn pp-btn-ghost" style={{ padding: "7px 12px", fontSize: 13, display: "flex", alignItems: "center", gap: 6, flexShrink: 0 }} onClick={onEdit}><Pencil size={14} /> Edit</button>}
         <button className="pp-btn pp-btn-ghost" style={{ padding: "7px 12px", fontSize: 13, display: "flex", alignItems: "center", gap: 6, flexShrink: 0 }} onClick={onToggleSaved}>
-          <Bookmark size={14} fill={saved ? "var(--accent)" : "none"} style={{ color: "var(--accent)" }} /> {saved ? "Saved" : "Save"}
+          <Bookmark size={14} fill={saved ? "var(--sage)" : "none"} style={{ color: saved ? "var(--sage)" : "var(--accent)" }} /> {saved ? "Saved" : "Save"}
         </button>
         <button className="pp-btn pp-btn-ghost" style={{ padding: 8, borderRadius: 999, flexShrink: 0 }} onClick={onClose} aria-label="Close note"><X size={18} /></button>
       </div>
@@ -1436,7 +1436,7 @@ function FilesView({ files, user, onAddFile, onDeleteFile, onEditFile, onDownloa
                   {canUpload && <button className="pp-btn pp-btn-ghost" style={{ padding: 5, borderRadius: 999, flexShrink: 0 }} onClick={(e) => { e.stopPropagation(); setEditId(f.id); }} aria-label="Edit" title="Edit"><Pencil size={14} /></button>}
                   {canUpload && <button className="pp-btn pp-btn-ghost" style={{ padding: 5, borderRadius: 999, flexShrink: 0 }} onClick={(e) => { e.stopPropagation(); if (window.confirm(`Delete "${f.title}"? You can undo for a few seconds afterwards.`)) onDeleteFile(f); }} aria-label="Delete file" title="Delete file"><Trash size={14} /></button>}
                   <button className="pp-btn pp-btn-ghost" style={{ padding: 5, borderRadius: 999, flexShrink: 0 }} onClick={(e) => { e.stopPropagation(); onToggleSavedFile(f.id); }} aria-label={isSaved ? "Remove bookmark" : "Add bookmark"}>
-                    <Bookmark size={14} fill={isSaved ? "var(--accent)" : "none"} style={{ color: "var(--accent)" }} />
+                    <Bookmark size={14} fill={isSaved ? "var(--sage)" : "none"} style={{ color: isSaved ? "var(--sage)" : "var(--accent)" }} />
                   </button>
                 </div>
                 <div className="pp-serif" style={{ fontSize: 15.5, fontWeight: 600, marginTop: 8, wordBreak: "break-word" }}>{f.title}</div>
@@ -2523,7 +2523,7 @@ function PlanCard({ plan, setup, fmt, onPatch, onRemove }) {
   else if (r.need > 100) { verdict = `Out of reach. Even a perfect final gives you about ${r1(r.best)}%.`; tone = "bad"; }
   else if (r.need >= 90) { verdict = `Possible, but tough: you'd need about ${Math.ceil(r.need)}% on the final.`; tone = "warn"; }
   else { verdict = `Possible: you'd need about ${Math.ceil(r.need)}% on the final.`; tone = "ok"; }
-  const color = tone === "ok" ? "#2F6B3F" : tone === "warn" ? "#8A6A12" : "#8A3434";
+  const color = tone === "ok" ? "var(--sage-ink)" : tone === "warn" ? "#8A6A12" : "#8A3434";
   const count = (ty) => r.marks.filter((m) => m.type === ty).length;
   const tooMany = count("periodic") > setup.nP ? "periodics" : count("ca") > setup.nCA ? "CAs" : null;
   return (
