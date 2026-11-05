@@ -642,6 +642,23 @@ const ROLE_INFO = {
   admin: { label: "Admin", icon: ShieldCheck, desc: "Full access — add notes, videos, files and quiz questions." }
 };
 
+function BookLogo({ size = 26, style }) {
+  return (
+    <svg viewBox="0 0 512 512" width={size} height={size} aria-hidden="true" style={{ display: "block", ...style }}>
+      <path d="M256 156C196 122 106 120 46 148V408C106 382 196 386 256 418C316 386 406 382 466 408V148C406 120 316 122 256 156Z" fill="#6F88DE" stroke="#6F88DE" strokeWidth="8" strokeLinejoin="round" />
+      <path d="M256 140C196 106 106 104 46 132V392C106 366 196 370 256 402C316 370 406 366 466 392V132C406 104 316 106 256 140Z" fill="#92A9F2" stroke="#92A9F2" strokeWidth="8" strokeLinejoin="round" />
+      <path d="M256 160C200 132 128 130 74 152V366C128 346 200 350 256 380Z" fill="var(--bg)" />
+      <path d="M256 160C312 132 384 130 438 152V366C384 346 312 350 256 380Z" fill="var(--bg)" />
+      <path d="M256 160V380" stroke="#92A9F2" strokeWidth="6" />
+      <g stroke="#92A9F2" strokeWidth="14" strokeLinecap="round" fill="none">
+        <path d="M104 204Q165 194 224 212M104 250Q165 240 224 258M104 296Q165 286 224 304M104 342Q140 335 176 345" />
+        <path d="M288 212Q347 194 408 204M288 258Q347 240 408 250M288 304Q347 286 408 296M288 345Q324 335 360 342" />
+      </g>
+      <path d="M330 150V250L350 232L370 250V142Z" fill="#FFB347" />
+    </svg>
+  );
+}
+
 const GRADE_CHOICES = [7, 8, 9, 10, 11, 12].map((n) => ({ n, value: `${n}th Grade`, label: `Grade ${n}` }));
 const gradeLabel = (g) => (g ? g.replace(/^(\d+)\w*\s+Grade$/, "Grade $1") : "");
 
@@ -715,7 +732,7 @@ function RoleGate({ onSelectRole, theme, setTheme }) {
       <div className="pp-card pp-index-card" style={{ width: "100%", maxWidth: 420, padding: "34px 28px", borderRadius: 10 }}>
         <div className="pp-tape" />
         <div style={{ textAlign: "center", marginBottom: 22 }}>
-          <img src="favicon.svg?v=2" alt="" width="72" height="72" style={{ display: "block", margin: "0 auto 10px" }} />
+          <BookLogo size={72} style={{ margin: "0 auto 10px" }} />
           <div className="pp-serif" style={{ fontSize: 26, fontWeight: 700 }}>PrepList Pro</div>
           <div style={{ fontSize: 13.5, color: "var(--muted)", marginTop: 4 }}>Notes, videos, files and past papers, all in one place.</div>
         </div>
@@ -3351,7 +3368,7 @@ function MainApp({ user, onChangeGrade, onSwitchRole, theme, setTheme }) {
         <GlobalStyle />
         <header style={{ borderBottom: "1px solid var(--border)", position: "sticky", top: 0, background: "var(--bg)", zIndex: 40 }}>
           <div className="pp-header-row" style={{ maxWidth: 960, margin: "0 auto", padding: "14px 18px", display: "flex", alignItems: "center", gap: 12 }}>
-            <div className="pp-serif pp-header-title" style={{ fontSize: 19, fontWeight: 700, display: "flex", alignItems: "center", gap: 6 }}><img src="favicon.svg?v=2" alt="" width="26" height="26" style={{ display: "block" }} /> PrepList Pro</div>
+            <div className="pp-serif pp-header-title" style={{ fontSize: 19, fontWeight: 700, display: "flex", alignItems: "center", gap: 6 }}><BookLogo size={26} /> PrepList Pro</div>
             <div style={{ flex: 1 }} />
             <button className="pp-btn pp-btn-ghost" style={{ padding: 8, borderRadius: 999 }} onClick={() => setShowSearch(true)} aria-label="Search everything"><Search size={16} /></button>
             <button className="pp-btn pp-btn-ghost" style={{ padding: 8, borderRadius: 999 }} onClick={() => setTheme(theme === "light" ? "dark" : "light")} aria-label="Toggle dark mode">{theme === "light" ? <Moon size={16} /> : <Sun size={16} />}</button>
