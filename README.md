@@ -179,3 +179,5 @@ your behalf.
 - Grade tracker uses CA / Periodic / Final categories (finals 50%, term exams 50% = CAs 30% + periodics 70%; weights editable) and shows what the final must be to hit a target.
 - Grade tracker is now a target planner: enter a target and your term average so far, add marks as they come back, and see what the final must be (50% weight by default, editable).
 - Target planner weights each mark by its share (CAs 15% and periodics 35% of the grade, split by how many there are per term, editable).
+- Students pick their grade (7-12) after choosing Student; it's remembered on the device, shown in the header, and changeable any time. Notes and videos are filtered to that grade.
+- Speed: smaller stored cover images for notes, lighter photo uploads with a progress counter, early connections to Firebase, and the photo-to-flashcards reader preloads when Flashcards opens.

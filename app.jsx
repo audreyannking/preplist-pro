@@ -335,7 +335,7 @@ async function fetchLibraryFileBlob(meta) {
 
 // Keeps note photos sharp: start big and high quality, and only step down if the
 // result would be too large for one Firestore document (1 MiB).
-const PHOTO_STEPS = [[2000, 0.9], [1800, 0.85], [1600, 0.8], [1400, 0.75], [1200, 0.7], [1000, 0.65]];
+const PHOTO_STEPS = [[1700, 0.82], [1500, 0.78], [1300, 0.72], [1100, 0.68], [900, 0.64]];
 const PHOTO_MAX_CHARS = 920000;
 function loadImageFile(file) {
   return new Promise((resolve, reject) => {
@@ -370,7 +370,7 @@ async function resizeImageAdaptive(file) {
 function makeThumb(dataUrl) {
   return new Promise((resolve) => {
     const img = new Image();
-    img.onload = () => resolve(drawScaled(img, 520, 0.72));
+    img.onload = () => resolve(drawScaled(img, 400, 0.62));
     img.onerror = () => resolve(null);
     img.src = dataUrl;
   });
@@ -619,7 +619,7 @@ function PaperSubjectSelect({ value, onChange, includeAll, label, board, examTyp
     </select>
   );
 }
-function FilterBar({ query, setQuery, subject, setSubject, grade, setGrade, placeholder, extra }) {
+function FilterBar({ query, setQuery, subject, setSubject, grade, setGrade, placeholder, extra, hideGrade }) {
   return (
     <div style={{ display: "flex", gap: 10, marginBottom: 16, flexWrap: "wrap", alignItems: "flex-start" }}>
       <div style={{ position: "relative", flex: 2, minWidth: 180 }}>
@@ -627,7 +627,7 @@ function FilterBar({ query, setQuery, subject, setSubject, grade, setGrade, plac
         <input className="pp-input" style={{ width: "100%", padding: "9px 12px 9px 34px", fontSize: 14 }} placeholder={placeholder} value={query} onChange={(e) => setQuery(e.target.value)} />
       </div>
       <div style={{ width: 168 }}><SubjectSelect value={subject} onChange={setSubject} includeAll /></div>
-      <div style={{ width: 150 }}><GradeSelect value={grade} onChange={setGrade} includeAll /></div>
+      {!hideGrade && <div style={{ width: 150 }}><GradeSelect value={grade} onChange={setGrade} includeAll /></div>}
       {extra}
     </div>
   );
@@ -641,6 +641,39 @@ const ROLE_INFO = {
   student: { label: "Student", icon: GraduationCap, desc: "Browse notes, videos, files, quizzes, flashcards and past papers." },
   admin: { label: "Admin", icon: ShieldCheck, desc: "Full access — add notes, videos, files and quiz questions." }
 };
+
+const GRADE_CHOICES = [7, 8, 9, 10, 11, 12].map((n) => ({ n, value: `${n}th Grade`, label: `Grade ${n}` }));
+const gradeLabel = (g) => (g ? g.replace(/^(\d+)\w*\s+Grade$/, "Grade $1") : "");
+
+function GradeButtons({ value, onPick }) {
+  return (
+    <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 10 }}>
+      {GRADE_CHOICES.map((g) => (
+        <button key={g.n} className="pp-role-card" onClick={() => onPick(g.value)} aria-pressed={value === g.value}
+          style={{ padding: "14px 6px", textAlign: "center", fontWeight: 700, fontSize: 15, color: "var(--text)", borderColor: value === g.value ? "var(--accent)" : undefined }}>
+          {g.label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+function GradeGate({ onPick, onBack, theme, setTheme }) {
+  return (
+    <div style={{ minHeight: "100dvh", display: "flex", alignItems: "center", justifyContent: "center", padding: 20, position: "relative" }}>
+      <button className="pp-btn pp-btn-ghost" style={{ position: "absolute", top: 20, right: 20, padding: 8, borderRadius: 999 }} onClick={() => setTheme(theme === "light" ? "dark" : "light")} aria-label="Toggle dark mode">
+        {theme === "light" ? <Moon size={16} /> : <Sun size={16} />}
+      </button>
+      <div className="pp-card pp-index-card" style={{ width: "100%", maxWidth: 420, padding: "34px 28px", borderRadius: 10 }}>
+        <div className="pp-tape" />
+        <button className="pp-btn pp-btn-ghost" style={{ padding: "5px 10px", fontSize: 12.5, marginBottom: 14 }} onClick={onBack}>← Back</button>
+        <div className="pp-serif" style={{ fontSize: 22, fontWeight: 700, marginBottom: 4 }}>Which grade are you in?</div>
+        <div style={{ fontSize: 13, color: "var(--muted)", marginBottom: 16, lineHeight: 1.5 }}>You'll only see notes and videos for your grade. We'll remember this on this device, and you can change it any time from the top of the page.</div>
+        <GradeButtons value={null} onPick={onPick} />
+      </div>
+    </div>
+  );
+}
 
 function SetupNeededScreen() {
   return (
@@ -971,14 +1004,14 @@ function NotesView({ notes, user, onAddNote, onDeleteNote, onEditNote, lastNoteI
 
   return (
     <div>
-      <FilterBar query={query} setQuery={setQuery} subject={subject} setSubject={setSubject} grade={grade} setGrade={setGrade} placeholder="Search notes…"
+      <FilterBar hideGrade={!!user.grade} query={query} setQuery={setQuery} subject={subject} setSubject={setSubject} grade={grade} setGrade={setGrade} placeholder="Search notes…"
         extra={canUpload && <button className="pp-btn pp-btn-primary" style={{ padding: "9px 14px", fontSize: 13.5, display: "flex", alignItems: "center", gap: 6 }} onClick={() => setShowForm(true)}><Plus size={15} /> Upload note</button>} />
       {lastNote && (
         <ContinueBanner title={lastNote.title} subtitle={lastNote.subject}
           onClick={() => document.getElementById(`note-${lastNote.id}`)?.scrollIntoView({ behavior: "smooth", block: "center" })} />
       )}
       {filtered.length === 0 ? (
-        <EmptyState icon={BookOpen} title="No notes yet" body={canUpload ? "Upload the first set of notes for students to study from." : "Only admins can upload notes — check back soon."} />
+        <EmptyState icon={BookOpen} title="No notes yet" body={canUpload ? "Upload the first set of notes for students to study from." : (user.grade ? `No notes for ${gradeLabel(user.grade)} yet. Check back soon.` : "Only admins can upload notes — check back soon.")} />
       ) : (
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(240px, 1fr))", gap: 14 }}>
           {filtered.map((n) => {
@@ -1012,7 +1045,7 @@ function NotesView({ notes, user, onAddNote, onDeleteNote, onEditNote, lastNoteI
       )}
       {openId && notes.find((n) => n.id === openId) && (() => { const n = notes.find((x) => x.id === openId); return <NoteViewer note={n} saved={savedNoteIds.includes(n.id)} onToggleSaved={() => onToggleSavedNote(n.id)} onEdit={canUpload ? () => { setOpenId(null); setEditId(n.id); } : null} onClose={() => setOpenId(null)} />; })()}
       {editId && notes.find((n) => n.id === editId) && (() => { const n = notes.find((x) => x.id === editId); return <EditNoteModal key={n.id} note={n} onClose={() => setEditId(null)} onSave={(v) => onEditNote(n, v)} />; })()}
-      {showForm && <AddNoteModal onClose={() => setShowForm(false)} onSubmit={async (payload) => { const ok = await onAddNote(payload); if (ok) setShowForm(false); }} />}
+      {showForm && <AddNoteModal onClose={() => setShowForm(false)} onSubmit={async (payload, onProgress) => { const ok = await onAddNote(payload, onProgress); if (ok) setShowForm(false); }} />}
     </div>
   );
 }
@@ -1027,6 +1060,7 @@ function AddNoteModal({ onClose, onSubmit }) {
   const [images, setImages] = useState([]);
   const [description, setDescription] = useState("");
   const [busy, setBusy] = useState(false);
+  const [prog, setProg] = useState(null);
   const canSubmit = title.trim() && subject && grade && (type === "text" ? text.trim() : images.length > 0);
 
   return (
@@ -1046,8 +1080,8 @@ function AddNoteModal({ onClose, onSubmit }) {
       {type === "text" ? <Field label="Notes"><MathToolbar textareaRef={textRef} value={text} setValue={setText} /><textarea ref={textRef} className="pp-input" style={{ width: "100%", padding: "9px 12px", fontSize: 14, minHeight: 110, resize: "vertical", fontFamily: "inherit" }} value={text} onChange={(e) => setText(e.target.value)} placeholder="Paste or write the notes…" /></Field>
         : <Field label="Photos or scanned pages (up to 10)"><MultiPhotoPicker value={images} onChange={setImages} /></Field>}
       <button className="pp-btn pp-btn-primary" style={{ width: "100%", padding: "10px 0", opacity: canSubmit ? 1 : 0.5 }} disabled={!canSubmit || busy}
-        onClick={async () => { setBusy(true); try { await onSubmit({ title: title.trim(), subject, grade, description: description.trim(), type, content: type === "text" ? text.trim() : images }); } finally { setBusy(false); } }}>
-        {busy ? "Publishing… please keep this open" : "Publish note"}
+        onClick={async () => { setBusy(true); try { await onSubmit({ title: title.trim(), subject, grade, description: description.trim(), type, content: type === "text" ? text.trim() : images }, (d, n) => setProg([d, n])); } finally { setBusy(false); setProg(null); } }}>
+        {busy ? (prog ? `Uploading photo ${prog[0]} of ${prog[1]}… keep this open` : "Publishing… keep this open") : "Publish note"}
       </button>
     </Modal>
   );
@@ -1077,14 +1111,14 @@ function VideosView({ videos, user, onAddVideo, onDeleteVideo, onEditVideo, last
 
   return (
     <div>
-      <FilterBar query={query} setQuery={setQuery} subject={subject} setSubject={setSubject} grade={grade} setGrade={setGrade} placeholder="Search videos…"
+      <FilterBar hideGrade={!!user.grade} query={query} setQuery={setQuery} subject={subject} setSubject={setSubject} grade={grade} setGrade={setGrade} placeholder="Search videos…"
         extra={isAdmin && <button className="pp-btn pp-btn-primary" style={{ padding: "9px 14px", fontSize: 13.5, display: "flex", alignItems: "center", gap: 6 }} onClick={() => setShowForm(true)}><Plus size={15} /> Add video</button>} />
       {lastVideo && (
         <ContinueBanner title={lastVideo.title} subtitle={lastVideo.subject}
           onClick={() => document.getElementById(`video-${lastVideo.id}`)?.scrollIntoView({ behavior: "smooth", block: "center" })} />
       )}
       {filtered.length === 0 ? (
-        <EmptyState icon={VideoIcon} title="No videos yet" body={isAdmin ? "Paste a YouTube link to add the first video." : "Only admins can add videos — check back soon."} />
+        <EmptyState icon={VideoIcon} title="No videos yet" body={isAdmin ? "Paste a YouTube link to add the first video." : (user.grade ? `No videos for ${gradeLabel(user.grade)} yet. Check back soon.` : "Only admins can add videos — check back soon.")} />
       ) : (
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))", gap: 16 }}>
           {filtered.map((v) => {
@@ -2453,6 +2487,7 @@ function cardsFromText(text) {
 }
 
 function FlashcardsView() {
+  useEffect(() => { const id = setTimeout(() => { loadTesseract().catch(() => {}); }, 1200); return () => clearTimeout(id); }, []);
   const [decks, setDecks] = useLocalState("preplist:flashcards", []);
   const [deckId, setDeckId] = useState("");
   const [newDeck, setNewDeck] = useState("");
@@ -3055,7 +3090,7 @@ const TABS = [
   { id: "contact", label: "Contact", icon: Mail }
 ];
 
-function MainApp({ user, onSwitchRole, theme, setTheme }) {
+function MainApp({ user, onChangeGrade, onSwitchRole, theme, setTheme }) {
   // Only subscribe to a collection once a tab that needs it is opened — keeps
   // the number of database reads per visitor (and the free-plan quota) low.
   const [wanted, setWanted] = useState(() => new Set(["notes"]));
@@ -3068,6 +3103,9 @@ function MainApp({ user, onSwitchRole, theme, setTheme }) {
 
   const [tab, setTab] = useState("notes");
   const [showSearch, setShowSearch] = useState(false);
+  const [showGrade, setShowGrade] = useState(false);
+  const notesShown = useMemo(() => (user.grade ? notes.filter((n) => n.grade === user.grade) : notes), [notes, user.grade]);
+  const videosShown = useMemo(() => (user.grade ? videos.filter((v) => v.grade === user.grade) : videos), [videos, user.grade]);
   const TAB_NEEDS = { notes: ["notes"], videos: ["videos"], files: ["files"], papers: [], quiz: ["quiz"], saved: ["notes", "videos", "files"], tools: [], flashcards: [], contact: [] };
   useEffect(() => { want(...(TAB_NEEDS[tab] || [])); if (tab === "contact" && user.role === "admin") want("feedback"); }, [tab, want]);
   useEffect(() => { if (showSearch) want("notes", "videos", "files"); }, [showSearch, want]);
@@ -3101,11 +3139,13 @@ function MainApp({ user, onSwitchRole, theme, setTheme }) {
   }, [tab, pendingScroll]);
   const jumpTo = useCallback((tabId, elId) => { setTab(tabId); setPendingScroll({ tab: tabId, elId }); }, []);
 
-  async function addNote(payload) {
+  async function addNote(payload, onProgress) {
     try {
       let doc = { ...payload };
       if (payload.type === "image") {
-        const [fileIds, thumb] = await Promise.all([Promise.all(payload.content.map((d) => saveFile(d))), makeThumb(payload.content[0])]);
+        let done = 0;
+        const total = payload.content.length;
+        const [fileIds, thumb] = await Promise.all([Promise.all(payload.content.map((d) => saveFile(d).then((id) => { done++; if (onProgress) onProgress(done, total); return id; }))), makeThumb(payload.content[0])]);
         doc = { ...payload, fileId: fileIds[0], fileIds }; delete doc.content;
         if (thumb) doc.thumb = thumb;
       }
@@ -3314,6 +3354,7 @@ function MainApp({ user, onSwitchRole, theme, setTheme }) {
             <div style={{ flex: 1 }} />
             <button className="pp-btn pp-btn-ghost" style={{ padding: 8, borderRadius: 999 }} onClick={() => setShowSearch(true)} aria-label="Search everything"><Search size={16} /></button>
             <button className="pp-btn pp-btn-ghost" style={{ padding: 8, borderRadius: 999 }} onClick={() => setTheme(theme === "light" ? "dark" : "light")} aria-label="Toggle dark mode">{theme === "light" ? <Moon size={16} /> : <Sun size={16} />}</button>
+            {user.grade && <button className="pp-btn pp-btn-ghost" style={{ padding: "6px 11px", fontSize: 13, fontWeight: 600, whiteSpace: "nowrap" }} onClick={() => setShowGrade(true)} title="Change your grade" aria-label={`${gradeLabel(user.grade)}. Change grade`}>{gradeLabel(user.grade)} ▾</button>}
             <button className="pp-btn pp-btn-ghost pp-role-pill" style={{ display: "flex", alignItems: "center", gap: 8, padding: "5px 10px 5px 5px" }} onClick={onSwitchRole} title="Switch role">
               <RoleBadge role={user.role} size={26} />
               <span style={{ fontSize: 13, fontWeight: 600 }}>{roleLabel(user.role)}</span>
@@ -3332,8 +3373,8 @@ function MainApp({ user, onSwitchRole, theme, setTheme }) {
         <main style={{ maxWidth: 960, margin: "0 auto", padding: "22px 18px 90px" }}>
           {!dataReady ? <Loading label="Loading…" /> : (
             <>
-              {tab === "notes" && <NotesView notes={notes} user={user} onAddNote={addNote} onDeleteNote={deleteNote} onEditNote={editNote} lastNoteId={lastNoteId} setLastNoteId={setLastNoteId} savedNoteIds={savedNoteIds} onToggleSavedNote={onToggleSavedNote} />}
-              {tab === "videos" && <VideosView videos={videos} user={user} onAddVideo={addVideo} onDeleteVideo={deleteVideo} onEditVideo={(v, patch) => updateItem("videos", v.id, patch)} lastVideoId={lastVideoId} setLastVideoId={setLastVideoId} savedVideoIds={savedVideoIds} onToggleSavedVideo={onToggleSavedVideo} />}
+              {tab === "notes" && <NotesView notes={notesShown} user={user} onAddNote={addNote} onDeleteNote={deleteNote} onEditNote={editNote} lastNoteId={lastNoteId} setLastNoteId={setLastNoteId} savedNoteIds={savedNoteIds} onToggleSavedNote={onToggleSavedNote} />}
+              {tab === "videos" && <VideosView videos={videosShown} user={user} onAddVideo={addVideo} onDeleteVideo={deleteVideo} onEditVideo={(v, patch) => updateItem("videos", v.id, patch)} lastVideoId={lastVideoId} setLastVideoId={setLastVideoId} savedVideoIds={savedVideoIds} onToggleSavedVideo={onToggleSavedVideo} />}
               {tab === "files" && <FilesView files={libraryFiles} user={user} onAddFile={addLibraryFile} onDeleteFile={deleteLibraryFile} onEditFile={(f, patch) => updateItem("libraryFiles", f.id, patch)} onDownloadFile={downloadLibraryFile} lastFileId={lastFileId} setLastFileId={setLastFileId} savedFileIds={savedFileIds} onToggleSavedFile={onToggleSavedFile} />}
               {tab === "papers" && <PastPapersView />}
               {tab === "quiz" && <QuizView questions={quizQuestions} user={user} notes={notes} onNeedRefs={() => want("notes")} onAddQuestion={addQuizQuestion} onImportQuestions={importQuizQuestions} onDeleteQuestion={deleteQuizQuestion} onDeleteMany={deleteManyQuiz} />}
@@ -3349,7 +3390,11 @@ function MainApp({ user, onSwitchRole, theme, setTheme }) {
           )}
         </main>
 
-        {showSearch && <GlobalSearchModal notes={notes} videos={videos} files={libraryFiles} onClose={() => setShowSearch(false)} onJump={jumpTo} />}
+        {showGrade && <Modal title="Change your grade" onClose={() => setShowGrade(false)}>
+          <div style={{ fontSize: 13, color: "var(--muted)", marginBottom: 14 }}>Notes and videos will switch to the grade you pick. This is saved on this device.</div>
+          <GradeButtons value={user.grade} onPick={(g) => { onChangeGrade(g); setShowGrade(false); }} />
+        </Modal>}
+        {showSearch && <GlobalSearchModal notes={notesShown} videos={videosShown} files={libraryFiles} onClose={() => setShowSearch(false)} onJump={jumpTo} />}
         {window.__ppVersion && <div style={{ textAlign: "center", fontSize: 11, color: "var(--muted)", padding: "0 0 18px" }}>PrepList Pro · updated {window.__ppVersion}</div>}
         <Toast toast={toast} onClose={() => setToast(null)} />
       </div>
@@ -3360,13 +3405,16 @@ function MainApp({ user, onSwitchRole, theme, setTheme }) {
 function PreplistProRoot() {
   const [theme, setTheme] = useLocalState("preplist:theme", "light");
   const [role, setRole] = useLocalState("preplist:role2", null);
+  const [myGrade, setMyGrade] = useLocalState("preplist:myGrade", null);
   const sessionReady = useAnonymousSession();
 
   if (!FIREBASE_READY) return <div className="pp-root" data-theme={theme} style={{ minHeight: "100dvh" }}><GlobalStyle /><SetupNeededScreen /></div>;
   if (!sessionReady) return <div className="pp-root" data-theme={theme} style={{ minHeight: "100dvh" }}><GlobalStyle /><Loading label="Connecting…" /></div>;
   if (!role) return <div className="pp-root" data-theme={theme} style={{ minHeight: "100dvh" }}><GlobalStyle /><RoleGate onSelectRole={setRole} theme={theme} setTheme={setTheme} /></div>;
 
-  return <MainApp user={{ role }} onSwitchRole={() => setRole(null)} theme={theme} setTheme={setTheme} />;
+  if (role === "student" && !GRADE_CHOICES.some((g) => g.value === myGrade)) return <div className="pp-root" data-theme={theme} style={{ minHeight: "100dvh" }}><GlobalStyle /><GradeGate onPick={setMyGrade} onBack={() => setRole(null)} theme={theme} setTheme={setTheme} /></div>;
+
+  return <MainApp user={{ role, grade: role === "student" ? myGrade : null }} onChangeGrade={setMyGrade} onSwitchRole={() => setRole(null)} theme={theme} setTheme={setTheme} />;
 }
 
 ReactDOM.createRoot(document.getElementById("root")).render(<PreplistProRoot />);

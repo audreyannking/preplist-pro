@@ -816,7 +816,7 @@ async function fetchLibraryFileBlob(meta) {
 
 // Keeps note photos sharp: start big and high quality, and only step down if the
 // result would be too large for one Firestore document (1 MiB).
-const PHOTO_STEPS = [[2000, 0.9], [1800, 0.85], [1600, 0.8], [1400, 0.75], [1200, 0.7], [1000, 0.65]];
+const PHOTO_STEPS = [[1700, 0.82], [1500, 0.78], [1300, 0.72], [1100, 0.68], [900, 0.64]];
 const PHOTO_MAX_CHARS = 920000;
 function loadImageFile(file) {
   return new Promise((resolve, reject) => {
@@ -862,7 +862,7 @@ async function resizeImageAdaptive(file) {
 function makeThumb(dataUrl) {
   return new Promise(resolve => {
     const img = new Image();
-    img.onload = () => resolve(drawScaled(img, 520, 0.72));
+    img.onload = () => resolve(drawScaled(img, 400, 0.62));
     img.onerror = () => resolve(null);
     img.src = dataUrl;
   });
@@ -1335,7 +1335,8 @@ function FilterBar({
   grade,
   setGrade,
   placeholder,
-  extra
+  extra,
+  hideGrade
 }) {
   return /*#__PURE__*/React.createElement("div", {
     style: {
@@ -1378,7 +1379,7 @@ function FilterBar({
     value: subject,
     onChange: setSubject,
     includeAll: true
-  })), /*#__PURE__*/React.createElement("div", {
+  })), !hideGrade && /*#__PURE__*/React.createElement("div", {
     style: {
       width: 150
     }
@@ -1405,6 +1406,104 @@ const ROLE_INFO = {
     desc: "Full access — add notes, videos, files and quiz questions."
   }
 };
+const GRADE_CHOICES = [7, 8, 9, 10, 11, 12].map(n => ({
+  n,
+  value: `${n}th Grade`,
+  label: `Grade ${n}`
+}));
+const gradeLabel = g => g ? g.replace(/^(\d+)\w*\s+Grade$/, "Grade $1") : "";
+function GradeButtons({
+  value,
+  onPick
+}) {
+  return /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "grid",
+      gridTemplateColumns: "repeat(3, 1fr)",
+      gap: 10
+    }
+  }, GRADE_CHOICES.map(g => /*#__PURE__*/React.createElement("button", {
+    key: g.n,
+    className: "pp-role-card",
+    onClick: () => onPick(g.value),
+    "aria-pressed": value === g.value,
+    style: {
+      padding: "14px 6px",
+      textAlign: "center",
+      fontWeight: 700,
+      fontSize: 15,
+      color: "var(--text)",
+      borderColor: value === g.value ? "var(--accent)" : undefined
+    }
+  }, g.label)));
+}
+function GradeGate({
+  onPick,
+  onBack,
+  theme,
+  setTheme
+}) {
+  return /*#__PURE__*/React.createElement("div", {
+    style: {
+      minHeight: "100dvh",
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      padding: 20,
+      position: "relative"
+    }
+  }, /*#__PURE__*/React.createElement("button", {
+    className: "pp-btn pp-btn-ghost",
+    style: {
+      position: "absolute",
+      top: 20,
+      right: 20,
+      padding: 8,
+      borderRadius: 999
+    },
+    onClick: () => setTheme(theme === "light" ? "dark" : "light"),
+    "aria-label": "Toggle dark mode"
+  }, theme === "light" ? /*#__PURE__*/React.createElement(Moon, {
+    size: 16
+  }) : /*#__PURE__*/React.createElement(Sun, {
+    size: 16
+  })), /*#__PURE__*/React.createElement("div", {
+    className: "pp-card pp-index-card",
+    style: {
+      width: "100%",
+      maxWidth: 420,
+      padding: "34px 28px",
+      borderRadius: 10
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "pp-tape"
+  }), /*#__PURE__*/React.createElement("button", {
+    className: "pp-btn pp-btn-ghost",
+    style: {
+      padding: "5px 10px",
+      fontSize: 12.5,
+      marginBottom: 14
+    },
+    onClick: onBack
+  }, "← Back"), /*#__PURE__*/React.createElement("div", {
+    className: "pp-serif",
+    style: {
+      fontSize: 22,
+      fontWeight: 700,
+      marginBottom: 4
+    }
+  }, "Which grade are you in?"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 13,
+      color: "var(--muted)",
+      marginBottom: 16,
+      lineHeight: 1.5
+    }
+  }, "You'll only see notes and videos for your grade. We'll remember this on this device, and you can change it any time from the top of the page."), /*#__PURE__*/React.createElement(GradeButtons, {
+    value: null,
+    onPick: onPick
+  })));
+}
 function SetupNeededScreen() {
   return /*#__PURE__*/React.createElement("div", {
     style: {
@@ -2222,6 +2321,7 @@ function NotesView({
   }, [notes, query, subject, grade]);
   const lastNote = notes.find(n => n.id === lastNoteId);
   return /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement(FilterBar, {
+    hideGrade: !!user.grade,
     query: query,
     setQuery: setQuery,
     subject: subject,
@@ -2252,7 +2352,7 @@ function NotesView({
   }), filtered.length === 0 ? /*#__PURE__*/React.createElement(EmptyState, {
     icon: BookOpen,
     title: "No notes yet",
-    body: canUpload ? "Upload the first set of notes for students to study from." : "Only admins can upload notes — check back soon."
+    body: canUpload ? "Upload the first set of notes for students to study from." : user.grade ? `No notes for ${gradeLabel(user.grade)} yet. Check back soon.` : "Only admins can upload notes — check back soon."
   }) : /*#__PURE__*/React.createElement("div", {
     style: {
       display: "grid",
@@ -2438,8 +2538,8 @@ function NotesView({
     });
   })(), showForm && /*#__PURE__*/React.createElement(AddNoteModal, {
     onClose: () => setShowForm(false),
-    onSubmit: async payload => {
-      const ok = await onAddNote(payload);
+    onSubmit: async (payload, onProgress) => {
+      const ok = await onAddNote(payload, onProgress);
       if (ok) setShowForm(false);
     }
   }));
@@ -2457,6 +2557,7 @@ function AddNoteModal({
   const [images, setImages] = useState([]);
   const [description, setDescription] = useState("");
   const [busy, setBusy] = useState(false);
+  const [prog, setProg] = useState(null);
   const canSubmit = title.trim() && subject && grade && (type === "text" ? text.trim() : images.length > 0);
   return /*#__PURE__*/React.createElement(Modal, {
     title: "Upload notes",
@@ -2566,12 +2667,13 @@ function AddNoteModal({
           description: description.trim(),
           type,
           content: type === "text" ? text.trim() : images
-        });
+        }, (d, n) => setProg([d, n]));
       } finally {
         setBusy(false);
+        setProg(null);
       }
     }
-  }, busy ? "Publishing… please keep this open" : "Publish note"));
+  }, busy ? prog ? `Uploading photo ${prog[0]} of ${prog[1]}… keep this open` : "Publishing… keep this open" : "Publish note"));
 }
 
 /* ---------------------------------------------------------------------- */
@@ -2607,6 +2709,7 @@ function VideosView({
   }, [videos, query, subject, grade]);
   const lastVideo = videos.find(v => v.id === lastVideoId);
   return /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement(FilterBar, {
+    hideGrade: !!user.grade,
     query: query,
     setQuery: setQuery,
     subject: subject,
@@ -2637,7 +2740,7 @@ function VideosView({
   }), filtered.length === 0 ? /*#__PURE__*/React.createElement(EmptyState, {
     icon: VideoIcon,
     title: "No videos yet",
-    body: isAdmin ? "Paste a YouTube link to add the first video." : "Only admins can add videos — check back soon."
+    body: isAdmin ? "Paste a YouTube link to add the first video." : user.grade ? `No videos for ${gradeLabel(user.grade)} yet. Check back soon.` : "Only admins can add videos — check back soon."
   }) : /*#__PURE__*/React.createElement("div", {
     style: {
       display: "grid",
@@ -6444,6 +6547,12 @@ function cardsFromText(text) {
   };
 }
 function FlashcardsView() {
+  useEffect(() => {
+    const id = setTimeout(() => {
+      loadTesseract().catch(() => {});
+    }, 1200);
+    return () => clearTimeout(id);
+  }, []);
   const [decks, setDecks] = useLocalState("preplist:flashcards", []);
   const [deckId, setDeckId] = useState("");
   const [newDeck, setNewDeck] = useState("");
@@ -8178,6 +8287,7 @@ const TABS = [{
 }];
 function MainApp({
   user,
+  onChangeGrade,
   onSwitchRole,
   theme,
   setTheme
@@ -8193,6 +8303,9 @@ function MainApp({
   const [feedbackList] = useCollection("feedback", undefined, wanted.has("feedback"));
   const [tab, setTab] = useState("notes");
   const [showSearch, setShowSearch] = useState(false);
+  const [showGrade, setShowGrade] = useState(false);
+  const notesShown = useMemo(() => user.grade ? notes.filter(n => n.grade === user.grade) : notes, [notes, user.grade]);
+  const videosShown = useMemo(() => user.grade ? videos.filter(v => v.grade === user.grade) : videos, [videos, user.grade]);
   const TAB_NEEDS = {
     notes: ["notes"],
     videos: ["videos"],
@@ -8247,13 +8360,19 @@ function MainApp({
       elId
     });
   }, []);
-  async function addNote(payload) {
+  async function addNote(payload, onProgress) {
     try {
       let doc = {
         ...payload
       };
       if (payload.type === "image") {
-        const [fileIds, thumb] = await Promise.all([Promise.all(payload.content.map(d => saveFile(d))), makeThumb(payload.content[0])]);
+        let done = 0;
+        const total = payload.content.length;
+        const [fileIds, thumb] = await Promise.all([Promise.all(payload.content.map(d => saveFile(d).then(id => {
+          done++;
+          if (onProgress) onProgress(done, total);
+          return id;
+        }))), makeThumb(payload.content[0])]);
         doc = {
           ...payload,
           fileId: fileIds[0],
@@ -8665,7 +8784,18 @@ function MainApp({
     size: 16
   }) : /*#__PURE__*/React.createElement(Sun, {
     size: 16
-  })), /*#__PURE__*/React.createElement("button", {
+  })), user.grade && /*#__PURE__*/React.createElement("button", {
+    className: "pp-btn pp-btn-ghost",
+    style: {
+      padding: "6px 11px",
+      fontSize: 13,
+      fontWeight: 600,
+      whiteSpace: "nowrap"
+    },
+    onClick: () => setShowGrade(true),
+    title: "Change your grade",
+    "aria-label": `${gradeLabel(user.grade)}. Change grade`
+  }, gradeLabel(user.grade), " ▾"), /*#__PURE__*/React.createElement("button", {
     className: "pp-btn pp-btn-ghost pp-role-pill",
     style: {
       display: "flex",
@@ -8720,7 +8850,7 @@ function MainApp({
   }, !dataReady ? /*#__PURE__*/React.createElement(Loading, {
     label: "Loading…"
   }) : /*#__PURE__*/React.createElement(React.Fragment, null, tab === "notes" && /*#__PURE__*/React.createElement(NotesView, {
-    notes: notes,
+    notes: notesShown,
     user: user,
     onAddNote: addNote,
     onDeleteNote: deleteNote,
@@ -8730,7 +8860,7 @@ function MainApp({
     savedNoteIds: savedNoteIds,
     onToggleSavedNote: onToggleSavedNote
   }), tab === "videos" && /*#__PURE__*/React.createElement(VideosView, {
-    videos: videos,
+    videos: videosShown,
     user: user,
     onAddVideo: addVideo,
     onDeleteVideo: deleteVideo,
@@ -8776,9 +8906,24 @@ function MainApp({
     onToggleSavedVideo: onToggleSavedVideo,
     onToggleSavedFile: onToggleSavedFile,
     onJump: jumpTo
-  }))), showSearch && /*#__PURE__*/React.createElement(GlobalSearchModal, {
-    notes: notes,
-    videos: videos,
+  }))), showGrade && /*#__PURE__*/React.createElement(Modal, {
+    title: "Change your grade",
+    onClose: () => setShowGrade(false)
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 13,
+      color: "var(--muted)",
+      marginBottom: 14
+    }
+  }, "Notes and videos will switch to the grade you pick. This is saved on this device."), /*#__PURE__*/React.createElement(GradeButtons, {
+    value: user.grade,
+    onPick: g => {
+      onChangeGrade(g);
+      setShowGrade(false);
+    }
+  })), showSearch && /*#__PURE__*/React.createElement(GlobalSearchModal, {
+    notes: notesShown,
+    videos: videosShown,
     files: libraryFiles,
     onClose: () => setShowSearch(false),
     onJump: jumpTo
@@ -8797,6 +8942,7 @@ function MainApp({
 function PreplistProRoot() {
   const [theme, setTheme] = useLocalState("preplist:theme", "light");
   const [role, setRole] = useLocalState("preplist:role2", null);
+  const [myGrade, setMyGrade] = useLocalState("preplist:myGrade", null);
   const sessionReady = useAnonymousSession();
   if (!FIREBASE_READY) return /*#__PURE__*/React.createElement("div", {
     className: "pp-root",
@@ -8825,10 +8971,24 @@ function PreplistProRoot() {
     theme: theme,
     setTheme: setTheme
   }));
+  if (role === "student" && !GRADE_CHOICES.some(g => g.value === myGrade)) return /*#__PURE__*/React.createElement("div", {
+    className: "pp-root",
+    "data-theme": theme,
+    style: {
+      minHeight: "100dvh"
+    }
+  }, /*#__PURE__*/React.createElement(GlobalStyle, null), /*#__PURE__*/React.createElement(GradeGate, {
+    onPick: setMyGrade,
+    onBack: () => setRole(null),
+    theme: theme,
+    setTheme: setTheme
+  }));
   return /*#__PURE__*/React.createElement(MainApp, {
     user: {
-      role
+      role,
+      grade: role === "student" ? myGrade : null
     },
+    onChangeGrade: setMyGrade,
     onSwitchRole: () => setRole(null),
     theme: theme,
     setTheme: setTheme
