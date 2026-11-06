@@ -3371,7 +3371,7 @@ function NoteImages({
   return /*#__PURE__*/React.createElement("div", null, ids.map((id, i) => /*#__PURE__*/React.createElement("div", {
     key: id,
     style: {
-      marginTop: i ? 8 : 0
+      marginTop: i ? 2 : 0
     }
   }, /*#__PURE__*/React.createElement(NoteImage, {
     note: {
@@ -3381,6 +3381,20 @@ function NoteImages({
     noZoom: noZoom
   }))));
 }
+async function loadFileData(id) {
+  if (fileCache.has(id)) return fileCache.get(id);
+  const d = await db.collection("files").doc(id).get();
+  const v = d.exists ? d.data().data : null;
+  if (v) fileCache.set(id, v);
+  return v;
+}
+async function dataUrlToFile(url, name) {
+  const blob = await (await fetch(url)).blob();
+  const ext = (blob.type.split("/")[1] || "jpg").replace("jpeg", "jpg");
+  return new File([blob], `${name}.${ext}`, {
+    type: blob.type || "image/jpeg"
+  });
+}
 function NoteViewer({
   note,
   saved,
@@ -3388,6 +3402,8 @@ function NoteViewer({
   onEdit,
   onClose
 }) {
+  const [saving, setSaving] = useState(false);
+  const [msg, setMsg] = useState("");
   useEffect(() => {
     const onKey = e => {
       if (e.key === "Escape") onClose();
@@ -3400,6 +3416,57 @@ function NoteViewer({
       document.body.style.overflow = prev;
     };
   }, [onClose]);
+  async function saveToPhotos() {
+    if (saving) return;
+    setSaving(true);
+    setMsg("");
+    try {
+      const ids = noteFileIds(note);
+      const urls = ids.length ? await Promise.all(ids.map(loadFileData)) : [note.content];
+      if (urls.some(u => !u)) throw new Error("missing");
+      const base = (note.title || "note").replace(/[^\w\- ]+/g, "").trim().replace(/\s+/g, "-") || "note";
+      const files = await Promise.all(urls.map((u, i) => dataUrlToFile(u, urls.length > 1 ? `${base}-${i + 1}` : base)));
+      if (navigator.canShare && navigator.canShare({
+        files
+      })) {
+        try {
+          await navigator.share({
+            files
+          });
+          setMsg("Tap “Save Image” to add to Photos");
+        } catch (e) {
+          if (e && e.name === "AbortError") {
+            setSaving(false);
+            return;
+          }
+          throw e;
+        }
+      } else {
+        files.forEach((f, i) => setTimeout(() => {
+          const a = document.createElement("a");
+          a.href = URL.createObjectURL(f);
+          a.download = f.name;
+          document.body.appendChild(a);
+          a.click();
+          a.remove();
+          setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+        }, i * 400));
+        setMsg("Downloaded");
+      }
+    } catch (e) {
+      setMsg("Couldn't save this one");
+    }
+    setSaving(false);
+    setTimeout(() => setMsg(""), 3500);
+  }
+  const btn = {
+    padding: "7px 12px",
+    fontSize: 13,
+    display: "flex",
+    alignItems: "center",
+    gap: 6,
+    flexShrink: 0
+  };
   return /*#__PURE__*/React.createElement("div", {
     role: "dialog",
     "aria-label": note.title,
@@ -3415,8 +3482,8 @@ function NoteViewer({
     style: {
       display: "flex",
       alignItems: "center",
-      gap: 10,
-      padding: "10px 14px",
+      gap: 8,
+      padding: "calc(8px + env(safe-area-inset-top)) 10px 8px",
       borderBottom: "1px solid var(--border)"
     }
   }, /*#__PURE__*/React.createElement("div", {
@@ -3427,7 +3494,7 @@ function NoteViewer({
   }, /*#__PURE__*/React.createElement("div", {
     className: "pp-serif",
     style: {
-      fontSize: 17,
+      fontSize: 16,
       fontWeight: 700,
       overflow: "hidden",
       textOverflow: "ellipsis",
@@ -3437,43 +3504,38 @@ function NoteViewer({
     style: {
       display: "flex",
       gap: 6,
-      marginTop: 4
+      marginTop: 3
     }
   }, /*#__PURE__*/React.createElement(Tag, {
     text: note.subject
   }), /*#__PURE__*/React.createElement(GradeTag, {
     text: note.grade
-  }))), onEdit && /*#__PURE__*/React.createElement("button", {
+  }))), note.type === "image" && /*#__PURE__*/React.createElement("button", {
     className: "pp-btn pp-btn-ghost",
-    style: {
-      padding: "7px 12px",
-      fontSize: 13,
-      display: "flex",
-      alignItems: "center",
-      gap: 6,
-      flexShrink: 0
-    },
+    style: btn,
+    onClick: saveToPhotos,
+    disabled: saving,
+    "aria-label": "Save to camera roll"
+  }, /*#__PURE__*/React.createElement(Download, {
+    size: 14
+  }), " ", saving ? "…" : "Photos"), onEdit && /*#__PURE__*/React.createElement("button", {
+    className: "pp-btn pp-btn-ghost",
+    style: btn,
     onClick: onEdit
   }, /*#__PURE__*/React.createElement(Pencil, {
     size: 14
-  }), " Edit"), /*#__PURE__*/React.createElement("button", {
+  })), /*#__PURE__*/React.createElement("button", {
     className: "pp-btn pp-btn-ghost",
-    style: {
-      padding: "7px 12px",
-      fontSize: 13,
-      display: "flex",
-      alignItems: "center",
-      gap: 6,
-      flexShrink: 0
-    },
-    onClick: onToggleSaved
+    style: btn,
+    onClick: onToggleSaved,
+    "aria-label": saved ? "Remove bookmark" : "Bookmark"
   }, /*#__PURE__*/React.createElement(Bookmark, {
     size: 14,
     fill: saved ? "var(--sage)" : "none",
     style: {
       color: saved ? "var(--sage)" : "var(--accent)"
     }
-  }), " ", saved ? "Saved" : "Save"), /*#__PURE__*/React.createElement("button", {
+  })), /*#__PURE__*/React.createElement("button", {
     className: "pp-btn pp-btn-ghost",
     style: {
       padding: 8,
@@ -3484,17 +3546,32 @@ function NoteViewer({
     "aria-label": "Close note"
   }, /*#__PURE__*/React.createElement(X, {
     size: 18
-  }))), /*#__PURE__*/React.createElement("div", {
+  }))), msg && /*#__PURE__*/React.createElement("div", {
+    style: {
+      position: "absolute",
+      top: "calc(70px + env(safe-area-inset-top))",
+      left: "50%",
+      transform: "translateX(-50%)",
+      background: "var(--text)",
+      color: "var(--bg)",
+      fontSize: 13,
+      fontWeight: 600,
+      padding: "8px 14px",
+      borderRadius: 999,
+      zIndex: 2,
+      whiteSpace: "nowrap"
+    }
+  }, msg), /*#__PURE__*/React.createElement("div", {
     style: {
       flex: 1,
       minHeight: 0,
       overflowY: "auto",
       WebkitOverflowScrolling: "touch",
-      padding: "16px 14px 40px"
+      padding: note.type === "image" ? "0 0 env(safe-area-inset-bottom)" : "16px 14px 40px"
     }
   }, /*#__PURE__*/React.createElement("div", {
     style: {
-      maxWidth: 1100,
+      maxWidth: note.type === "image" ? 1400 : 1100,
       margin: "0 auto"
     }
   }, note.description && /*#__PURE__*/React.createElement("p", {
@@ -3503,15 +3580,13 @@ function NoteViewer({
       lineHeight: 1.55,
       color: "var(--muted)",
       whiteSpace: "pre-wrap",
-      margin: "0 0 14px"
+      margin: note.type === "image" ? "12px 14px" : "0 0 14px"
     }
   }, note.description), note.type === "image" ? /*#__PURE__*/React.createElement(NoteImages, {
     note: note,
     noZoom: true,
     style: {
       width: "100%",
-      borderRadius: 6,
-      border: "1px solid var(--border)",
       display: "block"
     }
   }) : /*#__PURE__*/React.createElement("p", {
