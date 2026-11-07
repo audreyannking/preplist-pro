@@ -161,6 +161,7 @@ const SUBJECTS = [
   "Math", "Science", "Statistics", "Mechanics", "Physics", "Chemistry", "Biology",
   "English", "History", "Computer Science", "Computing", "Economics", "Business", "French", "Arabic", "Islamic", "Other"
 ];
+const ALL_GRADES = "All grades";
 const GRADES = ["6th Grade", "7th Grade", "8th Grade", "9th Grade", "10th Grade", "11th Grade", "12th Grade"];
 
 // Past Papers has its own subject list and exam-type set (Cambridge-style),
@@ -2213,7 +2214,7 @@ function FlashcardsView({ sharedDecks, user, notify }) {
   const myUid = auth && auth.currentUser ? auth.currentUser.uid : null;
   const staff = hasElevatedAccess(user);
   const shared = useMemo(() => (sharedDecks || [])
-    .filter((d) => (user.grade ? d.grade === user.grade : !fGrade || d.grade === fGrade) && (!fSubject || d.subject === fSubject))
+    .filter((d) => (user.grade ? (d.grade === user.grade || d.grade === ALL_GRADES) : !fGrade || d.grade === fGrade || d.grade === ALL_GRADES) && (!fSubject || d.subject === fSubject))
     .map((d) => ({ ...d, id: `s:${d.id}`, sid: d.id, shared: true, cards: (d.cards || []).map((c) => ({ ...c, box: boxes[c.id] || 0 })) }))
     .sort((a, b) => a.subject.localeCompare(b.subject) || b.createdAt - a.createdAt), [sharedDecks, user.grade, fGrade, fSubject, boxes]);
   const decks = useMemo(() => [...shared, ...(localDecks || [])], [shared, localDecks]);
@@ -2362,7 +2363,11 @@ function FlashcardsView({ sharedDecks, user, notify }) {
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
           <input className="pp-input" style={{ flex: 2, minWidth: 150, padding: "8px 10px", fontSize: 14 }} placeholder="Deck name, e.g. Cells and organelles" value={newDeck} onChange={(e) => setNewDeck(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") addDeck(); }} />
           {shareIt && <div style={{ width: 160 }}><SubjectSelect value={newSubject} onChange={setNewSubject} /></div>}
-          {shareIt && <div style={{ width: 140 }}><GradeSelect value={newGrade} onChange={setNewGrade} /></div>}
+          {shareIt && <div style={{ width: 150 }}><select className="pp-select" aria-label="Grade" style={{ padding: "9px 10px", fontSize: 14, width: "100%" }} value={newGrade} onChange={(e) => setNewGrade(e.target.value)}>
+            <option value="" disabled>Grade…</option>
+            <option value={ALL_GRADES}>All grades</option>
+            {GRADES.map((g) => <option key={g} value={g}>{g}</option>)}
+          </select></div>}
           <button className="pp-btn pp-btn-primary" style={{ padding: "8px 16px", opacity: newDeck.trim() ? 1 : 0.5 }} disabled={!newDeck.trim()} onClick={addDeck}>Create deck</button>
         </div>
         <label style={{ display: "flex", gap: 6, alignItems: "center", fontSize: 12.5, color: "var(--muted)", marginTop: 8 }}>
