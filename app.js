@@ -5685,16 +5685,40 @@ function cardsFromText(text) {
     skipped
   };
 }
-function FlashcardsView() {
+function FlashcardsView({
+  sharedDecks,
+  user,
+  notify
+}) {
   useEffect(() => {
     const id = setTimeout(() => {
       loadTesseract().catch(() => {});
     }, 1200);
     return () => clearTimeout(id);
   }, []);
-  const [decks, setDecks] = useLocalState("preplist:flashcards", []);
+  const [localDecks, setDecks] = useLocalState("preplist:flashcards", []);
+  const [boxes, setBoxes] = useLocalState("preplist:flashBoxes", {});
   const [deckId, setDeckId] = useState("");
   const [newDeck, setNewDeck] = useState("");
+  const [newSubject, setNewSubject] = useState("");
+  const [newGrade, setNewGrade] = useState(user.grade || "");
+  const [shareIt, setShareIt] = useState(true);
+  const [fSubject, setFSubject] = useState("");
+  const [fGrade, setFGrade] = useState("");
+  const myUid = auth && auth.currentUser ? auth.currentUser.uid : null;
+  const staff = hasElevatedAccess(user);
+  const shared = useMemo(() => (sharedDecks || []).filter(d => (user.grade ? d.grade === user.grade : !fGrade || d.grade === fGrade) && (!fSubject || d.subject === fSubject)).map(d => ({
+    ...d,
+    id: `s:${d.id}`,
+    sid: d.id,
+    shared: true,
+    cards: (d.cards || []).map(c => ({
+      ...c,
+      box: boxes[c.id] || 0
+    }))
+  })).sort((a, b) => a.subject.localeCompare(b.subject) || b.createdAt - a.createdAt), [sharedDecks, user.grade, fGrade, fSubject, boxes]);
+  const decks = useMemo(() => [...shared, ...(localDecks || [])], [shared, localDecks]);
+  const canEdit = d => !d.shared || staff || myUid && d.authorUid === myUid;
   const [front, setFront] = useState("");
   const [back, setBack] = useState("");
   const [studying, setStudying] = useState(false);
@@ -5749,15 +5773,40 @@ function FlashcardsView() {
       box: 0
     }));
     if (!picked.length) return;
-    updateDeck(d => ({
-      ...d,
-      cards: [...d.cards, ...picked]
-    }));
+    addCards(picked);
     setProposals(null);
     setRawText("");
   }
-  function addDeck() {
+  async function addDeck() {
     if (!newDeck.trim()) return;
+    if (shareIt) {
+      if (!newSubject || !newGrade) {
+        notify({
+          kind: "error",
+          text: "Pick a subject and grade so other students can find your deck."
+        });
+        return;
+      }
+      try {
+        const ref = await db.collection("flashDecks").add({
+          name: newDeck.trim(),
+          subject: newSubject,
+          grade: newGrade,
+          cards: [],
+          authorUid: myUid,
+          authorRole: user.role,
+          createdAt: Date.now()
+        });
+        setDeckId(`s:${ref.id}`);
+        setNewDeck("");
+      } catch (e) {
+        notify({
+          kind: "error",
+          text: friendlyDbError(e)
+        });
+      }
+      return;
+    }
     const d = {
       id: uid(),
       name: newDeck.trim(),
@@ -5767,20 +5816,84 @@ function FlashcardsView() {
     setDeckId(d.id);
     setNewDeck("");
   }
+  async function addCards(list) {
+    if (deck && deck.shared) {
+      try {
+        await db.collection("flashDecks").doc(deck.sid).update({
+          cards: firebase.firestore.FieldValue.arrayUnion(...list.map(({
+            id,
+            front,
+            back
+          }) => ({
+            id,
+            front,
+            back
+          })))
+        });
+      } catch (e) {
+        notify({
+          kind: "error",
+          text: friendlyDbError(e)
+        });
+      }
+    } else updateDeck(d => ({
+      ...d,
+      cards: [...d.cards, ...list]
+    }));
+  }
+  async function removeCard(c) {
+    if (deck.shared) {
+      try {
+        await db.collection("flashDecks").doc(deck.sid).update({
+          cards: deck.cards.filter(x => x.id !== c.id).map(({
+            id,
+            front,
+            back
+          }) => ({
+            id,
+            front,
+            back
+          }))
+        });
+      } catch (e) {
+        notify({
+          kind: "error",
+          text: friendlyDbError(e)
+        });
+      }
+    } else updateDeck(d => ({
+      ...d,
+      cards: d.cards.filter(x => x.id !== c.id)
+    }));
+  }
+  async function removeDeck() {
+    if (deck.shared) {
+      if (!window.confirm(`Delete "${deck.name}" for everyone?`)) return;
+      try {
+        await db.collection("flashDecks").doc(deck.sid).delete();
+        setDeckId("");
+      } catch (e) {
+        notify({
+          kind: "error",
+          text: friendlyDbError(e)
+        });
+      }
+    } else {
+      setDecks(prev => prev.filter(d => d.id !== deck.id));
+      setDeckId("");
+    }
+  }
   function updateDeck(fn) {
     setDecks(prev => prev.map(d => d.id === deckId ? fn(d) : d));
   }
   function addCard() {
     if (!front.trim() || !back.trim()) return;
-    updateDeck(d => ({
-      ...d,
-      cards: [...d.cards, {
-        id: uid(),
-        front: front.trim(),
-        back: back.trim(),
-        box: 0
-      }]
-    }));
+    addCards([{
+      id: uid(),
+      front: front.trim(),
+      back: back.trim(),
+      box: 0
+    }]);
     setFront("");
     setBack("");
   }
@@ -5806,7 +5919,10 @@ function FlashcardsView() {
       ...c,
       box: known ? Math.min(c.box + 1, 4) : 0
     } : c);
-    updateDeck(d => ({
+    if (deck.shared) setBoxes(b => ({
+      ...b,
+      [id]: known ? Math.min((b[id] || 0) + 1, 4) : 0
+    }));else updateDeck(d => ({
       ...d,
       cards
     }));
@@ -5902,43 +6018,101 @@ function FlashcardsView() {
       fontWeight: 700,
       marginBottom: 4
     }
-  }, "Flashcards"), "Make your own decks (write them in your own words). Cards you get right show up less; cards you miss come back sooner. Use $...$ for maths. Everything is saved on this device only."), /*#__PURE__*/React.createElement("div", {
+  }, "Flashcards"), "Study decks other students made for your grade and subject, or make your own and share it with everyone. Cards you get right show up less; cards you miss come back sooner. Use $...$ for maths. Your progress is saved on this device."), /*#__PURE__*/React.createElement("div", {
     style: {
       display: "flex",
       gap: 8,
       flexWrap: "wrap",
-      marginBottom: 14
+      marginBottom: 10
     }
-  }, /*#__PURE__*/React.createElement("select", {
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      width: 168
+    }
+  }, /*#__PURE__*/React.createElement(SubjectSelect, {
+    value: fSubject,
+    onChange: setFSubject,
+    includeAll: true
+  })), !user.grade && /*#__PURE__*/React.createElement("div", {
+    style: {
+      width: 150
+    }
+  }, /*#__PURE__*/React.createElement(GradeSelect, {
+    value: fGrade,
+    onChange: setFGrade,
+    includeAll: true
+  })), /*#__PURE__*/React.createElement("select", {
     className: "pp-select",
     "aria-label": "Deck",
     style: {
       padding: "8px 10px",
       fontSize: 14,
-      minWidth: 170
+      flex: 1,
+      minWidth: 190
     },
     value: deckId,
     onChange: e => setDeckId(e.target.value)
   }, /*#__PURE__*/React.createElement("option", {
     value: ""
-  }, "Choose a deck…"), decks.map(d => /*#__PURE__*/React.createElement("option", {
+  }, shared.length ? "Choose a deck…" : "No shared decks yet — make one below"), shared.length > 0 && /*#__PURE__*/React.createElement("optgroup", {
+    label: user.grade ? `Shared · ${gradeLabel(user.grade)}` : "Shared decks"
+  }, shared.map(d => /*#__PURE__*/React.createElement("option", {
     key: d.id,
     value: d.id
-  }, d.name, " (", d.cards.length, ")"))), /*#__PURE__*/React.createElement("input", {
+  }, d.subject, user.grade ? "" : ` · ${d.grade}`, " — ", d.name, " (", d.cards.length, ")"))), (localDecks || []).length > 0 && /*#__PURE__*/React.createElement("optgroup", {
+    label: "Private (this device only)"
+  }, localDecks.map(d => /*#__PURE__*/React.createElement("option", {
+    key: d.id,
+    value: d.id
+  }, d.name, " (", d.cards.length, ")"))))), /*#__PURE__*/React.createElement("div", {
+    className: "pp-card",
+    style: {
+      borderRadius: 10,
+      padding: 12,
+      marginBottom: 14
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 13.5,
+      fontWeight: 700,
+      marginBottom: 8
+    }
+  }, "Make a new deck"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      gap: 8,
+      flexWrap: "wrap",
+      alignItems: "center"
+    }
+  }, /*#__PURE__*/React.createElement("input", {
     className: "pp-input",
     style: {
-      flex: 1,
-      minWidth: 140,
+      flex: 2,
+      minWidth: 150,
       padding: "8px 10px",
       fontSize: 14
     },
-    placeholder: "New deck name, e.g. Biology – cells",
+    placeholder: "Deck name, e.g. Cells and organelles",
     value: newDeck,
     onChange: e => setNewDeck(e.target.value),
     onKeyDown: e => {
       if (e.key === "Enter") addDeck();
     }
-  }), /*#__PURE__*/React.createElement("button", {
+  }), shareIt && /*#__PURE__*/React.createElement("div", {
+    style: {
+      width: 160
+    }
+  }, /*#__PURE__*/React.createElement(SubjectSelect, {
+    value: newSubject,
+    onChange: setNewSubject
+  })), shareIt && /*#__PURE__*/React.createElement("div", {
+    style: {
+      width: 140
+    }
+  }, /*#__PURE__*/React.createElement(GradeSelect, {
+    value: newGrade,
+    onChange: setNewGrade
+  })), /*#__PURE__*/React.createElement("button", {
     className: "pp-btn pp-btn-primary",
     style: {
       padding: "8px 16px",
@@ -5946,7 +6120,23 @@ function FlashcardsView() {
     },
     disabled: !newDeck.trim(),
     onClick: addDeck
-  }, "Create deck")), deck && /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", {
+  }, "Create deck")), /*#__PURE__*/React.createElement("label", {
+    style: {
+      display: "flex",
+      gap: 6,
+      alignItems: "center",
+      fontSize: 12.5,
+      color: "var(--muted)",
+      marginTop: 8
+    }
+  }, /*#__PURE__*/React.createElement("input", {
+    type: "checkbox",
+    checked: shareIt,
+    onChange: e => setShareIt(e.target.checked),
+    style: {
+      accentColor: "var(--accent)"
+    }
+  }), " Share with everyone in that grade and subject")), deck && /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", {
     style: {
       display: "flex",
       gap: 8,
@@ -5962,17 +6152,19 @@ function FlashcardsView() {
     },
     disabled: !deck.cards.length,
     onClick: startStudy
-  }, "Study this deck"), /*#__PURE__*/React.createElement("button", {
+  }, "Study this deck"), canEdit(deck) && /*#__PURE__*/React.createElement("button", {
     className: "pp-btn pp-btn-ghost",
     style: {
       padding: "9px 14px",
       fontSize: 13
     },
-    onClick: () => {
-      setDecks(prev => prev.filter(d => d.id !== deck.id));
-      setDeckId("");
+    onClick: removeDeck
+  }, "Delete deck"), deck.shared && /*#__PURE__*/React.createElement("span", {
+    style: {
+      fontSize: 12,
+      color: "var(--muted)"
     }
-  }, "Delete deck")), /*#__PURE__*/React.createElement("div", {
+  }, "Shared deck · ", deck.subject, " · ", deck.grade)), canEdit(deck) && /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("div", {
     style: {
       display: "flex",
       gap: 8,
@@ -6135,7 +6327,7 @@ function FlashcardsView() {
       fontSize: 12,
       margin: "6px 0 0"
     }
-  }, rawText || "(nothing)")))), deck.cards.map(c => /*#__PURE__*/React.createElement("div", {
+  }, rawText || "(nothing)"))))), deck.cards.map(c => /*#__PURE__*/React.createElement("div", {
     key: c.id,
     style: {
       display: "flex",
@@ -6156,16 +6348,13 @@ function FlashcardsView() {
     text: c.back
   })), /*#__PURE__*/React.createElement(GradeTag, {
     text: `Box ${c.box + 1}`
-  }), /*#__PURE__*/React.createElement("button", {
+  }), canEdit(deck) && /*#__PURE__*/React.createElement("button", {
     className: "pp-btn pp-btn-ghost",
     style: {
       padding: 4,
       borderRadius: 999
     },
-    onClick: () => updateDeck(d => ({
-      ...d,
-      cards: d.cards.filter(x => x.id !== c.id)
-    })),
+    onClick: () => removeCard(c),
     "aria-label": "Delete card"
   }, /*#__PURE__*/React.createElement(X, {
     size: 12
@@ -7435,6 +7624,7 @@ function MainApp({
   const [videos, videosReady] = useCollection("videos", undefined, wanted.has("videos"));
   const [libraryFiles, libraryFilesReady] = useCollection("libraryFiles", undefined, wanted.has("files"));
   const [feedbackList] = useCollection("feedback", undefined, wanted.has("feedback"));
+  const [flashDecks, flashDecksReady] = useCollection("flashDecks", undefined, wanted.has("flashcards"));
   const [tab, setTab] = useState("notes");
   const [showSearch, setShowSearch] = useState(false);
   const [showGrade, setShowGrade] = useState(false);
@@ -7447,7 +7637,7 @@ function MainApp({
     papers: [],
     saved: ["notes", "videos", "files"],
     tools: [],
-    flashcards: [],
+    flashcards: ["flashcards"],
     contact: []
   };
   useEffect(() => {
@@ -7805,7 +7995,8 @@ function MainApp({
   const READY = {
     notes: notesReady,
     videos: videosReady,
-    files: libraryFilesReady
+    files: libraryFilesReady,
+    flashcards: flashDecksReady
   };
   const dataReady = (TAB_NEEDS[tab] || []).every(n => READY[n]);
   return /*#__PURE__*/React.createElement(ToastContext.Provider, {
@@ -7967,7 +8158,11 @@ function MainApp({
     setLastFileId: setLastFileId,
     savedFileIds: savedFileIds,
     onToggleSavedFile: onToggleSavedFile
-  }), tab === "papers" && /*#__PURE__*/React.createElement(PastPapersView, null), tab === "tools" && /*#__PURE__*/React.createElement(ToolsView, null), tab === "flashcards" && /*#__PURE__*/React.createElement(FlashcardsView, null), tab === "contact" && /*#__PURE__*/React.createElement(ContactView, {
+  }), tab === "papers" && /*#__PURE__*/React.createElement(PastPapersView, null), tab === "tools" && /*#__PURE__*/React.createElement(ToolsView, null), tab === "flashcards" && /*#__PURE__*/React.createElement(FlashcardsView, {
+    sharedDecks: flashDecks,
+    user: user,
+    notify: notify
+  }), tab === "contact" && /*#__PURE__*/React.createElement(ContactView, {
     isAdmin: user.role === "admin",
     feedback: feedbackList
   }), tab === "saved" && /*#__PURE__*/React.createElement(SavedView, {

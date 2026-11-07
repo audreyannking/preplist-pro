@@ -2172,11 +2172,25 @@ function cardsFromText(text) {
   return { cards, skipped };
 }
 
-function FlashcardsView() {
+function FlashcardsView({ sharedDecks, user, notify }) {
   useEffect(() => { const id = setTimeout(() => { loadTesseract().catch(() => {}); }, 1200); return () => clearTimeout(id); }, []);
-  const [decks, setDecks] = useLocalState("preplist:flashcards", []);
+  const [localDecks, setDecks] = useLocalState("preplist:flashcards", []);
+  const [boxes, setBoxes] = useLocalState("preplist:flashBoxes", {});
   const [deckId, setDeckId] = useState("");
   const [newDeck, setNewDeck] = useState("");
+  const [newSubject, setNewSubject] = useState("");
+  const [newGrade, setNewGrade] = useState(user.grade || "");
+  const [shareIt, setShareIt] = useState(true);
+  const [fSubject, setFSubject] = useState("");
+  const [fGrade, setFGrade] = useState("");
+  const myUid = auth && auth.currentUser ? auth.currentUser.uid : null;
+  const staff = hasElevatedAccess(user);
+  const shared = useMemo(() => (sharedDecks || [])
+    .filter((d) => (user.grade ? d.grade === user.grade : !fGrade || d.grade === fGrade) && (!fSubject || d.subject === fSubject))
+    .map((d) => ({ ...d, id: `s:${d.id}`, sid: d.id, shared: true, cards: (d.cards || []).map((c) => ({ ...c, box: boxes[c.id] || 0 })) }))
+    .sort((a, b) => a.subject.localeCompare(b.subject) || b.createdAt - a.createdAt), [sharedDecks, user.grade, fGrade, fSubject, boxes]);
+  const decks = useMemo(() => [...shared, ...(localDecks || [])], [shared, localDecks]);
+  const canEdit = (d) => !d.shared || staff || (myUid && d.authorUid === myUid);
   const [front, setFront] = useState("");
   const [back, setBack] = useState("");
   const [studying, setStudying] = useState(false);
@@ -2211,19 +2225,46 @@ function FlashcardsView() {
   function addProposals() {
     const picked = proposals.cards.filter((c) => c.on && c.front.trim() && c.back.trim()).map((c) => ({ id: uid(), front: c.front.trim(), back: c.back.trim(), box: 0 }));
     if (!picked.length) return;
-    updateDeck((d) => ({ ...d, cards: [...d.cards, ...picked] }));
+    addCards(picked);
     setProposals(null); setRawText("");
   }
 
-  function addDeck() {
+  async function addDeck() {
     if (!newDeck.trim()) return;
+    if (shareIt) {
+      if (!newSubject || !newGrade) { notify({ kind: "error", text: "Pick a subject and grade so other students can find your deck." }); return; }
+      try {
+        const ref = await db.collection("flashDecks").add({ name: newDeck.trim(), subject: newSubject, grade: newGrade, cards: [], authorUid: myUid, authorRole: user.role, createdAt: Date.now() });
+        setDeckId(`s:${ref.id}`); setNewDeck("");
+      } catch (e) { notify({ kind: "error", text: friendlyDbError(e) }); }
+      return;
+    }
     const d = { id: uid(), name: newDeck.trim(), cards: [] };
     setDecks((prev) => [...(prev || []), d]); setDeckId(d.id); setNewDeck("");
+  }
+  async function addCards(list) {
+    if (deck && deck.shared) {
+      try { await db.collection("flashDecks").doc(deck.sid).update({ cards: firebase.firestore.FieldValue.arrayUnion(...list.map(({ id, front, back }) => ({ id, front, back }))) }); }
+      catch (e) { notify({ kind: "error", text: friendlyDbError(e) }); }
+    } else updateDeck((d) => ({ ...d, cards: [...d.cards, ...list] }));
+  }
+  async function removeCard(c) {
+    if (deck.shared) {
+      try { await db.collection("flashDecks").doc(deck.sid).update({ cards: deck.cards.filter((x) => x.id !== c.id).map(({ id, front, back }) => ({ id, front, back })) }); }
+      catch (e) { notify({ kind: "error", text: friendlyDbError(e) }); }
+    } else updateDeck((d) => ({ ...d, cards: d.cards.filter((x) => x.id !== c.id) }));
+  }
+  async function removeDeck() {
+    if (deck.shared) {
+      if (!window.confirm(`Delete "${deck.name}" for everyone?`)) return;
+      try { await db.collection("flashDecks").doc(deck.sid).delete(); setDeckId(""); }
+      catch (e) { notify({ kind: "error", text: friendlyDbError(e) }); }
+    } else { setDecks((prev) => prev.filter((d) => d.id !== deck.id)); setDeckId(""); }
   }
   function updateDeck(fn) { setDecks((prev) => prev.map((d) => (d.id === deckId ? fn(d) : d))); }
   function addCard() {
     if (!front.trim() || !back.trim()) return;
-    updateDeck((d) => ({ ...d, cards: [...d.cards, { id: uid(), front: front.trim(), back: back.trim(), box: 0 }] }));
+    addCards([{ id: uid(), front: front.trim(), back: back.trim(), box: 0 }]);
     setFront(""); setBack("");
   }
   function pickCard(list) {
@@ -2237,7 +2278,8 @@ function FlashcardsView() {
   function grade(known) {
     const id = card.id;
     const cards = deck.cards.map((c) => (c.id === id ? { ...c, box: known ? Math.min(c.box + 1, 4) : 0 } : c));
-    updateDeck((d) => ({ ...d, cards }));
+    if (deck.shared) setBoxes((b) => ({ ...b, [id]: known ? Math.min((b[id] || 0) + 1, 4) : 0 }));
+    else updateDeck((d) => ({ ...d, cards }));
     markStudiedToday();
     setDone((n) => n + 1); setFlipped(false);
     const others = cards.length > 1 ? cards.filter((c) => c.id !== id) : cards;
@@ -2269,23 +2311,41 @@ function FlashcardsView() {
     <div>
       <div className="pp-card" style={{ borderRadius: 10, padding: 14, marginBottom: 16, fontSize: 13, lineHeight: 1.55 }}>
         <div className="pp-serif" style={{ fontSize: 15.5, fontWeight: 700, marginBottom: 4 }}>Flashcards</div>
-        Make your own decks (write them in your own words). Cards you get right show up less; cards you miss come back sooner. Use $...$ for maths. Everything is saved on this device only.
+        Study decks other students made for your grade and subject, or make your own and share it with everyone. Cards you get right show up less; cards you miss come back sooner. Use $...$ for maths. Your progress is saved on this device.
       </div>
-      <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 14 }}>
-        <select className="pp-select" aria-label="Deck" style={{ padding: "8px 10px", fontSize: 14, minWidth: 170 }} value={deckId} onChange={(e) => setDeckId(e.target.value)}>
-          <option value="">Choose a deck…</option>
-          {decks.map((d) => <option key={d.id} value={d.id}>{d.name} ({d.cards.length})</option>)}
+      <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 10 }}>
+        <div style={{ width: 168 }}><SubjectSelect value={fSubject} onChange={setFSubject} includeAll /></div>
+        {!user.grade && <div style={{ width: 150 }}><GradeSelect value={fGrade} onChange={setFGrade} includeAll /></div>}
+        <select className="pp-select" aria-label="Deck" style={{ padding: "8px 10px", fontSize: 14, flex: 1, minWidth: 190 }} value={deckId} onChange={(e) => setDeckId(e.target.value)}>
+          <option value="">{shared.length ? "Choose a deck…" : "No shared decks yet — make one below"}</option>
+          {shared.length > 0 && <optgroup label={user.grade ? `Shared · ${gradeLabel(user.grade)}` : "Shared decks"}>
+            {shared.map((d) => <option key={d.id} value={d.id}>{d.subject}{user.grade ? "" : ` · ${d.grade}`} — {d.name} ({d.cards.length})</option>)}
+          </optgroup>}
+          {(localDecks || []).length > 0 && <optgroup label="Private (this device only)">
+            {localDecks.map((d) => <option key={d.id} value={d.id}>{d.name} ({d.cards.length})</option>)}
+          </optgroup>}
         </select>
-        <input className="pp-input" style={{ flex: 1, minWidth: 140, padding: "8px 10px", fontSize: 14 }} placeholder="New deck name, e.g. Biology – cells" value={newDeck} onChange={(e) => setNewDeck(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") addDeck(); }} />
-        <button className="pp-btn pp-btn-primary" style={{ padding: "8px 16px", opacity: newDeck.trim() ? 1 : 0.5 }} disabled={!newDeck.trim()} onClick={addDeck}>Create deck</button>
+      </div>
+      <div className="pp-card" style={{ borderRadius: 10, padding: 12, marginBottom: 14 }}>
+        <div style={{ fontSize: 13.5, fontWeight: 700, marginBottom: 8 }}>Make a new deck</div>
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
+          <input className="pp-input" style={{ flex: 2, minWidth: 150, padding: "8px 10px", fontSize: 14 }} placeholder="Deck name, e.g. Cells and organelles" value={newDeck} onChange={(e) => setNewDeck(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") addDeck(); }} />
+          {shareIt && <div style={{ width: 160 }}><SubjectSelect value={newSubject} onChange={setNewSubject} /></div>}
+          {shareIt && <div style={{ width: 140 }}><GradeSelect value={newGrade} onChange={setNewGrade} /></div>}
+          <button className="pp-btn pp-btn-primary" style={{ padding: "8px 16px", opacity: newDeck.trim() ? 1 : 0.5 }} disabled={!newDeck.trim()} onClick={addDeck}>Create deck</button>
+        </div>
+        <label style={{ display: "flex", gap: 6, alignItems: "center", fontSize: 12.5, color: "var(--muted)", marginTop: 8 }}>
+          <input type="checkbox" checked={shareIt} onChange={(e) => setShareIt(e.target.checked)} style={{ accentColor: "var(--accent)" }} /> Share with everyone in that grade and subject
+        </label>
       </div>
       {deck && (
         <div>
           <div style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 12, flexWrap: "wrap" }}>
             <button className="pp-btn pp-btn-primary" style={{ padding: "9px 20px", opacity: deck.cards.length ? 1 : 0.5 }} disabled={!deck.cards.length} onClick={startStudy}>Study this deck</button>
-            <button className="pp-btn pp-btn-ghost" style={{ padding: "9px 14px", fontSize: 13 }} onClick={() => { setDecks((prev) => prev.filter((d) => d.id !== deck.id)); setDeckId(""); }}>Delete deck</button>
+            {canEdit(deck) && <button className="pp-btn pp-btn-ghost" style={{ padding: "9px 14px", fontSize: 13 }} onClick={removeDeck}>Delete deck</button>}
+            {deck.shared && <span style={{ fontSize: 12, color: "var(--muted)" }}>Shared deck · {deck.subject} · {deck.grade}</span>}
           </div>
-          <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 14 }}>
+          {canEdit(deck) && <><div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 14 }}>
             <input className="pp-input" style={{ flex: 1, minWidth: 160, padding: "8px 10px", fontSize: 14 }} placeholder="Front (question / term)" value={front} onChange={(e) => setFront(e.target.value)} />
             <input className="pp-input" style={{ flex: 1, minWidth: 160, padding: "8px 10px", fontSize: 14 }} placeholder="Back (answer)" value={back} onChange={(e) => setBack(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") addCard(); }} />
             <button className="pp-btn pp-btn-primary" style={{ padding: "8px 16px", opacity: front.trim() && back.trim() ? 1 : 0.5 }} disabled={!(front.trim() && back.trim())} onClick={addCard}>Add card</button>
@@ -2316,11 +2376,12 @@ function FlashcardsView() {
               </div>
             )}
           </div>
+          </>}
           {deck.cards.map((c) => (
             <div key={c.id} style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 0", borderTop: "1px solid var(--border)", fontSize: 13 }}>
               <span style={{ flex: 1, minWidth: 0 }}><b><MathText text={c.front} /></b> — <MathText text={c.back} /></span>
               <GradeTag text={`Box ${c.box + 1}`} />
-              <button className="pp-btn pp-btn-ghost" style={{ padding: 4, borderRadius: 999 }} onClick={() => updateDeck((d) => ({ ...d, cards: d.cards.filter((x) => x.id !== c.id) }))} aria-label="Delete card"><X size={12} /></button>
+              {canEdit(deck) && <button className="pp-btn pp-btn-ghost" style={{ padding: 4, borderRadius: 999 }} onClick={() => removeCard(c)} aria-label="Delete card"><X size={12} /></button>}
             </div>
           ))}
         </div>
@@ -2784,13 +2845,14 @@ function MainApp({ user, onChangeGrade, onSwitchRole, theme, setTheme }) {
   const [videos, videosReady] = useCollection("videos", undefined, wanted.has("videos"));
   const [libraryFiles, libraryFilesReady] = useCollection("libraryFiles", undefined, wanted.has("files"));
   const [feedbackList] = useCollection("feedback", undefined, wanted.has("feedback"));
+  const [flashDecks, flashDecksReady] = useCollection("flashDecks", undefined, wanted.has("flashcards"));
 
   const [tab, setTab] = useState("notes");
   const [showSearch, setShowSearch] = useState(false);
   const [showGrade, setShowGrade] = useState(false);
   const notesShown = useMemo(() => (user.grade ? notes.filter((n) => n.grade === user.grade) : notes), [notes, user.grade]);
   const videosShown = useMemo(() => (user.grade ? videos.filter((v) => v.grade === user.grade) : videos), [videos, user.grade]);
-  const TAB_NEEDS = { notes: ["notes"], videos: ["videos"], files: ["files"], papers: [], saved: ["notes", "videos", "files"], tools: [], flashcards: [], contact: [] };
+  const TAB_NEEDS = { notes: ["notes"], videos: ["videos"], files: ["files"], papers: [], saved: ["notes", "videos", "files"], tools: [], flashcards: ["flashcards"], contact: [] };
   useEffect(() => { want(...(TAB_NEEDS[tab] || [])); if (tab === "contact" && user.role === "admin") want("feedback"); }, [tab, want]);
   useEffect(() => { if (showSearch) want("notes", "videos", "files"); }, [showSearch, want]);
   const [toast, setToast] = useState(null);
@@ -3008,7 +3070,7 @@ function MainApp({ user, onChangeGrade, onSwitchRole, theme, setTheme }) {
   const deleteNote = (n) => deleteWithUndo("notes", [n], `"${n.title}"`, noteFileIds(n));
   const deleteVideo = (v) => deleteWithUndo("videos", [v], `"${v.title}"`);
 
-  const READY = { notes: notesReady, videos: videosReady, files: libraryFilesReady };
+  const READY = { notes: notesReady, videos: videosReady, files: libraryFilesReady, flashcards: flashDecksReady };
   const dataReady = (TAB_NEEDS[tab] || []).every((n) => READY[n]);
 
   return (
@@ -3045,7 +3107,7 @@ function MainApp({ user, onChangeGrade, onSwitchRole, theme, setTheme }) {
               {tab === "files" && <FilesView files={libraryFiles} user={user} onAddFile={addLibraryFile} onDeleteFile={deleteLibraryFile} onEditFile={(f, patch) => updateItem("libraryFiles", f.id, patch)} onDownloadFile={downloadLibraryFile} lastFileId={lastFileId} setLastFileId={setLastFileId} savedFileIds={savedFileIds} onToggleSavedFile={onToggleSavedFile} />}
               {tab === "papers" && <PastPapersView />}
               {tab === "tools" && <ToolsView />}
-              {tab === "flashcards" && <FlashcardsView />}
+              {tab === "flashcards" && <FlashcardsView sharedDecks={flashDecks} user={user} notify={notify} />}
               {tab === "contact" && <ContactView isAdmin={user.role === "admin"} feedback={feedbackList} />}
               {tab === "saved" && <SavedView notes={notes} videos={videos} files={libraryFiles}
                 lastNoteId={lastNoteId} lastVideoId={lastVideoId} lastFileId={lastFileId}
