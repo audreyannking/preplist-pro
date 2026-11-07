@@ -22,7 +22,30 @@ if (FIREBASE_READY) {
   auth = firebase.auth();
   db = firebase.firestore();
   // Keep a local copy so returning visitors re-download (and are billed for) only what changed.
+  // Auto-switch to long-polling on networks (schools, some ISPs) that stall Firestore's default streaming.
+  try { db.settings({ experimentalAutoDetectLongPolling: true, merge: true }); } catch { /* best-effort */ }
   db.enablePersistence({ synchronizeTabs: true }).catch(() => {});
+}
+
+// Resolves once the silent anonymous sign-in is done. Reading never waits on
+// it (the rules allow public reads), only writes do.
+const sessionPromise = new Promise((resolve) => {
+  if (!FIREBASE_READY) { resolve(); return; }
+  auth.onAuthStateChanged((u) => {
+    if (u) resolve();
+    else auth.signInAnonymously().catch((e) => { console.error("[preplist] anonymous sign-in failed", e); resolve(); });
+  });
+});
+if (FIREBASE_READY) {
+  const F = firebase.firestore;
+  const gate = (proto, name) => {
+    if (!proto || !proto[name]) return;
+    const orig = proto[name];
+    proto[name] = function (...args) { return sessionPromise.then(() => orig.apply(this, args)); };
+  };
+  gate(F.CollectionReference && F.CollectionReference.prototype, "add");
+  ["set", "update", "delete"].forEach((n) => gate(F.DocumentReference && F.DocumentReference.prototype, n));
+  gate(F.WriteBatch && F.WriteBatch.prototype, "commit");
 }
 
 // Silently sign every visitor in "anonymously" — no fields, no prompt,
@@ -31,14 +54,7 @@ if (FIREBASE_READY) {
 // the internet, while the app itself still has no login of any kind.
 function useAnonymousSession() {
   const [ready, setReady] = useState(false);
-  useEffect(() => {
-    if (!FIREBASE_READY) { setReady(true); return; }
-    const unsub = auth.onAuthStateChanged((u) => {
-      if (u) { setReady(true); }
-      else { auth.signInAnonymously().catch((e) => { console.error("[preplist] anonymous sign-in failed", e); setReady(true); }); }
-    });
-    return unsub;
-  }, []);
+  useEffect(() => { let live = true; sessionPromise.then(() => { if (live) setReady(true); }); return () => { live = false; }; }, []);
   return ready;
 }
 
@@ -231,9 +247,14 @@ function useLocalState(key, fallback) {
 // Big files (PDFs, scanned notes) live in their own "files" documents and are
 // fetched only when someone opens them, so listing a collection stays light.
 const fileCache = new Map();
+const pendingUploads = [];
 async function saveFile(dataUrl) {
-  const ref = await db.collection("files").add({ data: dataUrl, createdAt: Date.now() });
+  // Queue the upload and carry on; the write finishes in the background.
+  const ref = db.collection("files").doc();
   fileCache.set(ref.id, dataUrl);
+  const done = ref.set({ data: dataUrl, createdAt: Date.now() });
+  done.catch(() => {});
+  pendingUploads.push(done);
   return ref.id;
 }
 function useFileData(inline, fileId, enabled = true) {
@@ -2233,10 +2254,11 @@ function FlashcardsView({ sharedDecks, user, notify }) {
     if (!newDeck.trim()) return;
     if (shareIt) {
       if (!newSubject || !newGrade) { notify({ kind: "error", text: "Pick a subject and grade so other students can find your deck." }); return; }
-      try {
-        const ref = await db.collection("flashDecks").add({ name: newDeck.trim(), subject: newSubject, grade: newGrade, cards: [], authorUid: myUid, authorRole: user.role, createdAt: Date.now() });
-        setDeckId(`s:${ref.id}`); setNewDeck("");
-      } catch (e) { notify({ kind: "error", text: friendlyDbError(e) }); }
+      await sessionPromise;
+      const ref = db.collection("flashDecks").doc();
+      ref.set({ name: newDeck.trim(), subject: newSubject, grade: newGrade, cards: [], authorUid: auth.currentUser ? auth.currentUser.uid : null, authorRole: user.role, createdAt: Date.now() })
+        .catch((e) => notify({ kind: "error", text: friendlyDbError(e) }));
+      setDeckId(`s:${ref.id}`); setNewDeck("");
       return;
     }
     const d = { id: uid(), name: newDeck.trim(), cards: [] };
@@ -2244,21 +2266,21 @@ function FlashcardsView({ sharedDecks, user, notify }) {
   }
   async function addCards(list) {
     if (deck && deck.shared) {
-      try { await db.collection("flashDecks").doc(deck.sid).update({ cards: firebase.firestore.FieldValue.arrayUnion(...list.map(({ id, front, back }) => ({ id, front, back }))) }); }
-      catch (e) { notify({ kind: "error", text: friendlyDbError(e) }); }
+      db.collection("flashDecks").doc(deck.sid).update({ cards: firebase.firestore.FieldValue.arrayUnion(...list.map(({ id, front, back }) => ({ id, front, back }))) })
+        .catch((e) => notify({ kind: "error", text: friendlyDbError(e) }));
     } else updateDeck((d) => ({ ...d, cards: [...d.cards, ...list] }));
   }
   async function removeCard(c) {
     if (deck.shared) {
-      try { await db.collection("flashDecks").doc(deck.sid).update({ cards: deck.cards.filter((x) => x.id !== c.id).map(({ id, front, back }) => ({ id, front, back })) }); }
-      catch (e) { notify({ kind: "error", text: friendlyDbError(e) }); }
+      db.collection("flashDecks").doc(deck.sid).update({ cards: deck.cards.filter((x) => x.id !== c.id).map(({ id, front, back }) => ({ id, front, back })) })
+        .catch((e) => notify({ kind: "error", text: friendlyDbError(e) }));
     } else updateDeck((d) => ({ ...d, cards: d.cards.filter((x) => x.id !== c.id) }));
   }
   async function removeDeck() {
     if (deck.shared) {
       if (!window.confirm(`Delete "${deck.name}" for everyone?`)) return;
-      try { await db.collection("flashDecks").doc(deck.sid).delete(); setDeckId(""); }
-      catch (e) { notify({ kind: "error", text: friendlyDbError(e) }); }
+      db.collection("flashDecks").doc(deck.sid).delete().catch((e) => notify({ kind: "error", text: friendlyDbError(e) }));
+      setDeckId("");
     } else { setDecks((prev) => prev.filter((d) => d.id !== deck.id)); setDeckId(""); }
   }
   function updateDeck(fn) { setDecks((prev) => prev.map((d) => (d.id === deckId ? fn(d) : d))); }
@@ -2895,14 +2917,18 @@ function MainApp({ user, onChangeGrade, onSwitchRole, theme, setTheme }) {
         doc = { ...payload, fileId: fileIds[0], fileIds }; delete doc.content;
         if (thumb) doc.thumb = thumb;
       }
-      await db.collection("notes").add({ ...doc, authorRole: user.role, createdAt: Date.now() });
+      const uploads = pendingUploads.splice(0);
+      Promise.all([...uploads, db.collection("notes").add({ ...doc, authorRole: user.role, createdAt: Date.now() })])
+        .then(() => notify({ kind: "ok", text: "Note published." }))
+        .catch((e) => notify({ kind: "error", text: friendlyDbError(e) }));
       return true;
     }
     catch (e) { notify({ kind: "error", text: friendlyDbError(e) }); return false; }
   }
   async function updateItem(coll, id, patch) {
-    try { await db.collection(coll).doc(id).update(patch); notify({ kind: "ok", text: "Changes saved." }); return true; }
-    catch (e) { notify({ kind: "error", text: friendlyDbError(e) }); return false; }
+    db.collection(coll).doc(id).update(patch).catch((e) => notify({ kind: "error", text: friendlyDbError(e) }));
+    notify({ kind: "ok", text: "Changes saved." });
+    return true;
   }
   async function editNote(note, v) {
     try {
@@ -2932,8 +2958,8 @@ function MainApp({ user, onChangeGrade, onSwitchRole, theme, setTheme }) {
     } catch (e) { notify({ kind: "error", text: friendlyDbError(e) }); return false; }
   }
   async function addVideo(payload) {
-    try { await db.collection("videos").add({ ...payload, addedByRole: user.role, createdAt: Date.now() }); return true; }
-    catch (e) { notify({ kind: "error", text: friendlyDbError(e) }); return false; }
+    db.collection("videos").add({ ...payload, addedByRole: user.role, createdAt: Date.now() }).catch((e) => notify({ kind: "error", text: friendlyDbError(e) }));
+    return true;
   }
   async function addLibraryFile(payload, onProgress) {
     let fileId = null;
@@ -3138,7 +3164,6 @@ function PreplistProRoot() {
   const sessionReady = useAnonymousSession();
 
   if (!FIREBASE_READY) return <div className="pp-root" data-theme={theme} style={{ minHeight: "100dvh" }}><GlobalStyle /><SetupNeededScreen /></div>;
-  if (!sessionReady) return <div className="pp-root" data-theme={theme} style={{ minHeight: "100dvh" }}><GlobalStyle /><Loading label="Connecting…" /></div>;
   if (!role) return <div className="pp-root" data-theme={theme} style={{ minHeight: "100dvh" }}><GlobalStyle /><RoleGate onSelectRole={setRole} theme={theme} setTheme={setTheme} /></div>;
 
   if (role === "student" && !GRADE_CHOICES.some((g) => g.value === myGrade)) return <div className="pp-root" data-theme={theme} style={{ minHeight: "100dvh" }}><GlobalStyle /><GradeGate onPick={setMyGrade} onBack={() => setRole(null)} theme={theme} setTheme={setTheme} /></div>;
