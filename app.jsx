@@ -71,11 +71,12 @@ function friendlyDbError(e) {
 function Toast({ toast, onClose }) {
   if (!toast) return null;
   const isError = toast.kind === "error";
+  const isInfo = toast.kind === "info";
   return (
     <div className="pp-pop" style={{
       position: "fixed", left: "50%", transform: "translateX(-50%)", bottom: 22, zIndex: 80,
-      maxWidth: 420, background: isError ? "#F6DEDE" : "#DCEFD9", color: isError ? "#6E2A2A" : "#254D22",
-      border: `1.5px solid ${isError ? "#8A3434" : "#33662F"}`, borderRadius: 10, padding: "12px 14px",
+      maxWidth: 420, background: isError ? "#F6DEDE" : isInfo ? "#E8E3D0" : "#DCEFD9", color: isError ? "#6E2A2A" : isInfo ? "#2C3F57" : "#254D22",
+      border: `1.5px solid ${isError ? "#8A3434" : isInfo ? "#778D7A" : "#33662F"}`, borderRadius: 10, padding: "12px 14px",
       display: "flex", alignItems: "flex-start", gap: 10, fontSize: 13.5, lineHeight: 1.45, boxShadow: "0 6px 20px rgba(0,0,0,0.18)"
     }}>
       <span style={{ flex: 1 }}>{toast.text}</span>
@@ -602,10 +603,15 @@ function EmptyState({ icon: Icon, title, body }) {
   );
 }
 function Loading({ label }) {
+  const [slow, setSlow] = useState(false);
+  useEffect(() => { const t = setTimeout(() => setSlow(true), 4000); return () => clearTimeout(t); }, []);
   return (
-    <div style={{ display: "flex", alignItems: "center", gap: 8, padding: 40, justifyContent: "center", color: "var(--muted)" }}>
-      <Loader2 size={18} style={{ animation: "pp-spin 0.9s linear infinite" }} />
-      <span style={{ fontSize: 14 }}>{label}</span>
+    <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 6, padding: 40, color: "var(--muted)" }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+        <Loader2 size={18} style={{ animation: "pp-spin 0.9s linear infinite" }} />
+        <span style={{ fontSize: 14 }}>{label}</span>
+      </div>
+      {slow && <span className="pp-pop" style={{ fontSize: 12.5 }}>Hang tight, your connection is being a little slow today…</span>}
     </div>
   );
 }
@@ -2256,7 +2262,9 @@ function FlashcardsView({ sharedDecks, user, notify }) {
       if (!newSubject || !newGrade) { notify({ kind: "error", text: "Pick a subject and grade so other students can find your deck." }); return; }
       await sessionPromise;
       const ref = db.collection("flashDecks").doc();
+      notify({ kind: "info", sticky: true, text: "Setting up your deck for everyone…" });
       ref.set({ name: newDeck.trim(), subject: newSubject, grade: newGrade, cards: [], authorUid: auth.currentUser ? auth.currentUser.uid : null, authorRole: user.role, createdAt: Date.now() })
+        .then(() => notify({ kind: "ok", text: "Deck is live for your grade." }))
         .catch((e) => notify({ kind: "error", text: friendlyDbError(e) }));
       setDeckId(`s:${ref.id}`); setNewDeck("");
       return;
@@ -2267,6 +2275,7 @@ function FlashcardsView({ sharedDecks, user, notify }) {
   async function addCards(list) {
     if (deck && deck.shared) {
       db.collection("flashDecks").doc(deck.sid).update({ cards: firebase.firestore.FieldValue.arrayUnion(...list.map(({ id, front, back }) => ({ id, front, back }))) })
+        .then(() => notify({ kind: "ok", text: list.length > 1 ? "Cards added." : "Card added." }))
         .catch((e) => notify({ kind: "error", text: friendlyDbError(e) }));
     } else updateDeck((d) => ({ ...d, cards: [...d.cards, ...list] }));
   }
@@ -2879,8 +2888,13 @@ function MainApp({ user, onChangeGrade, onSwitchRole, theme, setTheme }) {
   useEffect(() => { if (showSearch) want("notes", "videos", "files"); }, [showSearch, want]);
   const [toast, setToast] = useState(null);
   const notify = useCallback((t) => setToast(t), []);
+  // Shows a gentle "working on it" message that turns into a result when the write lands.
+  const track = useCallback((promise, working, done) => {
+    notify({ kind: "info", sticky: true, text: working });
+    return Promise.resolve(promise).then(() => notify({ kind: "ok", text: done })).catch((e) => notify({ kind: "error", text: friendlyDbError(e) }));
+  }, [notify]);
   useEffect(() => {
-    if (!toast) return;
+    if (!toast || toast.sticky) return;
     const t = setTimeout(() => setToast(null), toast.action ? 10000 : 4500);
     return () => clearTimeout(t);
   }, [toast]);
@@ -2918,16 +2932,14 @@ function MainApp({ user, onChangeGrade, onSwitchRole, theme, setTheme }) {
         if (thumb) doc.thumb = thumb;
       }
       const uploads = pendingUploads.splice(0);
-      Promise.all([...uploads, db.collection("notes").add({ ...doc, authorRole: user.role, createdAt: Date.now() })])
-        .then(() => notify({ kind: "ok", text: "Note published." }))
-        .catch((e) => notify({ kind: "error", text: friendlyDbError(e) }));
+      track(Promise.all([...uploads, db.collection("notes").add({ ...doc, authorRole: user.role, createdAt: Date.now() })]),
+        "Sending your note out… it's already on your screen, just keep this tab open a little longer.", "Note published.");
       return true;
     }
     catch (e) { notify({ kind: "error", text: friendlyDbError(e) }); return false; }
   }
   async function updateItem(coll, id, patch) {
-    db.collection(coll).doc(id).update(patch).catch((e) => notify({ kind: "error", text: friendlyDbError(e) }));
-    notify({ kind: "ok", text: "Changes saved." });
+    track(db.collection(coll).doc(id).update(patch), "Saving your changes…", "Changes saved.");
     return true;
   }
   async function editNote(note, v) {
@@ -2958,7 +2970,7 @@ function MainApp({ user, onChangeGrade, onSwitchRole, theme, setTheme }) {
     } catch (e) { notify({ kind: "error", text: friendlyDbError(e) }); return false; }
   }
   async function addVideo(payload) {
-    db.collection("videos").add({ ...payload, addedByRole: user.role, createdAt: Date.now() }).catch((e) => notify({ kind: "error", text: friendlyDbError(e) }));
+    track(db.collection("videos").add({ ...payload, addedByRole: user.role, createdAt: Date.now() }), "Adding your video, almost there…", "Video added.");
     return true;
   }
   async function addLibraryFile(payload, onProgress) {
