@@ -24,7 +24,10 @@ if (FIREBASE_READY) {
   // Keep a local copy so returning visitors re-download (and are billed for) only what changed.
   // Auto-switch to long-polling on networks (schools, some ISPs) that stall Firestore's default streaming.
   try { db.settings({ experimentalAutoDetectLongPolling: true, merge: true }); } catch { /* best-effort */ }
-  db.enablePersistence({ synchronizeTabs: true }).catch(() => {});
+  // iPhone/iPad Safari can crash repeatedly when the offline cache (IndexedDB) grows large
+  // with note photos, so only desktop and Android browsers keep an offline copy.
+  const isAppleTouch = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+  if (!isAppleTouch) db.enablePersistence({ synchronizeTabs: true }).catch(() => {});
 }
 
 // Resolves once the silent anonymous sign-in is done. Reading never waits on
