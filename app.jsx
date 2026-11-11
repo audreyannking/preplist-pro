@@ -2086,6 +2086,7 @@ function CambridgePapers({ onOpen, onHalf, preset }) {
   const [level, setLevel] = useState("IGCSE");
   const [slug, setSlug] = useState("");
   const [seriesName, setSeriesName] = useState("");
+  const [variant, setVariant] = useLocalState("preplist:variant", "");
   useEffect(() => {
     fetch("cambridge-papers.json" + (window.__ppVersion ? "?v=" + encodeURIComponent(window.__ppVersion) : "")).then((r) => r.json()).then(setIndex).catch(() => setFailed(true));
   }, []);
@@ -2145,8 +2146,18 @@ function CambridgePapers({ onOpen, onHalf, preset }) {
           </div>
         )}
       </div>
+      {series && (() => {
+        const vs = [...new Set(Object.keys(series).filter((k) => /^\d{2}$/.test(k)).map((k) => k[1]))].sort();
+        if (vs.length < 2) return null;
+        return (
+          <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap", margin: "2px 0 8px" }}>
+            <span style={{ fontSize: 12.5, fontWeight: 700, color: "var(--muted)" }}>Variant</span>
+            {["", ...vs].map((v) => <button key={v || "all"} className={`pp-chip ${variant === v ? "selected" : ""}`} onClick={() => setVariant(v)}>{v ? `Variant ${v}` : "All"}</button>)}
+          </div>
+        );
+      })()}
       {subj && seriesList.length === 0 && <div style={{ fontSize: 13, color: "var(--muted)" }}>Cambridge hasn't published any papers for this subject on its public page.</div>}
-      {series && Object.keys(series).sort((a, b) => a.localeCompare(b, undefined, { numeric: true })).map((pn) => {
+      {series && Object.keys(series).filter((k) => !variant || !/^\d{2}$/.test(k) || k[1] === variant).sort((a, b) => a.localeCompare(b, undefined, { numeric: true })).map((pn) => {
         const d = series[pn];
         return (
           <div key={pn} style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", padding: "8px 0 8px 12px", borderTop: "1px solid var(--border)", borderLeft: `4px solid ${cieColor(subj.name).fg}`, borderLeftColor: cieColor(subj.name).bg, marginTop: 6, borderRadius: 4 }}>
@@ -2166,6 +2177,102 @@ function CambridgePapers({ onOpen, onHalf, preset }) {
           </div>
         );
       })}
+    </div>
+  );
+}
+
+function DocRow({ label, color, parts, docs, onOpen, onHalf, base }) {
+  const btn = { padding: "4px 10px", fontSize: 12 };
+  const full = (p) => base + p.url;
+  const both = parts.length > 1 ? parts.slice(0, 2) : null;
+  return (
+    <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", padding: "8px 0 8px 12px", borderTop: "1px solid var(--border)", borderLeft: `4px solid ${color}`, marginTop: 6, borderRadius: 4 }}>
+      <b style={{ fontSize: 13.5, minWidth: 130 }}>{label}</b>
+      {parts.map((p) => (
+        <span key={p.label} style={{ display: "inline-flex", gap: 4, alignItems: "center" }}>
+          <span style={{ fontSize: 12, color: "var(--muted)" }}>{p.label}</span>
+          <button className="pp-btn pp-btn-ghost" style={btn} onClick={() => onOpen(docs, full(p), null)}>Open</button>
+          <a className="pp-btn pp-btn-ghost" style={{ ...btn, textDecoration: "none" }} href={full(p)} target="_blank" rel="noopener noreferrer">New tab</a>
+          <button className="pp-btn pp-btn-ghost" style={btn} onClick={() => onHalf(full(p), "left")}>Left half</button>
+          <button className="pp-btn pp-btn-ghost" style={btn} onClick={() => onHalf(full(p), "right")}>Right half</button>
+        </span>
+      ))}
+      {both && <button className="pp-btn pp-btn-primary" style={btn} onClick={() => onOpen(docs, full(both[0]), full(both[1]))}>{both[0].label} + {both[1].label.toLowerCase()} side by side</button>}
+    </div>
+  );
+}
+
+function ExtraPapers({ source, onOpen, onHalf }) {
+  const [data, setData] = useState(null);
+  const [failed, setFailed] = useState(false);
+  const [slug, setSlug] = useState("");
+  useEffect(() => {
+    fetch("papers-extra.json" + (window.__ppVersion ? "?v=" + encodeURIComponent(window.__ppVersion) : "")).then((r) => r.json()).then(setData).catch(() => setFailed(true));
+  }, []);
+  if (failed) return <div style={{ fontSize: 13, color: "var(--muted)" }}>Couldn't load the paper list. Check your connection and refresh.</div>;
+  if (!data) return <Loading label="Loading papers…" />;
+  const head = (t, sub) => (
+    <div style={{ marginBottom: 10 }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 8 }}><div className="pp-serif" style={{ fontSize: 16, fontWeight: 700 }}>{t}</div><GradeTag text="Official" /></div>
+      {sub && <div style={{ fontSize: 12.5, color: "var(--muted)", marginTop: 3 }}>{sub}</div>}
+    </div>
+  );
+  if (source === "ap") {
+    const base = data.ap.base;
+    const subj = data.ap.subjects.find((x) => x.slug === slug);
+    const c = subj ? cieColor(subj.name) : null;
+    const docs = subj ? Object.entries(subj.years).sort((x, y) => y[0] - x[0]).flatMap(([y, d]) => [d.qp && { url: base + d.qp, label: `${y} · Free-response questions`, group: subj.name }, d.ms && { url: base + d.ms, label: `${y} · Scoring guidelines`, group: subj.name }].filter(Boolean)) : [];
+    return (
+      <div className="pp-card" style={{ borderRadius: 16, padding: 16, marginBottom: 22 }}>
+        {head("AP free-response questions", "Official College Board papers by course. Each year has the questions, the scoring guidelines, and (where published) the Chief Reader report.")}
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(170px, 1fr))", gap: 8, marginBottom: 8 }}>
+          {data.ap.subjects.map((x) => {
+            const cc = cieColor(x.name); const on = x.slug === slug;
+            return <button key={x.slug} type="button" onClick={() => setSlug(x.slug)} style={{ textAlign: "left", cursor: "pointer", font: "inherit", background: cc.bg, color: cc.fg, border: `2px solid ${on ? cc.fg : "transparent"}`, borderRadius: 12, padding: "9px 11px", fontSize: 13, fontWeight: 700, lineHeight: 1.25 }}>{x.name.replace(/^AP /, "")}</button>;
+          })}
+        </div>
+        {!subj && <div style={{ fontSize: 13, color: "var(--muted)", marginTop: 10 }}>Pick a course to see its papers.</div>}
+        {subj && Object.entries(subj.years).sort((x, y) => y[0] - x[0]).map(([y, d]) => (
+          <DocRow key={y} label={`AP ${y}`} color={c.bg} base={base} docs={docs} onOpen={onOpen} onHalf={onHalf}
+            parts={[d.qp && { label: "Questions", url: d.qp }, d.ms && { label: "Scoring guidelines", url: d.ms }, d.rep && { label: "Chief Reader report", url: d.rep }].filter(Boolean)} />
+        ))}
+      </div>
+    );
+  }
+  if (source === "sat") {
+    const base = data.sat.base;
+    const col = subjectColor("Math");
+    const sections = [["Digital SAT practice tests", "Full-length official tests with answers and scoring guides.", data.sat.tests], ["SAT practice essays", "Official essay prompts with score explanations.", data.sat.essays], ["PSAT practice tests", "PSAT 8/9, PSAT 10 and PSAT/NMSQT.", data.sat.psat]];
+    return (
+      <div>
+        {sections.map(([t, sub, list]) => {
+          const docs = list.flatMap((x) => [x.qp && { url: base + x.qp, label: x.name, group: t }, x.ans && { url: base + x.ans, label: `${x.name} · Answers`, group: t }, x.ms && { url: base + x.ms, label: `${x.name} · Scoring`, group: t }].filter(Boolean));
+          return (
+            <div key={t} className="pp-card" style={{ borderRadius: 16, padding: 16, marginBottom: 16 }}>
+              {head(t, sub)}
+              {list.map((x) => <DocRow key={x.name} label={x.name} color={col.bg} base={base} docs={docs} onOpen={onOpen} onHalf={onHalf}
+                parts={[x.qp && { label: "Test", url: x.qp }, x.ans && { label: "Answers", url: x.ans }, x.ms && { label: "Scoring", url: x.ms }].filter(Boolean)} />)}
+            </div>
+          );
+        })}
+      </div>
+    );
+  }
+  return (
+    <div>
+      <div className="pp-card" style={{ borderRadius: 16, padding: 16, marginBottom: 16 }}>
+        {head("Edexcel International GCSE", "Pick a subject, then on Pearson's page choose Past papers and your exam series. Papers and mark schemes open from Pearson itself.")}
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(190px, 1fr))", gap: 8 }}>
+          {data.edexcel.igcse.map((x) => {
+            const cc = cieColor(x.name);
+            return <a key={x.url} href={x.url} target="_blank" rel="noopener noreferrer" style={{ textDecoration: "none", background: cc.bg, color: cc.fg, borderRadius: 12, padding: "10px 12px", fontSize: 13, fontWeight: 700, lineHeight: 1.25, display: "flex", justifyContent: "space-between", gap: 6 }}><span>{x.name}</span><span aria-hidden="true">↗</span></a>;
+          })}
+        </div>
+      </div>
+      <div className="pp-card" style={{ borderRadius: 16, padding: 16, marginBottom: 16 }}>
+        {head("Edexcel International Advanced Level (IAL)", "Pearson's official finder covers AS and A Level subjects: choose International Advanced Level, then your subject and exam series.")}
+        <a className="pp-btn pp-btn-primary" style={{ padding: "8px 16px", fontSize: 13, textDecoration: "none", display: "inline-block" }} href={data.edexcel.finder} target="_blank" rel="noopener noreferrer">Open Pearson's past paper finder ↗</a>
+      </div>
     </div>
   );
 }
@@ -2199,7 +2306,8 @@ function PastPapersView() {
         ))}
       </div>
       {source === "cambridge" && <CambridgePapers preset={preset} onHalf={half} onOpen={(items, left, right) => setSplit({ items, left, right })} />}
-      {RESOURCE_GROUPS.filter((g) => g.source === source).map((g) => (
+      {(source === "ap" || source === "sat" || source === "edexcel") && <ExtraPapers source={source} onHalf={half} onOpen={(items, left, right) => setSplit({ items, left, right })} />}
+      {RESOURCE_GROUPS.filter((g) => g.source === source && !["ap", "sat", "edexcel"].includes(source)).map((g) => (
         <div key={g.title} style={{ marginBottom: 22 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
             <div className="pp-serif" style={{ fontSize: 16, fontWeight: 700 }}>{g.title}</div>
