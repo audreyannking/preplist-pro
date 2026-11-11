@@ -512,6 +512,9 @@ function GlobalStyle() {
       .pp-root[data-theme='dark'] .pp-card[role='button']:hover { box-shadow: 0 10px 24px rgba(0,0,0,0.35); }
       .pp-index-card { border-radius: 20px !important; }
       .pp-tape { display: none; }
+      .pp-cover-btn { background: rgba(255,255,255,0.6); color: inherit; border: none; border-radius: 999px; width: 28px; height: 28px; display: inline-flex; align-items: center; justify-content: center; cursor: pointer; flex-shrink: 0; transition: background 0.15s ease, transform 0.12s ease; }
+      .pp-cover-btn:hover { background: rgba(255,255,255,0.9); }
+      .pp-cover-btn:active { transform: scale(0.94); }
       .pp-btn { font-family: 'Inter', -apple-system, system-ui, sans-serif; font-weight: 600; border-radius: 10px !important; letter-spacing: -0.005em;
         transition: transform 0.12s ease, background 0.15s ease, box-shadow 0.15s ease; cursor: pointer; }
       .pp-btn:active { transform: translateY(1px); }
@@ -651,14 +654,14 @@ function PaperSubjectSelect({ value, onChange, includeAll, label, board, examTyp
     </select>
   );
 }
-function FilterBar({ query, setQuery, subject, setSubject, grade, setGrade, placeholder, extra, hideGrade }) {
+function FilterBar({ query, setQuery, subject, setSubject, grade, setGrade, placeholder, extra, hideGrade, hideSubject }) {
   return (
     <div style={{ display: "flex", gap: 10, marginBottom: 16, flexWrap: "wrap", alignItems: "flex-start" }}>
       <div style={{ position: "relative", flex: 2, minWidth: 180 }}>
         <Search size={15} style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)", color: "var(--muted)" }} />
         <input className="pp-input" style={{ width: "100%", padding: "9px 12px 9px 34px", fontSize: 14 }} placeholder={placeholder} value={query} onChange={(e) => setQuery(e.target.value)} />
       </div>
-      <div style={{ width: 168 }}><SubjectSelect value={subject} onChange={setSubject} includeAll /></div>
+      {!hideSubject && <div style={{ width: 168 }}><SubjectSelect value={subject} onChange={setSubject} includeAll /></div>}
       {!hideGrade && <div style={{ width: 150 }}><GradeSelect value={grade} onChange={setGrade} includeAll /></div>}
       {extra}
     </div>
@@ -1033,6 +1036,71 @@ function MultiPhotoPicker({ value, onChange, max = MAX_NOTE_PHOTOS }) {
 /* Notes                                                                   */
 /* ---------------------------------------------------------------------- */
 
+function SubjectChips({ items, value, onChange }) {
+  const counts = {};
+  items.forEach((i) => { const k = i.subject || "Other"; counts[k] = (counts[k] || 0) + 1; });
+  const subjects = Object.keys(counts).sort();
+  if (subjects.length < 2) return null;
+  return (
+    <div className="pp-scrollbar" style={{ display: "flex", gap: 8, overflowX: "auto", margin: "-4px 0 16px", paddingBottom: 2 }}>
+      <button className={`pp-chip ${value === "" ? "selected" : ""}`} style={{ flexShrink: 0 }} onClick={() => onChange("")}>All <span style={{ opacity: 0.6 }}>{items.length}</span></button>
+      {subjects.map((sub) => {
+        const c = subjectColor(sub);
+        return (
+          <button key={sub} className={`pp-chip ${value === sub ? "selected" : ""}`} style={{ flexShrink: 0, display: "inline-flex", alignItems: "center", gap: 7 }} onClick={() => onChange(value === sub ? "" : sub)}>
+            <span style={{ width: 9, height: 9, borderRadius: "50%", background: c.fg, opacity: 0.75 }} />{sub} <span style={{ opacity: 0.6 }}>{counts[sub]}</span>
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+// Lays items out in a grid, with a neat heading per subject when more than one subject is showing.
+function GroupedGrid({ items, subject, min = 240, gap = 14, render }) {
+  const groups = {};
+  items.forEach((i) => { const k = i.subject || "Other"; (groups[k] = groups[k] || []).push(i); });
+  const keys = Object.keys(groups).sort();
+  const grid = (list) => <div style={{ display: "grid", gridTemplateColumns: `repeat(auto-fill, minmax(${min}px, 1fr))`, gap }}>{list.map(render)}</div>;
+  if (subject || keys.length < 2) return grid(items);
+  return (
+    <div>
+      {keys.map((k) => {
+        const c = subjectColor(k);
+        return (
+          <section key={k} style={{ marginBottom: 28 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 9, marginBottom: 12 }}>
+              <span style={{ width: 10, height: 10, borderRadius: 3, background: c.fg, opacity: 0.8 }} />
+              <h2 className="pp-serif" style={{ fontSize: 15, fontWeight: 700, margin: 0 }}>{k}</h2>
+              <span style={{ fontSize: 12.5, color: "var(--muted)" }}>{groups[k].length}</span>
+              <div style={{ flex: 1, height: 1, background: "var(--border)" }} />
+            </div>
+            {grid(groups[k])}
+          </section>
+        );
+      })}
+    </div>
+  );
+}
+
+function NoteCover({ subject, grade, pages, children }) {
+  const c = subjectColor(subject);
+  const initial = (subject || "?").trim().charAt(0).toUpperCase();
+  return (
+    <div style={{ background: c.bg, color: c.fg, position: "relative", overflow: "hidden", padding: "12px 12px 12px 14px", minHeight: 84, display: "flex", flexDirection: "column", justifyContent: "space-between" }}>
+      <span aria-hidden="true" style={{ position: "absolute", right: 10, bottom: -22, fontSize: 92, fontWeight: 800, lineHeight: 1, opacity: 0.16, letterSpacing: "-0.04em", pointerEvents: "none" }}>{initial}</span>
+      <span aria-hidden="true" style={{ position: "absolute", right: -18, top: -22, width: 70, height: 70, borderRadius: "50%", background: "rgba(255,255,255,0.35)", pointerEvents: "none" }} />
+      <div style={{ display: "flex", alignItems: "center", gap: 6, position: "relative" }}>
+        <span style={{ fontSize: 12, fontWeight: 700, letterSpacing: "0.06em", textTransform: "uppercase", flex: 1 }}>{subject}</span>
+        {children}
+      </div>
+      <div style={{ display: "flex", gap: 6, alignItems: "center", position: "relative", marginTop: 14 }}>
+        {grade && <span style={{ background: "rgba(255,255,255,0.6)", color: c.fg, padding: "2px 9px", borderRadius: 999, fontSize: 11.5, fontWeight: 700 }}>{grade}</span>}
+        {pages > 1 && <span style={{ background: "rgba(255,255,255,0.6)", color: c.fg, padding: "2px 9px", borderRadius: 999, fontSize: 11.5, fontWeight: 700 }}>{pages} pages</span>}
+      </div>
+    </div>
+  );
+}
+
 function NotesView({ notes, user, onAddNote, onDeleteNote, onEditNote, lastNoteId, setLastNoteId, savedNoteIds, onToggleSavedNote }) {
   const [showForm, setShowForm] = useState(false);
   const [query, setQuery] = useState("");
@@ -1054,8 +1122,9 @@ function NotesView({ notes, user, onAddNote, onDeleteNote, onEditNote, lastNoteI
 
   return (
     <div>
-      <FilterBar hideGrade={!!user.grade} query={query} setQuery={setQuery} subject={subject} setSubject={setSubject} grade={grade} setGrade={setGrade} placeholder="Search notes…"
+      <FilterBar hideSubject hideGrade={!!user.grade} query={query} setQuery={setQuery} subject={subject} setSubject={setSubject} grade={grade} setGrade={setGrade} placeholder="Search notes…"
         extra={canUpload && <button className="pp-btn pp-btn-primary" style={{ padding: "9px 14px", fontSize: 13.5, display: "flex", alignItems: "center", gap: 6 }} onClick={() => setShowForm(true)}><Plus size={15} /> Upload note</button>} />
+      <SubjectChips items={notes} value={subject} onChange={setSubject} />
       {lastNote && (
         <ContinueBanner title={lastNote.title} subtitle={lastNote.subject}
           onClick={() => document.getElementById(`note-${lastNote.id}`)?.scrollIntoView({ behavior: "smooth", block: "center" })} />
@@ -1063,35 +1132,33 @@ function NotesView({ notes, user, onAddNote, onDeleteNote, onEditNote, lastNoteI
       {filtered.length === 0 ? (
         <EmptyState icon={BookOpen} title="No notes yet" body={canUpload ? "Upload the first set of notes for students to study from." : (user.grade ? `No notes for ${gradeLabel(user.grade)} yet. Check back soon.` : "Only admins can upload notes — check back soon.")} />
       ) : (
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(240px, 1fr))", gap: 14 }}>
-          {filtered.map((n) => {
+        <GroupedGrid items={filtered} subject={subject} min={250} render={(n) => {
             const isSaved = savedNoteIds.includes(n.id);
             return (
               <div key={n.id} id={`note-${n.id}`} className="pp-card" role="button" tabIndex={0}
                 onClick={() => { setLastNoteId(n.id); setOpenId(n.id); }}
                 onKeyDown={(e) => { if (e.key === "Enter") { setLastNoteId(n.id); setOpenId(n.id); } }}
-                style={{ borderRadius: 10, padding: 14, cursor: "pointer", display: "flex", flexDirection: "column", outline: n.id === lastNoteId ? "2px solid var(--accent)" : "none", outlineOffset: 2 }}>
-                <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
-                  <div style={{ display: "flex", gap: 6, flexWrap: "wrap", flex: 1 }}><Tag text={n.subject} /><GradeTag text={n.grade} /></div>
-                  {canUpload && <button className="pp-btn pp-btn-ghost" style={{ padding: 5, borderRadius: 999, flexShrink: 0 }} onClick={(e) => { e.stopPropagation(); setEditId(n.id); }} aria-label="Edit" title="Edit"><Pencil size={14} /></button>}
-                  {canUpload && <button className="pp-btn pp-btn-ghost" style={{ padding: 5, borderRadius: 999, flexShrink: 0 }} onClick={(e) => { e.stopPropagation(); if (window.confirm(`Delete "${n.title}"? You can undo for a few seconds afterwards.`)) onDeleteNote(n); }} aria-label="Delete note" title="Delete note"><Trash size={14} /></button>}
-                  <button className="pp-btn pp-btn-ghost" style={{ padding: 5, borderRadius: 999, flexShrink: 0 }} onClick={(e) => { e.stopPropagation(); onToggleSavedNote(n.id); }} aria-label={isSaved ? "Remove bookmark" : "Add bookmark"}>
-                    <Bookmark size={14} fill={isSaved ? "var(--sage)" : "none"} style={{ color: isSaved ? "var(--sage)" : "var(--accent)" }} />
+                style={{ borderRadius: 16, padding: 0, overflow: "hidden", cursor: "pointer", display: "flex", flexDirection: "column", outline: n.id === lastNoteId ? "2px solid var(--accent)" : "none", outlineOffset: 2 }}>
+                <NoteCover subject={n.subject} grade={n.grade} pages={n.type === "image" ? noteFileIds(n).length : 0}>
+                  {canUpload && <button className="pp-cover-btn" onClick={(e) => { e.stopPropagation(); setEditId(n.id); }} aria-label="Edit" title="Edit"><Pencil size={14} /></button>}
+                  {canUpload && <button className="pp-cover-btn" onClick={(e) => { e.stopPropagation(); if (window.confirm(`Delete "${n.title}"? You can undo for a few seconds afterwards.`)) onDeleteNote(n); }} aria-label="Delete note" title="Delete note"><Trash size={14} /></button>}
+                  <button className="pp-cover-btn" onClick={(e) => { e.stopPropagation(); onToggleSavedNote(n.id); }} aria-label={isSaved ? "Remove bookmark" : "Add bookmark"}>
+                    <Bookmark size={14} fill={isSaved ? "var(--sage-ink)" : "none"} style={{ color: isSaved ? "var(--sage-ink)" : "inherit" }} />
                   </button>
+                </NoteCover>
+                <div style={{ padding: "12px 14px 14px", display: "flex", flexDirection: "column", flex: 1 }}>
+                  <div className="pp-serif" style={{ fontSize: 16, fontWeight: 650, lineHeight: 1.3 }}>{n.title}</div>
+                  <Desc text={n.description} />
+                  {n.type === "image" ? (
+                    <div style={{ marginTop: 10 }}>
+                      <NoteImage note={n.thumb ? { content: n.thumb } : { ...n, fileId: noteFileIds(n)[0] }} noZoom style={{ width: "100%", height: 130, objectFit: "cover", objectPosition: "top", borderRadius: 10, border: "1px solid var(--border)", display: "block" }} />
+                    </div>
+                  ) : <p style={{ fontSize: 13.5, marginTop: 8, lineHeight: 1.5, color: "var(--text)", whiteSpace: "pre-wrap", overflow: "hidden", display: "-webkit-box", WebkitLineClamp: 4, WebkitBoxOrient: "vertical" }}><MathText text={n.content} /></p>}
+                  <div style={{ fontSize: 11.5, color: "var(--muted)", marginTop: "auto", paddingTop: 12 }}>{roleLabel(n.authorRole)} · {timeAgo(n.createdAt)}</div>
                 </div>
-                <div className="pp-serif" style={{ fontSize: 15.5, fontWeight: 600, marginTop: 8 }}>{n.title}</div>
-                <Desc text={n.description} />
-                {n.type === "image" ? (
-                  <div style={{ position: "relative", marginTop: 8 }}>
-                    <NoteImage note={n.thumb ? { content: n.thumb } : { ...n, fileId: noteFileIds(n)[0] }} noZoom style={{ width: "100%", height: 150, objectFit: "cover", objectPosition: "top", borderRadius: 6, border: "1px solid var(--border)", display: "block" }} />
-                    {noteFileIds(n).length > 1 && <span style={{ position: "absolute", right: 6, bottom: 6, fontSize: 11, fontWeight: 700, background: "var(--bg)", color: "var(--text)", borderRadius: 999, padding: "2px 9px", border: "1px solid var(--border)" }}>{noteFileIds(n).length} pages</span>}
-                  </div>
-                ) : <p style={{ fontSize: 13.5, marginTop: 8, lineHeight: 1.5, color: "var(--text)", whiteSpace: "pre-wrap", overflow: "hidden", display: "-webkit-box", WebkitLineClamp: 5, WebkitBoxOrient: "vertical" }}><MathText text={n.content} /></p>}
-                <div style={{ fontSize: 11.5, color: "var(--muted)", marginTop: 10 }}>{roleLabel(n.authorRole)} · {timeAgo(n.createdAt)} · Tap to open</div>
               </div>
             );
-          })}
-        </div>
+          }} />
       )}
       {openId && notes.find((n) => n.id === openId) && (() => { const n = notes.find((x) => x.id === openId); return <NoteViewer note={n} saved={savedNoteIds.includes(n.id)} onToggleSaved={() => onToggleSavedNote(n.id)} onEdit={canUpload ? () => { setOpenId(null); setEditId(n.id); } : null} onClose={() => setOpenId(null)} />; })()}
       {editId && notes.find((n) => n.id === editId) && (() => { const n = notes.find((x) => x.id === editId); return <EditNoteModal key={n.id} note={n} onClose={() => setEditId(null)} onSave={(v) => onEditNote(n, v)} />; })()}
@@ -1161,8 +1228,9 @@ function VideosView({ videos, user, onAddVideo, onDeleteVideo, onEditVideo, last
 
   return (
     <div>
-      <FilterBar hideGrade={!!user.grade} query={query} setQuery={setQuery} subject={subject} setSubject={setSubject} grade={grade} setGrade={setGrade} placeholder="Search videos…"
+      <FilterBar hideSubject hideGrade={!!user.grade} query={query} setQuery={setQuery} subject={subject} setSubject={setSubject} grade={grade} setGrade={setGrade} placeholder="Search videos…"
         extra={isAdmin && <button className="pp-btn pp-btn-primary" style={{ padding: "9px 14px", fontSize: 13.5, display: "flex", alignItems: "center", gap: 6 }} onClick={() => setShowForm(true)}><Plus size={15} /> Add video</button>} />
+      <SubjectChips items={videos} value={subject} onChange={setSubject} />
       {lastVideo && (
         <ContinueBanner title={lastVideo.title} subtitle={lastVideo.subject}
           onClick={() => document.getElementById(`video-${lastVideo.id}`)?.scrollIntoView({ behavior: "smooth", block: "center" })} />
@@ -1170,8 +1238,7 @@ function VideosView({ videos, user, onAddVideo, onDeleteVideo, onEditVideo, last
       {filtered.length === 0 ? (
         <EmptyState icon={VideoIcon} title="No videos yet" body={isAdmin ? "Paste a YouTube link to add the first video." : (user.grade ? `No videos for ${gradeLabel(user.grade)} yet. Check back soon.` : "Only admins can add videos — check back soon.")} />
       ) : (
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))", gap: 16 }}>
-          {filtered.map((v) => {
+        <GroupedGrid items={filtered} subject={subject} min={280} gap={16} render={(v) => {
             const isSaved = savedVideoIds.includes(v.id);
             return (
               <div key={v.id} id={`video-${v.id}`} className="pp-card" onClick={() => setLastVideoId(v.id)}
@@ -1194,8 +1261,7 @@ function VideosView({ videos, user, onAddVideo, onDeleteVideo, onEditVideo, last
                 </div>
               </div>
             );
-          })}
-        </div>
+          }} />
       )}
       {editId && videos.find((v) => v.id === editId) && (() => { const v = videos.find((x) => x.id === editId); return <EditItemModal key={v.id} heading="Edit video" item={v} onClose={() => setEditId(null)} onSave={(patch) => onEditVideo(v, patch)} />; })()}
       {showForm && <AddVideoModal onClose={() => setShowForm(false)} onSubmit={async (payload) => { const ok = await onAddVideo(payload); if (ok) setShowForm(false); }} />}
@@ -1485,8 +1551,9 @@ function FilesView({ files, user, onAddFile, onDeleteFile, onEditFile, onDownloa
 
   return (
     <div>
-      <FilterBar query={query} setQuery={setQuery} subject={subject} setSubject={setSubject} grade={grade} setGrade={setGrade} placeholder="Search files…"
+      <FilterBar hideSubject query={query} setQuery={setQuery} subject={subject} setSubject={setSubject} grade={grade} setGrade={setGrade} placeholder="Search files…"
         extra={canUpload && <button className="pp-btn pp-btn-primary" style={{ padding: "9px 14px", fontSize: 13.5, display: "flex", alignItems: "center", gap: 6 }} onClick={() => setShowForm(true)}><Plus size={15} /> Upload file</button>} />
+      <SubjectChips items={files} value={subject} onChange={setSubject} />
       {lastFile && (
         <ContinueBanner title={lastFile.title} subtitle={lastFile.subject}
           onClick={() => document.getElementById(`file-${lastFile.id}`)?.scrollIntoView({ behavior: "smooth", block: "center" })} />
@@ -1494,8 +1561,7 @@ function FilesView({ files, user, onAddFile, onDeleteFile, onEditFile, onDownloa
       {filtered.length === 0 ? (
         <EmptyState icon={Folder} title="No files yet" body={canUpload ? "Upload the first file for students to open or download." : "Only admins can upload files — check back soon."} />
       ) : (
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(240px, 1fr))", gap: 14 }}>
-          {filtered.map((f) => {
+        <GroupedGrid items={filtered} subject={subject} min={250} render={(f) => {
             const isSaved = savedFileIds.includes(f.id);
             const KindIcon = fileKindIcon(f);
             const c = subjectColor(f.subject || "x");
@@ -1503,32 +1569,32 @@ function FilesView({ files, user, onAddFile, onDeleteFile, onEditFile, onDownloa
             return (
               <div key={f.id} id={`file-${f.id}`} className="pp-card" role="button" tabIndex={0}
                 onClick={open} onKeyDown={(e) => { if (e.key === "Enter") open(); }}
-                style={{ borderRadius: 10, padding: 14, cursor: "pointer", display: "flex", flexDirection: "column", outline: f.id === lastFileId ? "2px solid var(--accent)" : "none", outlineOffset: 2 }}>
-                <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
-                  <div style={{ display: "flex", gap: 6, flexWrap: "wrap", flex: 1, minWidth: 0 }}><Tag text={f.subject} /><GradeTag text={f.grade} /></div>
-                  <button className="pp-btn pp-btn-ghost" style={{ padding: 5, borderRadius: 999, flexShrink: 0 }} onClick={(e) => { e.stopPropagation(); onDownloadFile(f); }} aria-label="Download file" title="Download file"><Download size={14} /></button>
-                  {canUpload && <button className="pp-btn pp-btn-ghost" style={{ padding: 5, borderRadius: 999, flexShrink: 0 }} onClick={(e) => { e.stopPropagation(); setEditId(f.id); }} aria-label="Edit" title="Edit"><Pencil size={14} /></button>}
-                  {canUpload && <button className="pp-btn pp-btn-ghost" style={{ padding: 5, borderRadius: 999, flexShrink: 0 }} onClick={(e) => { e.stopPropagation(); if (window.confirm(`Delete "${f.title}"? You can undo for a few seconds afterwards.`)) onDeleteFile(f); }} aria-label="Delete file" title="Delete file"><Trash size={14} /></button>}
-                  <button className="pp-btn pp-btn-ghost" style={{ padding: 5, borderRadius: 999, flexShrink: 0 }} onClick={(e) => { e.stopPropagation(); onToggleSavedFile(f.id); }} aria-label={isSaved ? "Remove bookmark" : "Add bookmark"}>
-                    <Bookmark size={14} fill={isSaved ? "var(--sage)" : "none"} style={{ color: isSaved ? "var(--sage)" : "var(--accent)" }} />
+                style={{ borderRadius: 16, padding: 0, overflow: "hidden", cursor: "pointer", display: "flex", flexDirection: "column", outline: f.id === lastFileId ? "2px solid var(--accent)" : "none", outlineOffset: 2 }}>
+                <NoteCover subject={f.subject} grade={f.grade} pages={0}>
+                  <button className="pp-cover-btn" onClick={(e) => { e.stopPropagation(); onDownloadFile(f); }} aria-label="Download file" title="Download file"><Download size={14} /></button>
+                  {canUpload && <button className="pp-cover-btn" onClick={(e) => { e.stopPropagation(); setEditId(f.id); }} aria-label="Edit" title="Edit"><Pencil size={14} /></button>}
+                  {canUpload && <button className="pp-cover-btn" onClick={(e) => { e.stopPropagation(); if (window.confirm(`Delete "${f.title}"? You can undo for a few seconds afterwards.`)) onDeleteFile(f); }} aria-label="Delete file" title="Delete file"><Trash size={14} /></button>}
+                  <button className="pp-cover-btn" onClick={(e) => { e.stopPropagation(); onToggleSavedFile(f.id); }} aria-label={isSaved ? "Remove bookmark" : "Add bookmark"}>
+                    <Bookmark size={14} fill={isSaved ? "var(--sage-ink)" : "none"} style={{ color: isSaved ? "var(--sage-ink)" : "inherit" }} />
                   </button>
-                </div>
-                <div className="pp-serif" style={{ fontSize: 15.5, fontWeight: 600, marginTop: 8, wordBreak: "break-word" }}>{f.title}</div>
-                <Desc text={f.description} />
-                <div style={{ display: "flex", alignItems: "center", gap: 9, marginTop: 9, minWidth: 0 }}>
-                  <div style={{ width: 36, height: 36, borderRadius: 8, background: c.bg, color: c.fg, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-                    <KindIcon size={18} />
+                </NoteCover>
+                <div style={{ padding: "12px 14px 14px", display: "flex", flexDirection: "column", flex: 1 }}>
+                  <div className="pp-serif" style={{ fontSize: 16, fontWeight: 650, lineHeight: 1.3, wordBreak: "break-word" }}>{f.title}</div>
+                  <Desc text={f.description} />
+                  <div style={{ display: "flex", alignItems: "center", gap: 10, marginTop: 10, minWidth: 0, padding: "9px 10px", background: "var(--bg)", borderRadius: 10, border: "1px solid var(--border)" }}>
+                    <div style={{ width: 34, height: 34, borderRadius: 9, background: c.bg, color: c.fg, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                      <KindIcon size={17} />
+                    </div>
+                    <div style={{ minWidth: 0, flex: 1 }}>
+                      <div style={{ fontSize: 12.5, fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={f.fileName}>{f.fileName}</div>
+                      <div style={{ fontSize: 11.5, color: "var(--muted)" }}>{fileTypeLabel(f)} · {formatBytes(f.size)}</div>
+                    </div>
                   </div>
-                  <div style={{ minWidth: 0, flex: 1 }}>
-                    <div style={{ fontSize: 12.5, fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={f.fileName}>{f.fileName}</div>
-                    <div style={{ fontSize: 11.5, color: "var(--muted)" }}>{fileTypeLabel(f)} · {formatBytes(f.size)}</div>
-                  </div>
+                  <div style={{ fontSize: 11.5, color: "var(--muted)", marginTop: "auto", paddingTop: 12 }}>{roleLabel(f.addedByRole)} · {timeAgo(f.createdAt)}</div>
                 </div>
-                <div style={{ fontSize: 11.5, color: "var(--muted)", marginTop: 10 }}>Added by {roleLabel(f.addedByRole)} · {timeAgo(f.createdAt)} · Tap to open</div>
               </div>
             );
-          })}
-        </div>
+          }} />
       )}
       {openId && files.find((f) => f.id === openId) && (() => { const f = files.find((x) => x.id === openId); return <FileViewer file={f} onClose={() => setOpenId(null)} onDownload={onDownloadFile} />; })()}
       {editId && files.find((f) => f.id === editId) && (() => { const f = files.find((x) => x.id === editId); return <EditItemModal key={f.id} heading="Edit file" item={f} onClose={() => setEditId(null)} onSave={(patch) => onEditFile(f, patch)} />; })()}
