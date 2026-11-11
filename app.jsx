@@ -2080,6 +2080,41 @@ function cieShortName(name) { return name.replace(/^AS & A Level\s*/, "").replac
 function cieCode(name) { const m = name.match(/\((\d{4})\)/); return m ? m[1] : ""; }
 function paperLabel(pn) { return /^\d{2}$/.test(pn) ? `Paper ${pn[0]} · Variant ${pn[1]}` : `Paper ${pn}`; }
 
+// Older papers: Save My Exams pages for a Cambridge subject, found from the lists already in RESOURCE_GROUPS.
+function smeLinksFor(level, name) {
+  const norm = (t) => t.toLowerCase().replace(/^as & a level\s*/, "").replace(/\s*\(\d{4}\).*$/, "").replace(/\s*[-–]\s*(foreign|first) language/, "").replace(/\s*&\s*/g, " and ").trim();
+  const alias = { "mathematics": "maths", "mathematics (further)": "further maths", "business studies": "business", "english - first language": "english language" };
+  let n = norm(name); n = alias[n] || n;
+  const groups = level === "IGCSE" ? [["IGCSE", "Save My Exams \u2014 IGCSE \u2014 Cambridge"]] : [["AS Level", "Save My Exams \u2014 AS Level \u2014 Cambridge"], ["A Level", "Save My Exams \u2014 A Level \u2014 Cambridge"]];
+  const out = [];
+  groups.forEach(([lab, title]) => {
+    const g = RESOURCE_GROUPS.find((x) => x.title === title);
+    const hit = g && g.links.find((l) => l.label.toLowerCase() === n);
+    if (hit) out.push({ label: lab, url: hit.url });
+  });
+  return out;
+}
+function SmePanel({ links, onHalf, empty }) {
+  const btn = { padding: "4px 10px", fontSize: 12 };
+  return (
+    <div style={{ marginTop: 14, padding: "12px 14px", borderRadius: 12, background: "var(--bg)", border: "1px solid var(--border)" }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", marginBottom: 4 }}>
+        <b style={{ fontSize: 13.5 }}>Older papers on Save My Exams</b><GradeTag text="Third-party" />
+      </div>
+      <div style={{ fontSize: 12.5, color: "var(--muted)", marginBottom: 8 }}>Years that Cambridge no longer shows publicly. Some pages ask you to sign in. Use the half-screen buttons to put it beside a Cambridge paper.</div>
+      {links.length === 0 && <div style={{ fontSize: 12.5, color: "var(--muted)" }}>{empty || "There isn't a Save My Exams page for this subject yet."}</div>}
+      {links.map((l) => (
+        <div key={l.url} style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap", padding: "5px 0" }}>
+          <span style={{ fontSize: 13, fontWeight: 600, minWidth: 82 }}>{l.label}</span>
+          <a className="pp-btn pp-btn-ghost" style={{ ...btn, textDecoration: "none" }} href={l.url} target="_blank" rel="noopener noreferrer">New tab</a>
+          <button className="pp-btn pp-btn-primary" style={btn} onClick={() => onHalf(l.url, "left")}>Left half</button>
+          <button className="pp-btn pp-btn-primary" style={btn} onClick={() => onHalf(l.url, "right")}>Right half</button>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 function CambridgePapers({ onOpen, onHalf, preset }) {
   const [index, setIndex] = useState(null);
   const [failed, setFailed] = useState(false);
@@ -2177,6 +2212,7 @@ function CambridgePapers({ onOpen, onHalf, preset }) {
           </div>
         );
       })}
+      {subj && <SmePanel links={smeLinksFor(level, subj.name)} onHalf={onHalf} />}
     </div>
   );
 }
@@ -2273,6 +2309,28 @@ function ExtraPapers({ source, onOpen, onHalf }) {
         {head("Edexcel International Advanced Level (IAL)", "Pearson's official finder covers AS and A Level subjects: choose International Advanced Level, then your subject and exam series.")}
         <a className="pp-btn pp-btn-primary" style={{ padding: "8px 16px", fontSize: 13, textDecoration: "none", display: "inline-block" }} href={data.edexcel.finder} target="_blank" rel="noopener noreferrer">Open Pearson's past paper finder ↗</a>
       </div>
+      {[["Older Edexcel IGCSE papers on Save My Exams", "Save My Exams \u2014 IGCSE \u2014 Edexcel"], ["Older Edexcel International A Level papers on Save My Exams", "Save My Exams \u2014 A Level \u2014 Edexcel (International)"]].map(([t, gt]) => {
+        const g = RESOURCE_GROUPS.find((x) => x.title === gt);
+        if (!g) return null;
+        return (
+          <div key={t} className="pp-card" style={{ borderRadius: 16, padding: 16, marginBottom: 16 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}><div className="pp-serif" style={{ fontSize: 16, fontWeight: 700 }}>{t}</div><GradeTag text="Third-party" /></div>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(260px, 1fr))", gap: 8 }}>
+              {g.links.map((l) => {
+                const cc = cieColor(l.label);
+                return (
+                  <div key={l.url} style={{ display: "flex", alignItems: "center", gap: 6, padding: "7px 10px", borderRadius: 12, background: cc.bg, color: cc.fg }}>
+                    <span style={{ flex: 1, fontSize: 13, fontWeight: 700 }}>{l.label}</span>
+                    <a className="pp-cover-btn" style={{ textDecoration: "none", width: "auto", padding: "0 9px", fontSize: 12, fontWeight: 700 }} href={l.url} target="_blank" rel="noopener noreferrer">Tab</a>
+                    <button className="pp-cover-btn" style={{ width: "auto", padding: "0 9px", fontSize: 12, fontWeight: 700 }} onClick={() => onHalf(l.url, "left")}>Left</button>
+                    <button className="pp-cover-btn" style={{ width: "auto", padding: "0 9px", fontSize: 12, fontWeight: 700 }} onClick={() => onHalf(l.url, "right")}>Right</button>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        );
+      })}
     </div>
   );
 }
@@ -2307,7 +2365,7 @@ function PastPapersView() {
       </div>
       {source === "cambridge" && <CambridgePapers preset={preset} onHalf={half} onOpen={(items, left, right) => setSplit({ items, left, right })} />}
       {(source === "ap" || source === "sat" || source === "edexcel") && <ExtraPapers source={source} onHalf={half} onOpen={(items, left, right) => setSplit({ items, left, right })} />}
-      {RESOURCE_GROUPS.filter((g) => g.source === source && !["ap", "sat", "edexcel"].includes(source)).map((g) => (
+      {RESOURCE_GROUPS.filter((g) => g.source === source && !["ap", "sat", "edexcel", "cambridge"].includes(source)).map((g) => (
         <div key={g.title} style={{ marginBottom: 22 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
             <div className="pp-serif" style={{ fontSize: 16, fontWeight: 700 }}>{g.title}</div>
@@ -2393,6 +2451,92 @@ function cardsFromText(text) {
     skipped.push(it);
   }
   return { cards, skipped };
+}
+
+const STUDY_TECHNIQUES = [
+  { name: "Active recall", tag: "Strongly supported", color: "Biology", time: "10 to 20 min", go: ["flashcards", "Open flashcards"],
+    blurb: "Test yourself instead of rereading. Pulling an answer out of your memory is what makes it stick.",
+    steps: ["Read a topic once, then close the book.", "Ask yourself questions or use flashcards and answer out loud or on paper.", "Check the answers and mark the ones you missed.", "Come back to the missed ones first."], best: "Definitions, formulas, facts, vocabulary" },
+  { name: "Spaced repetition", tag: "Strongly supported", color: "Chemistry", time: "5 to 10 min a day", go: ["flashcards", "Open flashcards"],
+    blurb: "Review the same thing at growing gaps, like 1 day, 3 days, 1 week, 2 weeks. Forgetting a little between reviews makes memory stronger.",
+    steps: ["Put new cards in box 1 and review them tomorrow.", "Get a card right: move it up a box and see it less often.", "Get it wrong: back to box 1.", "Our flashcards already do this for you."], best: "Anything you need to remember for weeks" },
+  { name: "Past paper practice", tag: "Strongly supported", color: "Math", time: "1 to 2 hours", go: ["papers", "Open past papers"],
+    blurb: "Practice under exam conditions, then learn from the mark scheme. It is active recall plus learning how the exam asks questions.",
+    steps: ["Time yourself and use only what the exam allows.", "Mark it with the mark scheme, line by line.", "Write down each mistake and why you made it.", "Redo the topics you lost marks on a few days later."], best: "Final months, every subject" },
+  { name: "Blurting", tag: "Recall", color: "Physics", time: "15 min", go: null,
+    blurb: "Write everything you remember about a topic on a blank page, then fill the gaps.",
+    steps: ["Study a topic for 10 minutes, then close everything.", "Write all you remember on a blank page.", "Open your notes and add what you missed in a different color.", "Repeat the missing parts after a day."], best: "Biology, History, Geography, any content-heavy topic" },
+  { name: "Feynman technique", tag: "Understanding", color: "Computer Science", time: "15 to 25 min", go: null,
+    blurb: "If you can't explain it simply, you don't understand it yet.",
+    steps: ["Pick a concept and explain it as if to a 10-year-old.", "Notice where you get stuck or use jargon.", "Go back to your notes and fill that gap.", "Explain it again, shorter and simpler."], best: "Hard ideas in science, maths and economics" },
+  { name: "Interleaving", tag: "Well supported", color: "Economics", time: "A whole session", go: null,
+    blurb: "Mix topics or problem types in one session instead of doing one topic for hours. It feels harder but teaches you to choose the right method.",
+    steps: ["List 3 to 4 topics you've covered.", "Do 3 to 5 questions from each, in mixed order.", "For each question, first decide what type it is.", "Review the ones you picked the wrong method for."], best: "Maths, physics, chemistry calculations" },
+  { name: "Pomodoro", tag: "Focus", color: "Business", time: "25 + 5 min cycles", go: ["tools", "Open the timer"],
+    blurb: "Short focused sprints with real breaks, so you stay sharp and don't burn out.",
+    steps: ["Pick one task and set a 25-minute timer.", "Phone away, work on only that task.", "Take a 5-minute break and move around.", "After 4 rounds, take a 20 to 30 minute break."], best: "Starting when you don't feel like it" },
+  { name: "Cornell notes", tag: "Note-taking", color: "English", time: "While in class", go: null,
+    blurb: "Take notes in a layout that turns into study questions later.",
+    steps: ["Divide the page: a narrow left column, a wide right column, a strip at the bottom.", "Write notes in the right column during class.", "Afterwards, write questions in the left column.", "Cover the right side and answer the questions. Write a summary at the bottom."], best: "Lessons and lectures" },
+  { name: "Mind maps", tag: "Connections", color: "History", time: "15 to 20 min", go: null,
+    blurb: "Draw a topic as a web to see how ideas connect. Best done from memory, then checked.",
+    steps: ["Write the topic in the middle.", "Draw branches for the main ideas from memory.", "Add details and examples to each branch.", "Check your notes and add what's missing."], best: "Essay subjects and big-picture revision" },
+  { name: "SQ3R", tag: "Reading", color: "Islamic", time: "30 to 45 min", go: null,
+    blurb: "A five-step method for getting more out of a textbook chapter.",
+    steps: ["Survey: skim the headings and summaries.", "Question: turn headings into questions.", "Read: read to answer your questions.", "Recite: answer them aloud from memory.", "Review: go over it again later."], best: "Textbook chapters" },
+  { name: "Dual coding", tag: "Visuals", color: "Arabic", time: "10 to 15 min", go: null,
+    blurb: "Pair words with simple drawings so you remember in two ways.",
+    steps: ["Take a process or idea in your notes.", "Draw a quick diagram, flowchart or sketch of it.", "Label it in your own words.", "Next time, redraw it from memory."], best: "Processes, cycles, systems, timelines" }
+];
+
+function TechniquesView({ onGo, onSwitchToCards }) {
+  const [open, setOpen] = useState(null);
+  return (
+    <div>
+      <div className="pp-card" style={{ borderRadius: 16, padding: 16, marginBottom: 16, fontSize: 13.5, lineHeight: 1.55 }}>
+        <div className="pp-serif" style={{ fontSize: 16, fontWeight: 700, marginBottom: 4 }}>Study smarter, not longer</div>
+        Research on how students learn consistently finds that <b>testing yourself</b>, <b>spacing out your revision</b> and <b>mixing topics</b> work much better than rereading or highlighting. The first three methods below are the strongest. Tap a method to see how to do it.
+      </div>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))", gap: 14 }}>
+        {STUDY_TECHNIQUES.map((t) => {
+          const c = subjectColor(t.color);
+          const on = open === t.name;
+          return (
+            <div key={t.name} className="pp-card" style={{ borderRadius: 16, padding: 0, overflow: "hidden", display: "flex", flexDirection: "column" }}>
+              <div style={{ background: c.bg, color: c.fg, padding: "12px 14px", display: "flex", alignItems: "center", gap: 8 }}>
+                <span style={{ fontSize: 15, fontWeight: 700, flex: 1 }}>{t.name}</span>
+                <span style={{ background: "rgba(255,255,255,0.6)", padding: "2px 9px", borderRadius: 999, fontSize: 11.5, fontWeight: 700 }}>{t.tag}</span>
+              </div>
+              <div style={{ padding: "12px 14px 14px", display: "flex", flexDirection: "column", gap: 8, flex: 1 }}>
+                <div style={{ fontSize: 13.5, lineHeight: 1.5 }}>{t.blurb}</div>
+                <div style={{ fontSize: 12, color: "var(--muted)" }}>{t.time} · Best for: {t.best}</div>
+                {on && <ol style={{ margin: "2px 0 0", paddingLeft: 20, fontSize: 13.5, lineHeight: 1.6 }}>{t.steps.map((st) => <li key={st}>{st}</li>)}</ol>}
+                <div style={{ display: "flex", gap: 8, marginTop: "auto", paddingTop: 4, flexWrap: "wrap" }}>
+                  <button className="pp-btn pp-btn-ghost" style={{ padding: "6px 12px", fontSize: 12.5 }} onClick={() => setOpen(on ? null : t.name)}>{on ? "Hide steps" : "How to do it"}</button>
+                  {t.go && <button className="pp-btn pp-btn-primary" style={{ padding: "6px 12px", fontSize: 12.5 }} onClick={() => (t.go[0] === "flashcards" ? onSwitchToCards() : onGo(t.go[0]))}>{t.go[1]}</button>}
+                </div>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+      <div style={{ fontSize: 12.5, color: "var(--muted)", marginTop: 16 }}>Rereading and highlighting on their own are usually the weakest ways to study. They feel productive but don't build memory much. Use them to get started, then switch to testing yourself.</div>
+    </div>
+  );
+}
+
+function StudyHub({ sharedDecks, user, notify, onGo }) {
+  const [sub, setSub] = useLocalState("preplist:studySub", "cards");
+  return (
+    <div>
+      <div style={{ display: "flex", gap: 8, marginBottom: 16 }} role="tablist" aria-label="Study hub sections">
+        {[["cards", "Flashcards"], ["techniques", "Study techniques"]].map(([id, label]) => (
+          <button key={id} role="tab" aria-selected={sub === id} className={`pp-btn ${sub === id ? "pp-btn-primary" : "pp-btn-ghost"}`} style={{ padding: "7px 16px", fontSize: 13.5 }} onClick={() => setSub(id)}>{label}</button>
+        ))}
+      </div>
+      {sub === "techniques" ? <TechniquesView onGo={onGo} onSwitchToCards={() => setSub("cards")} /> : <FlashcardsView sharedDecks={sharedDecks} user={user} notify={notify} />}
+    </div>
+  );
 }
 
 function FlashcardsView({ sharedDecks, user, notify }) {
@@ -3061,7 +3205,7 @@ const TABS = [
   { id: "videos", label: "Videos", icon: VideoIcon },
   { id: "files", label: "Files", icon: Folder },
   { id: "papers", label: "Past Papers", icon: FileText },
-  { id: "flashcards", label: "Flashcards", icon: Star },
+  { id: "flashcards", label: "Study Hub", icon: Star },
   { id: "tools", label: "Tracker", icon: Clock },
   { id: "saved", label: "Saved", icon: Bookmark },
   { id: "contact", label: "Contact", icon: Mail }
@@ -3345,7 +3489,7 @@ function MainApp({ user, onChangeGrade, onSwitchRole, theme, setTheme }) {
               {tab === "files" && <FilesView files={libraryFiles} user={user} onAddFile={addLibraryFile} onDeleteFile={deleteLibraryFile} onEditFile={(f, patch) => updateItem("libraryFiles", f.id, patch)} onDownloadFile={downloadLibraryFile} lastFileId={lastFileId} setLastFileId={setLastFileId} savedFileIds={savedFileIds} onToggleSavedFile={onToggleSavedFile} />}
               {tab === "papers" && <PastPapersView />}
               {tab === "tools" && <ToolsView />}
-              {tab === "flashcards" && <FlashcardsView sharedDecks={flashDecks} user={user} notify={notify} />}
+              {tab === "flashcards" && <StudyHub sharedDecks={flashDecks} user={user} notify={notify} onGo={setTab} />}
               {tab === "contact" && <ContactView isAdmin={user.role === "admin"} feedback={feedbackList} />}
               {tab === "saved" && <SavedView notes={notes} videos={videos} files={libraryFiles}
                 lastNoteId={lastNoteId} lastVideoId={lastVideoId} lastFileId={lastFileId}
