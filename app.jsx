@@ -2067,6 +2067,19 @@ function EmbedSplitViewer({ items, startUrl, startRight, onClose }) {
   );
 }
 
+// Maps a Cambridge subject title onto the site's own subject names so colors match notes and files.
+function cieColor(name) {
+  const n = name.toLowerCase();
+  const map = [["further", "Math"], ["mathematics", "Math"], ["physics", "Physics"], ["chemistry", "Chemistry"], ["biology", "Biology"], ["computer science", "Computer Science"],
+    ["information technology", "Computing"], ["digital media", "Computing"], ["economics", "Economics"], ["business", "Business"], ["accounting", "Business"], ["history", "History"],
+    ["english", "English"], ["general paper", "English"], ["french", "French"], ["arabic", "Arabic"], ["islamic", "Islamic"], ["environmental", "Science"], ["marine", "Science"], ["psychology", "Science"]];
+  const hit = map.find(([k]) => n.includes(k));
+  return subjectColor(hit ? hit[1] : name.replace(/^(AS & A Level|IGCSE)\s*/, ""));
+}
+function cieShortName(name) { return name.replace(/^AS & A Level\s*/, "").replace(/\s*\((\d{4})\).*$/, ""); }
+function cieCode(name) { const m = name.match(/\((\d{4})\)/); return m ? m[1] : ""; }
+function paperLabel(pn) { return /^\d{2}$/.test(pn) ? `Paper ${pn[0]} · Variant ${pn[1]}` : `Paper ${pn}`; }
+
 function CambridgePapers({ onOpen, onHalf, preset }) {
   const [index, setIndex] = useState(null);
   const [failed, setFailed] = useState(false);
@@ -2074,7 +2087,7 @@ function CambridgePapers({ onOpen, onHalf, preset }) {
   const [slug, setSlug] = useState("");
   const [seriesName, setSeriesName] = useState("");
   useEffect(() => {
-    fetch("cambridge-papers.json").then((r) => r.json()).then(setIndex).catch(() => setFailed(true));
+    fetch("cambridge-papers.json" + (window.__ppVersion ? "?v=" + encodeURIComponent(window.__ppVersion) : "")).then((r) => r.json()).then(setIndex).catch(() => setFailed(true));
   }, []);
   useEffect(() => {
     if (!preset || !index) return;
@@ -2106,16 +2119,23 @@ function CambridgePapers({ onOpen, onHalf, preset }) {
       <div className="pp-serif" style={{ fontSize: 16, fontWeight: 700, marginBottom: 2 }}>Cambridge papers and mark schemes — pick and open</div>
       <div style={{ fontSize: 12.5, color: "var(--muted)", marginBottom: 10 }}>Each question paper and each mark scheme is its own option: "Open" shows it in the split view (pick the other document on the second side), "New tab" opens it on its own. These are links to Cambridge's own files (nothing is copied). Cambridge's public pages only list the latest series and specimen papers — older years need a school login with Cambridge.</div>
       <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 10 }}>
-        <div style={{ width: 150 }}>
-          <select className="pp-select" aria-label="Level" style={sel} value={level} onChange={(e) => { setLevel(e.target.value); setSlug(""); setSeriesName(""); }}>
-            <option value="IGCSE">IGCSE</option><option value="AS & A Level">AS &amp; A Level</option>
-          </select>
+        <div style={{ display: "flex", gap: 6, width: "100%" }}>
+          {[["IGCSE", "IGCSE"], ["AS & A Level", "AS & A Level"]].map(([v, l]) => (
+            <button key={v} className={`pp-chip ${level === v ? "selected" : ""}`} onClick={() => { setLevel(v); setSlug(""); setSeriesName(""); }}>{l}</button>
+          ))}
         </div>
-        <div style={{ flex: 1, minWidth: 220 }}>
-          <select className="pp-select" aria-label="Cambridge subject" style={sel} value={slug} onChange={(e) => { const s2 = subjects.find((x) => x.slug === e.target.value); setSlug(e.target.value); setSeriesName(s2 ? Object.keys(s2.series)[0] || "" : ""); }}>
-            <option value="">Choose a subject…</option>
-            {subjects.map((s) => <option key={s.slug} value={s.slug}>{s.name}</option>)}
-          </select>
+        <div style={{ width: "100%", display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(150px, 1fr))", gap: 8 }}>
+          {subjects.map((x) => {
+            const c = cieColor(x.name);
+            const on = x.slug === slug;
+            return (
+              <button key={x.slug} type="button" onClick={() => { setSlug(x.slug); setSeriesName(Object.keys(x.series)[0] || ""); }}
+                style={{ textAlign: "left", cursor: "pointer", font: "inherit", background: c.bg, color: c.fg, border: `2px solid ${on ? c.fg : "transparent"}`, borderRadius: 12, padding: "9px 11px", display: "flex", flexDirection: "column", gap: 2, boxShadow: on ? "0 2px 8px rgba(13,27,42,0.15)" : "none", transition: "transform 0.12s ease" }}>
+                <span style={{ fontSize: 13, fontWeight: 700, lineHeight: 1.25 }}>{cieShortName(x.name)}</span>
+                <span style={{ fontSize: 11, fontWeight: 600, opacity: 0.7 }}>{cieCode(x.name)}{x.name.includes("AS only") ? " · AS only" : ""}</span>
+              </button>
+            );
+          })}
         </div>
         {subj && (
           <div style={{ width: 170 }}>
@@ -2129,8 +2149,8 @@ function CambridgePapers({ onOpen, onHalf, preset }) {
       {series && Object.keys(series).sort((a, b) => a.localeCompare(b, undefined, { numeric: true })).map((pn) => {
         const d = series[pn];
         return (
-          <div key={pn} style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", padding: "7px 0", borderTop: "1px solid var(--border)" }}>
-            <b style={{ fontSize: 13.5, width: 70 }}>Paper {pn}</b>
+          <div key={pn} style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", padding: "8px 0 8px 12px", borderTop: "1px solid var(--border)", borderLeft: `4px solid ${cieColor(subj.name).fg}`, borderLeftColor: cieColor(subj.name).bg, marginTop: 6, borderRadius: 4 }}>
+            <b style={{ fontSize: 13.5, minWidth: 130 }}>{paperLabel(pn)}</b>
             {d.qp && <span style={{ display: "inline-flex", gap: 4, alignItems: "center" }}><span style={{ fontSize: 12, color: "var(--muted)" }}>Question paper</span>
               <button className="pp-btn pp-btn-ghost" style={btn} onClick={() => open(d.qp, null)}>Open</button>
               <a className="pp-btn pp-btn-ghost" style={{ ...btn, textDecoration: "none" }} href={url(d.qp)} target="_blank" rel="noopener noreferrer">New tab</a>
