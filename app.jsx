@@ -481,10 +481,10 @@ function roleLabel(role) { return role === "admin" ? "Admin" : "Student"; }
 function GlobalStyle() {
   return (
     <style>{`
-      @import url('https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=Karla:wght@400;500;600;700&display=swap');
+      @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
       .pp-root {
-        --bg-light: #F4F1DE; --surface-light: #EBE6CE; --accent-light: #415A77; --field-light: #FAF8EC;
-        --text-light: #0D1B2A; --muted-light: #5B6B7C; --border-light: #D4C4A8;
+        --bg-light: #F5F3E6; --surface-light: #FFFFFF; --accent-light: #415A77; --field-light: #FBFAF4;
+        --text-light: #0D1B2A; --muted-light: #5B6B7C; --border-light: #E4DEC8;
         --sage-light: #778D7A; --sage-ink-light: #4F6B54; --accent-fg-light: #F4F1DE; --accent-ink-light: #415A77;
         --bg-dark: #17181B; --surface-dark: #212327; --accent-dark: #4F6D8F; --field-dark: #0D1B2A;
         --text-dark: #F4F1DE; --muted-dark: #9AA8B8; --border-dark: #32353B;
@@ -501,41 +501,39 @@ function GlobalStyle() {
         --accent-fg: var(--accent-fg-dark); --accent-ink: var(--accent-ink-dark); --sage: var(--sage-dark); --sage-ink: var(--sage-ink-dark);
       }
       .pp-root {
-        background: var(--bg); color: var(--text); font-family: 'Karla', sans-serif;
+        background: var(--bg); color: var(--text); font-family: 'Inter', -apple-system, system-ui, sans-serif;
         min-height: 100%; transition: background 0.25s ease, color 0.25s ease;
       }
-      .pp-serif { font-family: 'Fraunces', serif; }
+      .pp-serif { font-family: 'Inter', -apple-system, system-ui, sans-serif; letter-spacing: -0.015em; }
       .pp-root *:focus-visible { outline: 2.5px solid var(--accent); outline-offset: 2px; border-radius: 4px; }
-      .pp-card { background: var(--surface); border: 1px solid var(--border); position: relative; }
-      .pp-index-card { border-radius: 3px; box-shadow: 1px 2px 0 var(--border); }
-      .pp-index-card::before {
-        content: ''; position: absolute; top: 0; left: 22px; width: 1px; height: 100%;
-        background: color-mix(in srgb, var(--sage) 45%, transparent);
-      }
-      .pp-tape {
-        position: absolute; top: -10px; left: 50%; transform: translateX(-50%) rotate(-2deg);
-        width: 64px; height: 20px; background: color-mix(in srgb, var(--sage) 55%, transparent);
-        opacity: 0.8; border: 1px solid color-mix(in srgb, var(--sage) 70%, transparent);
-      }
-      .pp-btn { font-family: 'Karla', sans-serif; font-weight: 600; border-radius: 8px;
+      .pp-card { background: var(--surface); border: 1px solid var(--border); position: relative; border-radius: 16px !important; box-shadow: 0 1px 2px rgba(13,27,42,0.04), 0 4px 14px rgba(13,27,42,0.04); transition: transform 0.15s ease, box-shadow 0.15s ease, border-color 0.15s ease; }
+      .pp-root[data-theme='dark'] .pp-card { box-shadow: none; }
+      .pp-card[role='button']:hover { transform: translateY(-2px); box-shadow: 0 2px 4px rgba(13,27,42,0.06), 0 10px 24px rgba(13,27,42,0.08); border-color: color-mix(in srgb, var(--accent) 35%, var(--border)); }
+      .pp-root[data-theme='dark'] .pp-card[role='button']:hover { box-shadow: 0 10px 24px rgba(0,0,0,0.35); }
+      .pp-index-card { border-radius: 20px !important; }
+      .pp-tape { display: none; }
+      .pp-btn { font-family: 'Inter', -apple-system, system-ui, sans-serif; font-weight: 600; border-radius: 10px !important; letter-spacing: -0.005em;
         transition: transform 0.12s ease, background 0.15s ease, box-shadow 0.15s ease; cursor: pointer; }
       .pp-btn:active { transform: translateY(1px); }
       .pp-btn:disabled { cursor: default; opacity: 0.6; }
-      .pp-btn-primary { background: var(--accent); color: var(--accent-fg); border: 1px solid color-mix(in srgb, var(--accent) 70%, black 10%); }
+      .pp-btn-primary { background: var(--accent); color: var(--accent-fg); border: 1px solid transparent; box-shadow: 0 1px 2px rgba(13,27,42,0.18); }
       .pp-btn-primary:hover { filter: brightness(1.04); }
       .pp-btn-ghost { background: transparent; color: var(--text); border: 1px solid var(--border); }
       .pp-btn-ghost:hover { background: var(--surface); }
-      .pp-input, .pp-select { background: var(--field); border: 1px solid var(--border); color: var(--text); border-radius: 8px; font-family: 'Karla', sans-serif; }
+      .pp-input, .pp-select { background: var(--field); border: 1px solid var(--border); color: var(--text); border-radius: 10px !important; font-family: 'Inter', -apple-system, system-ui, sans-serif; }
+      .pp-input:focus, .pp-select:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 22%, transparent); }
       .pp-input::placeholder { color: var(--muted); }
-      .pp-tab { font-family: 'Karla', sans-serif; font-weight: 600; color: var(--muted); border-bottom: 2.5px solid transparent; cursor: pointer; white-space: nowrap; }
-      .pp-tab.active { color: var(--text); border-bottom-color: var(--accent); }
-      .pp-scrollbar::-webkit-scrollbar { height: 6px; width: 6px; }
+      .pp-tab { font-family: 'Inter', -apple-system, system-ui, sans-serif; font-weight: 600; color: var(--muted); border-radius: 999px; cursor: pointer; white-space: nowrap; transition: background 0.15s ease, color 0.15s ease; padding: 7px 13px !important; }
+      .pp-tab:hover { color: var(--text); background: color-mix(in srgb, var(--accent) 8%, transparent); }
+      .pp-tab.active { color: var(--accent-fg); background: var(--accent); }
+      .pp-scrollbar::-webkit-scrollbar { height: 0; width: 6px; }
+      nav.pp-scrollbar { scrollbar-width: none; }
       .pp-scrollbar::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
       .pp-file-slot { border: 1px solid var(--border); border-radius: 8px; padding: 8px 10px; background: var(--bg); }
       .pp-search-row:hover { background: var(--bg); }
-      .pp-file-input { display: block; font-family: 'Karla', sans-serif; font-size: 12px; color: var(--muted); max-width: 190px; }
+      .pp-file-input { display: block; font-family: 'Inter', -apple-system, system-ui, sans-serif; font-size: 12px; color: var(--muted); max-width: 190px; }
       .pp-file-input::file-selector-button {
-        font-family: 'Karla', sans-serif; font-weight: 600; font-size: 12.5px;
+        font-family: 'Inter', -apple-system, system-ui, sans-serif; font-weight: 600; font-size: 12.5px;
         padding: 6px 11px; border-radius: 7px; border: 1px solid var(--border);
         background: transparent; color: var(--text); cursor: pointer; margin-right: 8px;
         transition: background 0.15s ease;
@@ -543,7 +541,7 @@ function GlobalStyle() {
       .pp-file-input::file-selector-button:hover { background: var(--surface); }
       .pp-role-card { border: 1.5px solid var(--border); border-radius: 10px; padding: 14px; cursor: pointer; text-align: left; background: var(--bg); color: var(--text); font: inherit; appearance: none; -webkit-appearance: none; transition: border-color 0.12s ease, background 0.12s ease; }
       .pp-role-card:hover { border-color: var(--accent); }
-      .pp-chip { border: 1.5px solid var(--border); border-radius: 999px; padding: 6px 13px; font-size: 13px; cursor: pointer; background: var(--bg); color: var(--text); font-family: 'Karla', sans-serif; font-weight: 600; }
+      .pp-chip { border: 1.5px solid var(--border); border-radius: 999px; padding: 6px 13px; font-size: 13px; cursor: pointer; background: var(--bg); color: var(--text); font-family: 'Inter', -apple-system, system-ui, sans-serif; font-weight: 600; }
       .pp-chip.selected { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 30%, var(--bg)); }
       @keyframes pp-stamp-in { 0% { transform: scale(2.2) rotate(-16deg); opacity: 0; } 60% { transform: scale(0.92) rotate(-8deg); opacity: 1; } 100% { transform: scale(1) rotate(-8deg); opacity: 1; } }
       .pp-stamp { animation: pp-stamp-in 0.42s cubic-bezier(.2,1.4,.4,1); }
@@ -559,8 +557,8 @@ function GlobalStyle() {
       @media (max-width: 480px) {
         .pp-twoup { flex-direction: column; gap: 14px; }
         .pp-split { flex-direction: column; }
-        .pp-tab { font-size: 13px; padding: 9px 1px !important; }
-        header nav.pp-scrollbar { gap: 14px !important; }
+        .pp-tab { font-size: 13px; padding: 7px 11px !important; }
+        header nav.pp-scrollbar { gap: 4px !important; }
         .pp-modal-card { padding: 16px !important; }
         .pp-header-title { font-size: 16px !important; }
         .pp-header-row { padding: 12px 14px !important; gap: 8px !important; }
@@ -3123,8 +3121,8 @@ function MainApp({ user, onChangeGrade, onSwitchRole, theme, setTheme }) {
     <ToastContext.Provider value={notify}>
       <div className="pp-root" data-theme={theme} style={{ minHeight: "100dvh" }}>
         <GlobalStyle />
-        <header style={{ borderBottom: "1px solid var(--border)", position: "sticky", top: 0, background: "var(--bg)", zIndex: 40 }}>
-          <div className="pp-header-row" style={{ maxWidth: 960, margin: "0 auto", padding: "14px 18px", display: "flex", alignItems: "center", gap: 12 }}>
+        <header style={{ borderBottom: "1px solid var(--border)", position: "sticky", top: 0, background: "color-mix(in srgb, var(--bg) 82%, transparent)", backdropFilter: "saturate(1.4) blur(14px)", WebkitBackdropFilter: "saturate(1.4) blur(14px)", zIndex: 40 }}>
+          <div className="pp-header-row" style={{ maxWidth: 1040, margin: "0 auto", padding: "14px 20px", display: "flex", alignItems: "center", gap: 12 }}>
             <div className="pp-serif pp-header-title" style={{ fontSize: 19, fontWeight: 700, display: "flex", alignItems: "center", gap: 6 }}><BookLogo size={26} /> PrepList Pro</div>
             <div style={{ flex: 1 }} />
             <button className="pp-btn pp-btn-ghost" style={{ padding: 8, borderRadius: 999 }} onClick={() => setShowSearch(true)} aria-label="Search everything"><Search size={16} /></button>
@@ -3136,7 +3134,7 @@ function MainApp({ user, onChangeGrade, onSwitchRole, theme, setTheme }) {
               <LogOut size={13} style={{ color: "var(--muted)" }} />
             </button>
           </div>
-          <nav className="pp-scrollbar" style={{ maxWidth: 960, margin: "0 auto", padding: "0 18px", display: "flex", gap: 20, overflowX: "auto" }}>
+          <nav className="pp-scrollbar" style={{ maxWidth: 1040, margin: "0 auto", padding: "0 20px 12px", display: "flex", gap: 20, overflowX: "auto" }}>
             {TABS.map((t) => (
               <div key={t.id} className={`pp-tab ${tab === t.id ? "active" : ""}`} style={{ padding: "10px 2px", fontSize: 14, display: "flex", alignItems: "center", gap: 6 }} onClick={() => setTab(t.id)}>
                 <t.icon size={14} /> {t.label}
@@ -3145,7 +3143,7 @@ function MainApp({ user, onChangeGrade, onSwitchRole, theme, setTheme }) {
           </nav>
         </header>
 
-        <main style={{ maxWidth: 960, margin: "0 auto", padding: "22px 18px 90px" }}>
+        <main style={{ maxWidth: 1040, margin: "0 auto", padding: "26px 20px 90px" }}>
           {!dataReady ? <Loading label="Loading…" /> : (
             <>
               {tab === "notes" && <NotesView notes={notesShown} user={user} onAddNote={addNote} onDeleteNote={deleteNote} onEditNote={editNote} lastNoteId={lastNoteId} setLastNoteId={setLastNoteId} savedNoteIds={savedNoteIds} onToggleSavedNote={onToggleSavedNote} />}
@@ -3178,7 +3176,7 @@ function MainApp({ user, onChangeGrade, onSwitchRole, theme, setTheme }) {
 
 function PreplistProRoot() {
   const [theme, setTheme] = useLocalState("preplist:theme", "light");
-  useEffect(() => { document.documentElement.style.background = document.body.style.background = theme === "dark" ? "#17181B" : "#F4F1DE"; }, [theme]);
+  useEffect(() => { document.documentElement.style.background = document.body.style.background = theme === "dark" ? "#17181B" : "#F5F3E6"; }, [theme]);
   const [role, setRole] = useLocalState("preplist:role2", null);
   const [myGrade, setMyGrade] = useLocalState("preplist:myGrade", null);
   const sessionReady = useAnonymousSession();
