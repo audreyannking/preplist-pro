@@ -223,8 +223,10 @@ async function adminStatus() {
   return { ok: false, email: u.email, id, why: "error" };
 }
 async function checkAdmin() { return (await adminStatus()).ok; }
+// Admins type a plain username; Firebase wants an email-shaped id, so a username gets a private suffix.
+function adminLoginId(name) { const n = name.trim().toLowerCase(); return n.includes("@") ? n : n + "@admins.preplist.app"; }
 async function signInAsAdmin(email, password) {
-  if (email) await auth.signInWithEmailAndPassword(email.trim(), password);
+  if (email) await auth.signInWithEmailAndPassword(adminLoginId(email), password);
   else await auth.signInWithPopup(new firebase.auth.GoogleAuthProvider());
   const st = await adminStatus();
   if (st.ok) return { ok: true };
@@ -787,7 +789,7 @@ function RoleGate({ onSelectRole, theme, setTheme }) {
     setError("");
   }
   async function doSignIn(withPassword) {
-    if (withPassword && (!email.trim() || !password)) { setError("Enter your admin email and password."); return; }
+    if (withPassword && (!email.trim() || !password)) { setError("Enter your username and password."); return; }
     setBusy(true); setError(""); setNeedId(""); setCopied(false);
     try {
       const r = withPassword ? await signInAsAdmin(email, password) : await signInAsAdmin();
@@ -796,7 +798,7 @@ function RoleGate({ onSelectRole, theme, setTheme }) {
       else { setNeedId(r.id || ""); setError("Your login works, but this account isn't on the admin list yet. In Firebase, add a document to \"admins\" whose Document ID is the code below (tap Copy, then paste it into the Document ID box)."); }
     } catch (e) {
       const c = e && e.code;
-      if (c === "auth/wrong-password" || c === "auth/user-not-found" || c === "auth/invalid-credential" || c === "auth/invalid-login-credentials" || c === "auth/invalid-email") setError("Wrong email or password.");
+      if (c === "auth/wrong-password" || c === "auth/user-not-found" || c === "auth/invalid-credential" || c === "auth/invalid-login-credentials" || c === "auth/invalid-email") setError("Wrong username or password.");
       else if (c === "auth/too-many-requests") setError("Too many tries. Wait a few minutes and try again.");
       else if (c === "auth/operation-not-allowed") setError("Email and password sign-in isn't switched on in Firebase yet.");
       else if (c === "auth/popup-closed-by-user" || c === "auth/cancelled-popup-request") setError("Sign-in was cancelled.");
@@ -854,7 +856,7 @@ function RoleGate({ onSelectRole, theme, setTheme }) {
               </div>
             )}
             <form onSubmit={(e) => { e.preventDefault(); doSignIn(true); }} style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-              <input className="pp-input" type="email" autoComplete="username" placeholder="Admin email" value={email} onChange={(e) => setEmail(e.target.value)} />
+              <input className="pp-input" type="text" autoCapitalize="none" autoCorrect="off" autoComplete="username" placeholder="Username" value={email} onChange={(e) => setEmail(e.target.value)} />
               <input className="pp-input" type="password" autoComplete="current-password" placeholder="Password" value={password} onChange={(e) => setPassword(e.target.value)} />
               <button type="submit" className="pp-btn pp-btn-primary" style={{ width: "100%", padding: "10px 0", opacity: busy ? 0.6 : 1 }} disabled={busy}>{busy ? "Signing in…" : "Sign in"}</button>
             </form>
