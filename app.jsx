@@ -775,6 +775,8 @@ function SetupNeededScreen() {
 function RoleGate({ onSelectRole, theme, setTheme }) {
   const [pendingRole, setPendingRole] = useState(null);
   const [error, setError] = useState("");
+  const [needId, setNeedId] = useState("");
+  const [copied, setCopied] = useState(false);
   const [busy, setBusy] = useState(false);
 
   function pick(role) {
@@ -783,13 +785,13 @@ function RoleGate({ onSelectRole, theme, setTheme }) {
     setError("");
   }
   async function googleSignIn() {
-    setBusy(true); setError("");
+    setBusy(true); setError(""); setNeedId(""); setCopied(false);
     try {
       const r = await signInAsAdmin();
       if (r.ok) onSelectRole(pendingRole);
       else if (r.why === "unverified") setError(`Google says ${r.email} isn't a verified email, so it can't be an admin.`);
       else if (r.why === "error") setError("Couldn't check the admin list just now (the database refused or timed out). Try again in a moment.");
-      else setError(`You signed in as ${r.email}, but there's no admin entry named "${r.id}". In Firebase, the admins document ID must be exactly that, in lowercase, with no spaces.`);
+      else { setNeedId(r.id || ""); setError(`You signed in as ${r.email}, but the admins list has no entry with this exact name. In Firebase, add a document to "admins" whose Document ID is the text below (tap Copy, then paste it into the Document ID box).`); }
     } catch (e) {
       const c = e && e.code;
       if (c === "auth/popup-closed-by-user" || c === "auth/cancelled-popup-request") setError("Sign-in was cancelled.");
@@ -840,6 +842,12 @@ function RoleGate({ onSelectRole, theme, setTheme }) {
               Admins sign in with their own Google account. Only accounts on the admin list get in, and turning on Google's 2-Step Verification for it adds a second check.
             </div>
             {error && <div style={{ fontSize: 12.5, color: "#8A3434", marginBottom: 10, lineHeight: 1.45 }}>{error}</div>}
+            {needId && (
+              <div style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 12, padding: "8px 10px", border: "1px solid var(--border)", borderRadius: 10, background: "var(--bg)" }}>
+                <code style={{ flex: 1, fontSize: 13, wordBreak: "break-all", userSelect: "all" }}>{needId}</code>
+                <button className="pp-btn pp-btn-ghost" style={{ padding: "5px 10px", fontSize: 12.5, flexShrink: 0 }} onClick={() => { try { navigator.clipboard.writeText(needId); setCopied(true); } catch { /* user can select the text instead */ } }}>{copied ? "Copied" : "Copy"}</button>
+              </div>
+            )}
             <button className="pp-btn pp-btn-primary" style={{ width: "100%", padding: "10px 0", opacity: busy ? 0.6 : 1 }} disabled={busy} onClick={googleSignIn}>{busy ? "Signing in…" : "Continue with Google"}</button>
           </>
         )}
