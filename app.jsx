@@ -751,6 +751,81 @@ function BookLogo({ size = 26, style }) {
 const GRADE_CHOICES = [7, 8, 9, 10, 11, 12].map((n) => ({ n, value: `${n}th Grade`, label: `Grade ${n}` }));
 const gradeLabel = (g) => (g ? g.replace(/^(\d+)\w*\s+Grade$/, "Grade $1") : "");
 
+const SURVEY_VERSION = 1;
+const SURVEY_FREQUENCY_OPTIONS = [
+  ["first", "First time"],
+  ["rarely", "Rarely"],
+  ["monthly", "A few times a month"],
+  ["weekly", "A few times a week"],
+  ["most", "Most days"]
+];
+const SURVEY_FEATURE_OPTIONS = [
+  ["notes", "Notes"],
+  ["videos", "Videos"],
+  ["files", "Files"],
+  ["papers", "Past papers"],
+  ["study", "Study Hub"],
+  ["tracker", "Tracker"],
+  ["saved", "Saved"],
+  ["none", "None yet"]
+];
+const SURVEY_MOST_OPTIONS = [
+  ["notes", "Notes"],
+  ["videos", "Videos"],
+  ["files", "Files"],
+  ["papers", "Past papers"],
+  ["study", "Study Hub"],
+  ["tracker", "Tracker"],
+  ["saved", "Saved"],
+  ["unsure", "Not sure yet"]
+];
+const SURVEY_IMPROVE_OPTIONS = [
+  ["notes", "More notes"],
+  ["videos", "More videos"],
+  ["files", "More files"],
+  ["papers", "More past papers"],
+  ["search", "Better search and filters"],
+  ["tools", "Better study tools"],
+  ["speed", "Faster or more reliable site"],
+  ["other", "Something else"]
+];
+const SUGGESTION_STATUS_OPTIONS = [
+  ["new", "New"],
+  ["reviewed", "Reviewed"],
+  ["planned", "Planned"],
+  ["done", "Done"]
+];
+const SUGGESTION_STATUS_TONE = {
+  new: { bg: "#D9E8F5", fg: "#2A5578" },
+  reviewed: { bg: "#F5EBC2", fg: "#7A611A" },
+  planned: { bg: "#EBDFF6", fg: "#5B3A82" },
+  done: { bg: "#DCEFD9", fg: "#33662F" }
+};
+
+function surveyLabel(options, value) {
+  const found = options.find(([v]) => v === value);
+  return found ? found[1] : (value || "—");
+}
+function copyText(text, notify, okText) {
+  const fail = () => notify({ kind: "error", text: "Couldn't copy that. Please try again." });
+  if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(text).then(() => notify({ kind: "ok", text: okText }), fail);
+  else fail();
+}
+function downloadTextFile(filename, content, type) {
+  const blob = new Blob([content], { type: type || "text/plain;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+function csvCell(value) {
+  return `"${String(value == null ? "" : value).replace(/"/g, '""')}"`;
+}
+
 function GradeButtons({ value, onPick }) {
   return (
     <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 10 }}>
@@ -3391,6 +3466,531 @@ function ToolsView() {
   );
 }
 
+function SurveyChoiceChips({ options, value, onChange, multiple, label }) {
+  return (
+    <div role={multiple ? "group" : "radiogroup"} aria-label={label} style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+      {options.map(([v, l]) => {
+        const selected = multiple ? value.includes(v) : value === v;
+        return (
+          <button key={v} type="button" className={`pp-chip ${selected ? "selected" : ""}`}
+            role={multiple ? undefined : "radio"} aria-checked={multiple ? undefined : selected} aria-pressed={multiple ? selected : undefined}
+            onClick={() => onChange(v)} style={{ padding: "7px 13px", fontSize: 13 }}>{l}</button>
+        );
+      })}
+    </div>
+  );
+}
+
+function SurveyScale({ min, max, value, onChange, low, high, label }) {
+  const values = Array.from({ length: max - min + 1 }, (_, i) => min + i);
+  return (
+    <div>
+      <div role="radiogroup" aria-label={label} style={{ display: "flex", gap: 5, flexWrap: "wrap" }}>
+        {values.map((n) => (
+          <button key={n} type="button" role="radio" aria-checked={value === n} className={`pp-chip ${value === n ? "selected" : ""}`}
+            onClick={() => onChange(n)} style={{ minWidth: 38, padding: "7px 9px", fontSize: 13 }}>{n}</button>
+        ))}
+      </div>
+      <div className="pp-sub" style={{ display: "flex", justifyContent: "space-between", fontSize: 12, marginTop: 6 }}>
+        <span>{low}</span><span>{high}</span>
+      </div>
+    </div>
+  );
+}
+
+function SurveyQuestion({ n, title, hint, children }) {
+  return (
+    <div style={{ paddingTop: n === 1 ? 0 : 18, marginTop: n === 1 ? 0 : 18, borderTop: n === 1 ? "none" : "1px solid var(--border)" }}>
+      <div style={{ display: "flex", alignItems: "baseline", gap: 8, marginBottom: 9 }}>
+        <span className="pp-eyebrow" style={{ flexShrink: 0 }}>{String(n).padStart(2, "0")}</span>
+        <div style={{ fontSize: 15, fontWeight: 600, lineHeight: 1.45 }}>{title}{hint && <span className="pp-sub" style={{ fontWeight: 400 }}> · {hint}</span>}</div>
+      </div>
+      {children}
+    </div>
+  );
+}
+
+function SurveyView({ user }) {
+  const notify = useToast();
+  const [saved, setSaved] = useLocalState("preplist:mySurvey", null);
+  const [draft, setDraft] = useLocalState("preplist:surveyDraft", null);
+  const initial = draft || saved || {};
+  const [frequency, setFrequency] = useState(initial.frequency || "");
+  const [featuresUsed, setFeaturesUsed] = useState(Array.isArray(initial.featuresUsed) ? initial.featuresUsed : []);
+  const [mostUseful, setMostUseful] = useState(initial.mostUseful || "");
+  const [improveFirst, setImproveFirst] = useState(initial.improveFirst || "");
+  const [ease, setEase] = useState(initial.ease || 0);
+  const [usefulness, setUsefulness] = useState(initial.usefulness || 0);
+  const [recommend, setRecommend] = useState(initial.recommend == null ? null : initial.recommend);
+  const [biggestIssue, setBiggestIssue] = useState(initial.biggestIssue || "");
+  const [subjectNeed, setSubjectNeed] = useState(initial.subjectNeed || "");
+  const [message, setMessage] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [suggestionBusy, setSuggestionBusy] = useState(false);
+
+  useEffect(() => {
+    setDraft({ frequency, featuresUsed, mostUseful, improveFirst, ease, usefulness, recommend, biggestIssue, subjectNeed });
+  }, [frequency, featuresUsed, mostUseful, improveFirst, ease, usefulness, recommend, biggestIssue, subjectNeed, setDraft]);
+
+  const required = [!!frequency, featuresUsed.length > 0, !!mostUseful, !!improveFirst, ease > 0, usefulness > 0, recommend !== null && recommend >= 0];
+  const answered = required.filter(Boolean).length;
+  const complete = answered === required.length;
+
+  function toggleFeature(v) {
+    setFeaturesUsed((prev) => {
+      if (v === "none") return prev.includes("none") ? [] : ["none"];
+      const next = prev.includes(v) ? prev.filter((x) => x !== v) : [...prev.filter((x) => x !== "none"), v];
+      return next;
+    });
+  }
+
+  async function submitSurvey() {
+    if (!complete || busy) return;
+    const current = auth && auth.currentUser;
+    if (!current) { notify({ kind: "error", text: "Your session is still starting. Please try again in a moment." }); return; }
+    setBusy(true);
+    try {
+      const now = Date.now();
+      const payload = {
+        authorUid: current.uid,
+        role: user.role,
+        grade: user.grade || "",
+        surveyVersion: SURVEY_VERSION,
+        frequency,
+        featuresUsed,
+        mostUseful,
+        improveFirst,
+        ease,
+        usefulness,
+        recommend,
+        biggestIssue: biggestIssue.trim().slice(0, 400),
+        subjectNeed: subjectNeed.trim().slice(0, 120),
+        createdAt: saved && saved.createdAt ? saved.createdAt : now,
+        updatedAt: now
+      };
+      await db.collection("surveyResponses").doc(current.uid).set(payload, { merge: true });
+      setSaved(payload);
+      setDraft(null);
+      notify({ kind: "ok", text: saved ? "Your response has been updated." : "Thank you for your response!" });
+    } catch (e) {
+      notify({ kind: "error", text: friendlyDbError(e) });
+    }
+    setBusy(false);
+  }
+
+  async function sendSuggestion() {
+    const text = message.trim();
+    if (!text || suggestionBusy) return;
+    const current = auth && auth.currentUser;
+    if (!current) { notify({ kind: "error", text: "Your session is still starting. Please try again in a moment." }); return; }
+    setSuggestionBusy(true);
+    try {
+      const now = Date.now();
+      await db.collection("suggestions").add({
+        authorUid: current.uid,
+        role: user.role,
+        grade: user.grade || "",
+        message: text.slice(0, 500),
+        status: "new",
+        surveyVersion: SURVEY_VERSION,
+        createdAt: now,
+        updatedAt: now
+      });
+      setMessage("");
+      notify({ kind: "ok", text: "Suggestion sent. Thank you!" });
+    } catch (e) {
+      notify({ kind: "error", text: friendlyDbError(e) });
+    }
+    setSuggestionBusy(false);
+  }
+
+  return (
+    <div>
+      <div className="pp-card pp-sec" style={{ maxWidth: 760, margin: "0 auto 16px" }}>
+        <div className="pp-eyebrow">Student survey · about 2 minutes</div>
+        <div className="pp-h" style={{ fontSize: 24, marginTop: 4 }}>Help us build what you need.</div>
+        <div className="pp-sub" style={{ marginTop: 6, maxWidth: 580 }}>
+          Your answers are anonymous. Please don't include your name, email, or other personal details.
+          {user.grade ? ` This response is linked to ${gradeLabel(user.grade)}.` : ""}
+        </div>
+        <div style={{ display: "flex", alignItems: "center", gap: 10, marginTop: 16 }}>
+          <div className="pp-bar" style={{ flex: 1 }}><i style={{ width: `${(answered / required.length) * 100}%` }} /></div>
+          <span className="pp-sub" style={{ fontSize: 12, whiteSpace: "nowrap" }}>{answered} / {required.length} answered</span>
+        </div>
+        {saved && <div className="pp-sub" style={{ marginTop: 8, color: "var(--sage-ink)" }}>You already sent a response. You can update it below.</div>}
+      </div>
+
+      <div className="pp-card pp-sec" style={{ maxWidth: 760, margin: "0 auto 16px" }}>
+        <div className="pp-eyebrow">How you use PrepList Pro</div>
+        <SurveyQuestion n={1} title="How often do you use PrepList Pro?">
+          <SurveyChoiceChips label="How often do you use PrepList Pro" options={SURVEY_FREQUENCY_OPTIONS} value={frequency} onChange={setFrequency} />
+        </SurveyQuestion>
+        <SurveyQuestion n={2} title="Which parts have you used?" hint="choose all that apply">
+          <SurveyChoiceChips label="Which parts have you used" options={SURVEY_FEATURE_OPTIONS} value={featuresUsed} onChange={toggleFeature} multiple />
+        </SurveyQuestion>
+        <SurveyQuestion n={3} title="Which part has helped you most?">
+          <SurveyChoiceChips label="Which part has helped you most" options={SURVEY_MOST_OPTIONS} value={mostUseful} onChange={setMostUseful} />
+        </SurveyQuestion>
+      </div>
+
+      <div className="pp-card pp-sec" style={{ maxWidth: 760, margin: "0 auto 16px" }}>
+        <div className="pp-eyebrow">What we should improve</div>
+        <SurveyQuestion n={4} title="What should we improve first?">
+          <SurveyChoiceChips label="What should we improve first" options={SURVEY_IMPROVE_OPTIONS} value={improveFirst} onChange={setImproveFirst} />
+        </SurveyQuestion>
+        <SurveyQuestion n={5} title="How easy is it to find what you need?">
+          <SurveyScale label="How easy is it to find what you need" min={1} max={5} value={ease} onChange={setEase} low="Very hard" high="Very easy" />
+        </SurveyQuestion>
+        <SurveyQuestion n={6} title="How useful is the content for your studies?">
+          <SurveyScale label="How useful is the content for your studies" min={1} max={5} value={usefulness} onChange={setUsefulness} low="Not useful" high="Very useful" />
+        </SurveyQuestion>
+        <SurveyQuestion n={7} title="How likely are you to recommend PrepList Pro to a classmate?">
+          <SurveyScale label="How likely are you to recommend PrepList Pro" min={0} max={10} value={recommend} onChange={setRecommend} low="Not likely" high="Very likely" />
+        </SurveyQuestion>
+      </div>
+
+      <div className="pp-card pp-sec" style={{ maxWidth: 760, margin: "0 auto 16px" }}>
+        <div className="pp-eyebrow">Optional details</div>
+        <SurveyQuestion n={8} title="What is the biggest problem you've had?" hint="optional">
+          <textarea className="pp-input" maxLength={400} style={{ width: "100%", padding: "9px 12px", fontSize: 14, minHeight: 86, resize: "vertical", fontFamily: "inherit" }}
+            placeholder="Tell us what got in the way." value={biggestIssue} onChange={(e) => setBiggestIssue(e.target.value)} />
+          <div className="pp-sub" style={{ textAlign: "right", fontSize: 11.5, marginTop: 3 }}>{biggestIssue.length}/400</div>
+        </SurveyQuestion>
+        <SurveyQuestion n={9} title="Which subject or grade needs more resources?" hint="optional">
+          <input className="pp-input" maxLength={120} style={{ width: "100%", padding: "9px 12px", fontSize: 14 }}
+            placeholder="e.g. Grade 10 Physics" value={subjectNeed} onChange={(e) => setSubjectNeed(e.target.value)} />
+        </SurveyQuestion>
+      </div>
+
+      <div className="pp-card pp-sec" style={{ maxWidth: 760, margin: "0 auto 16px" }}>
+        <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
+          <button className="pp-btn pp-btn-primary" style={{ padding: "10px 20px", opacity: complete && !busy ? 1 : 0.5 }} disabled={!complete || busy} onClick={submitSurvey}>
+            {busy ? "Saving…" : saved ? "Update my response" : "Send my response"}
+          </button>
+          <span className="pp-sub" style={{ fontSize: 12.5 }}>
+            {complete ? "Your answers are ready to send." : `Answer ${required.length - answered} more required question${required.length - answered === 1 ? "" : "s"}.`}
+          </span>
+        </div>
+      </div>
+
+      <div className="pp-card pp-sec" style={{ maxWidth: 760, margin: "0 auto" }}>
+        <div className="pp-eyebrow">Suggestions</div>
+        <div className="pp-h" style={{ marginTop: 2 }}>Have an idea or found a problem?</div>
+        <div className="pp-sub" style={{ marginTop: 4, marginBottom: 10 }}>Send a free-text suggestion to the team. You don't have to complete the survey first.</div>
+        <textarea className="pp-input" maxLength={500} style={{ width: "100%", padding: "9px 12px", fontSize: 14, minHeight: 80, resize: "vertical", fontFamily: "inherit" }}
+          placeholder="What should we add, fix, or improve?" value={message} onChange={(e) => setMessage(e.target.value)} />
+        <div style={{ display: "flex", gap: 10, alignItems: "center", justifyContent: "space-between", marginTop: 8, flexWrap: "wrap" }}>
+          <span className="pp-sub" style={{ fontSize: 11.5 }}>{message.length}/500 · Please don't include personal details.</span>
+          <button className="pp-btn pp-btn-primary" style={{ padding: "9px 18px", opacity: message.trim() && !suggestionBusy ? 1 : 0.5 }} disabled={!message.trim() || suggestionBusy} onClick={sendSuggestion}>
+            {suggestionBusy ? "Sending…" : "Send suggestion"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function surveyCountRows(responses, options, field) {
+  const counts = new Map(options.map(([v]) => [v, 0]));
+  responses.forEach((r) => {
+    const values = field === "featuresUsed" ? (r.featuresUsed || []) : [r[field]];
+    values.forEach((v) => { if (counts.has(v)) counts.set(v, counts.get(v) + 1); });
+  });
+  return options.map(([value, label]) => ({ value, label, count: counts.get(value) || 0 }));
+}
+
+function SurveyBars({ title, rows, total }) {
+  const max = Math.max(1, ...rows.map((r) => r.count));
+  return (
+    <div className="pp-card pp-sec">
+      <div className="pp-eyebrow">{title}</div>
+      <div style={{ marginTop: 12 }}>
+        {rows.map((r) => {
+          const pct = total ? Math.round((r.count / total) * 100) : 0;
+          return (
+            <div key={r.value} style={{ marginBottom: 11 }}>
+              <div style={{ display: "flex", justifyContent: "space-between", gap: 8, fontSize: 13 }}>
+                <span>{r.label}</span><span className="pp-sub" style={{ fontSize: 12 }}>{r.count} · {pct}%</span>
+              </div>
+              <div className="pp-bar" style={{ marginTop: 5 }}><i style={{ width: `${(r.count / max) * 100}%` }} /></div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function SuggestionStatusPill({ status }) {
+  const tone = SUGGESTION_STATUS_TONE[status] || SUGGESTION_STATUS_TONE.new;
+  return <span style={{ background: tone.bg, color: tone.fg, padding: "2px 9px", borderRadius: 999, fontSize: 11.5, fontWeight: 700, whiteSpace: "nowrap" }}>{surveyLabel(SUGGESTION_STATUS_OPTIONS, status || "new")}</span>;
+}
+
+function SurveyInboxView({ responses, suggestions }) {
+  const notify = useToast();
+  const [view, setView] = useLocalState("preplist:surveyInboxView", "overview");
+  const [gradeFilter, setGradeFilter] = useState("");
+  const [statusFilter, setStatusFilter] = useState("all");
+  const allResponses = responses || [];
+  const allSuggestions = suggestions || [];
+  const filtered = useMemo(() => allResponses.filter((r) => !gradeFilter || r.grade === gradeFilter), [allResponses, gradeFilter]);
+  const featureRows = useMemo(() => surveyCountRows(filtered, SURVEY_FEATURE_OPTIONS, "featuresUsed"), [filtered]);
+  const mostRows = useMemo(() => surveyCountRows(filtered, SURVEY_MOST_OPTIONS, "mostUseful"), [filtered]);
+  const improveRows = useMemo(() => surveyCountRows(filtered, SURVEY_IMPROVE_OPTIONS, "improveFirst"), [filtered]);
+  const avg = (key) => filtered.length ? filtered.reduce((sum, r) => sum + (Number(r[key]) || 0), 0) / filtered.length : 0;
+  const avgEase = avg("ease");
+  const avgUsefulness = avg("usefulness");
+  const avgRecommend = avg("recommend");
+  const promoters = filtered.filter((r) => Number(r.recommend) >= 9).length;
+  const passives = filtered.filter((r) => Number(r.recommend) >= 7 && Number(r.recommend) <= 8).length;
+  const detractors = filtered.filter((r) => Number(r.recommend) <= 6).length;
+  const nps = filtered.length ? Math.round(((promoters - detractors) / filtered.length) * 100) : 0;
+  const npsBreakdown = `${promoters} promoter${promoters === 1 ? "" : "s"}, ${passives} passive${passives === 1 ? "" : "s"}, ${detractors} detractor${detractors === 1 ? "" : "s"}`;
+  const suggestionsShown = allSuggestions.filter((s) => statusFilter === "all" || (s.status || "new") === statusFilter);
+  const latestSuggestions = [...allSuggestions].sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0)).slice(0, 3);
+  const big = { fontSize: 32, fontWeight: 700, lineHeight: 1.05, letterSpacing: "-0.03em" };
+  const unit = { fontSize: 14, fontWeight: 600, color: "var(--muted)", marginLeft: 5, letterSpacing: 0 };
+
+  const whenText = (ts) => (ts ? new Date(ts).toLocaleString() : "");
+  const topRows = (rows) => rows.filter((r) => r.count).sort((a, b) => b.count - a.count).slice(0, 4).map((r) => `${r.label} (${r.count})`).join(", ") || "None";
+
+  function copyReport() {
+    const issues = filtered.filter((r) => r.biggestIssue).slice(0, 8);
+    const needs = filtered.filter((r) => r.subjectNeed).slice(0, 8);
+    const lines = [
+      `PrepList Pro - Survey v${SURVEY_VERSION}`,
+      `Responses: ${filtered.length}`,
+      `Average ease: ${filtered.length ? avgEase.toFixed(1) : "—"} / 5`,
+      `Average usefulness: ${filtered.length ? avgUsefulness.toFixed(1) : "—"} / 5`,
+      `Average recommendation: ${filtered.length ? avgRecommend.toFixed(1) : "—"} / 10`,
+      `NPS: ${filtered.length ? (nps > 0 ? `+${nps}` : nps) : "—"} (${npsBreakdown})`,
+      `Top features: ${topRows(featureRows)}`,
+      `Most useful: ${topRows(mostRows)}`,
+      `Improve first: ${topRows(improveRows)}`,
+      "",
+      "Written feedback:",
+      ...(issues.length ? issues.map((r) => `- ${r.grade || "No grade"}: ${r.biggestIssue}`) : ["- None"]),
+      "",
+      "More resources requested:",
+      ...(needs.length ? needs.map((r) => `- ${r.grade || "No grade"}: ${r.subjectNeed}`) : ["- None"]),
+      "",
+      "Suggestions:",
+      ...(allSuggestions.length ? allSuggestions.slice(0, 20).map((s) => `- [${surveyLabel(SUGGESTION_STATUS_OPTIONS, s.status || "new")}] ${s.grade || "No grade"}: ${s.message}`) : ["- None"])
+    ];
+    copyText(lines.join("\n"), notify, "Survey report copied for the dev team.");
+  }
+
+  function downloadResponses() {
+    const header = ["Grade", "Sent", "Updated", "Frequency", "Features used", "Most useful", "Improve first", "Ease /5", "Usefulness /5", "Recommend /10", "Biggest issue", "More resources"];
+    const rows = filtered.map((r) => [
+      r.grade || "",
+      whenText(r.createdAt),
+      whenText(r.updatedAt),
+      surveyLabel(SURVEY_FREQUENCY_OPTIONS, r.frequency),
+      (r.featuresUsed || []).map((v) => surveyLabel(SURVEY_FEATURE_OPTIONS, v)).join("; "),
+      surveyLabel(SURVEY_MOST_OPTIONS, r.mostUseful),
+      surveyLabel(SURVEY_IMPROVE_OPTIONS, r.improveFirst),
+      r.ease || "",
+      r.usefulness || "",
+      r.recommend == null ? "" : r.recommend,
+      r.biggestIssue || "",
+      r.subjectNeed || ""
+    ]);
+    downloadTextFile(`preplist-survey-responses-${new Date().toISOString().slice(0, 10)}.csv`, [header, ...rows].map((row) => row.map(csvCell).join(",")).join("\r\n"), "text/csv;charset=utf-8");
+    notify({ kind: "ok", text: "Survey responses downloaded." });
+  }
+
+  function downloadSuggestions() {
+    const header = ["Grade", "Status", "Sent", "Message"];
+    const rows = suggestionsShown.map((s) => [
+      s.grade || "",
+      surveyLabel(SUGGESTION_STATUS_OPTIONS, s.status || "new"),
+      whenText(s.createdAt),
+      s.message || ""
+    ]);
+    downloadTextFile(`preplist-survey-suggestions-${new Date().toISOString().slice(0, 10)}.csv`, [header, ...rows].map((row) => row.map(csvCell).join(",")).join("\r\n"), "text/csv;charset=utf-8");
+    notify({ kind: "ok", text: "Suggestions downloaded." });
+  }
+
+  async function setSuggestionStatus(id, status) {
+    try {
+      await db.collection("suggestions").doc(id).update({ status, updatedAt: Date.now() });
+      notify({ kind: "ok", text: "Suggestion status updated." });
+    } catch (e) {
+      notify({ kind: "error", text: friendlyDbError(e) });
+    }
+  }
+
+  async function removeSuggestion(id) {
+    if (!window.confirm("Delete this suggestion?")) return;
+    try {
+      await db.collection("suggestions").doc(id).delete();
+      notify({ kind: "ok", text: "Suggestion deleted." });
+    } catch (e) {
+      notify({ kind: "error", text: friendlyDbError(e) });
+    }
+  }
+
+  function renderOverview() {
+    if (!filtered.length) {
+      return <div className="pp-card"><EmptyState icon={ListChecks} title="No responses yet" body="Share the Survey tab with students and their answers will appear here." /></div>;
+    }
+    return (
+      <div className="pp-grid-tools">
+        <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+          <SurveyBars title="Which parts students use" rows={featureRows} total={filtered.length} />
+          <SurveyBars title="Which part helped most" rows={mostRows} total={filtered.length} />
+          <SurveyBars title="What to improve first" rows={improveRows} total={filtered.length} />
+        </div>
+        <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+          <div className="pp-card pp-sec">
+            <div className="pp-eyebrow">Ratings</div>
+            {[
+              ["Ease of finding", avgEase, 5],
+              ["Content usefulness", avgUsefulness, 5],
+              ["Would recommend", avgRecommend, 10]
+            ].map(([label, value, max]) => (
+              <div key={label} style={{ marginTop: 12 }}>
+                <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13 }}>
+                  <span>{label}</span><span className="pp-sub">{value.toFixed(1)} / {max}</span>
+                </div>
+                <div className="pp-bar" style={{ marginTop: 5 }}><i style={{ width: `${(value / max) * 100}%` }} /></div>
+              </div>
+            ))}
+          </div>
+          <div className="pp-card pp-sec">
+            <div className="pp-eyebrow">Would recommend</div>
+            <div style={{ ...big, marginTop: 6 }}>{avgRecommend.toFixed(1)}<span style={unit}>/ 10</span></div>
+            <div className="pp-sub" style={{ marginTop: 6 }}>NPS {nps > 0 ? `+${nps}` : nps} · {npsBreakdown}</div>
+          </div>
+          <div className="pp-card pp-sec">
+            <div className="pp-eyebrow">Recent suggestions</div>
+            {latestSuggestions.length ? latestSuggestions.map((s) => (
+              <div key={s.id} style={{ paddingTop: 10, marginTop: 10, borderTop: "1px solid var(--border)" }}>
+                <div style={{ display: "flex", gap: 7, alignItems: "center", flexWrap: "wrap" }}>
+                  <SuggestionStatusPill status={s.status || "new"} />
+                  <span className="pp-sub" style={{ fontSize: 11.5 }}>{s.grade || "No grade"} · {timeAgo(s.createdAt || Date.now())}</span>
+                </div>
+                <div style={{ fontSize: 13, marginTop: 5, lineHeight: 1.45 }}>{s.message}</div>
+              </div>
+            )) : <div className="pp-sub" style={{ marginTop: 8 }}>No suggestions yet.</div>}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  function renderResponses() {
+    if (!filtered.length) {
+      return <div className="pp-card"><EmptyState icon={ListChecks} title="No responses yet" body="Student survey responses will appear here as soon as they are sent." /></div>;
+    }
+    return (
+      <div>
+        <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 12 }}>
+          <button className="pp-btn pp-btn-ghost" style={{ padding: "7px 12px", fontSize: 13, display: "inline-flex", alignItems: "center", gap: 6 }} onClick={downloadResponses}>
+            <Download size={14} /> Download responses CSV
+          </button>
+        </div>
+        {filtered.map((r) => (
+          <div key={r.id} className="pp-card pp-sec" style={{ marginBottom: 12 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+              <GradeTag text={r.grade} />
+              {r.role === "admin" && <span className="pp-sub" style={{ fontSize: 11.5 }}>Admin test</span>}
+              <span className="pp-sub" style={{ fontSize: 11.5 }}>{timeAgo(r.updatedAt || r.createdAt || Date.now())}</span>
+              <span className="pp-sub" style={{ fontSize: 11.5 }}>Survey v{r.surveyVersion || 1}</span>
+            </div>
+            <div style={{ display: "flex", gap: 16, flexWrap: "wrap", marginTop: 10 }}>
+              <div><div className="pp-eyebrow">Uses</div><div style={{ fontSize: 13.5, marginTop: 2 }}>{surveyLabel(SURVEY_FREQUENCY_OPTIONS, r.frequency)}</div></div>
+              <div><div className="pp-eyebrow">Ease</div><div style={{ fontSize: 13.5, marginTop: 2 }}>{r.ease || "—"} / 5</div></div>
+              <div><div className="pp-eyebrow">Useful</div><div style={{ fontSize: 13.5, marginTop: 2 }}>{r.usefulness || "—"} / 5</div></div>
+              <div><div className="pp-eyebrow">Recommend</div><div style={{ fontSize: 13.5, marginTop: 2 }}>{r.recommend == null ? "—" : r.recommend} / 10</div></div>
+            </div>
+            <div className="pp-sub" style={{ marginTop: 10, fontSize: 13 }}><b>Most useful:</b> {surveyLabel(SURVEY_MOST_OPTIONS, r.mostUseful)} · <b>Improve first:</b> {surveyLabel(SURVEY_IMPROVE_OPTIONS, r.improveFirst)}</div>
+            <div className="pp-sub" style={{ marginTop: 4, fontSize: 12.5 }}><b>Used:</b> {(r.featuresUsed || []).map((v) => surveyLabel(SURVEY_FEATURE_OPTIONS, v)).join(", ") || "—"}</div>
+            {r.biggestIssue && <div style={{ marginTop: 10, paddingTop: 10, borderTop: "1px solid var(--border)" }}><div className="pp-eyebrow">Biggest problem</div><div style={{ fontSize: 13.5, marginTop: 4, lineHeight: 1.5 }}>{r.biggestIssue}</div></div>}
+            {r.subjectNeed && <div style={{ marginTop: 8 }}><div className="pp-eyebrow">More resources requested</div><div style={{ fontSize: 13.5, marginTop: 4 }}>{r.subjectNeed}</div></div>}
+          </div>
+        ))}
+      </div>
+    );
+  }
+
+  function renderSuggestions() {
+    return (
+      <div>
+        <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 12 }}>
+          <button className={`pp-chip ${statusFilter === "all" ? "selected" : ""}`} onClick={() => setStatusFilter("all")}>All <span style={{ opacity: 0.6 }}>{allSuggestions.length}</span></button>
+          {SUGGESTION_STATUS_OPTIONS.map(([value, label]) => {
+            const count = allSuggestions.filter((s) => (s.status || "new") === value).length;
+            return <button key={value} className={`pp-chip ${statusFilter === value ? "selected" : ""}`} onClick={() => setStatusFilter(value)}>{label} <span style={{ opacity: 0.6 }}>{count}</span></button>;
+          })}
+          <div style={{ flex: 1 }} />
+          <button className="pp-btn pp-btn-ghost" style={{ padding: "7px 12px", fontSize: 13, display: "inline-flex", alignItems: "center", gap: 6 }} onClick={downloadSuggestions}>
+            <Download size={14} /> Download CSV
+          </button>
+        </div>
+        {!suggestionsShown.length ? (
+          <div className="pp-card"><EmptyState icon={MessageSquare} title="No suggestions yet" body="Free-text ideas and problems sent from the Survey tab will appear here." /></div>
+        ) : suggestionsShown.map((s) => (
+          <div key={s.id} className="pp-card pp-sec" style={{ marginBottom: 12 }}>
+            <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+              <SuggestionStatusPill status={s.status || "new"} />
+              <GradeTag text={s.grade} />
+              <span className="pp-sub" style={{ fontSize: 11.5 }}>{timeAgo(s.createdAt || Date.now())}</span>
+              <div style={{ flex: 1 }} />
+              <button className="pp-btn pp-btn-ghost" style={{ padding: "5px 10px", fontSize: 12 }} onClick={() => copyText(s.message || "", notify, "Suggestion copied.")}>Copy</button>
+              <button className="pp-btn pp-btn-ghost" style={{ padding: 5, borderRadius: 999 }} onClick={() => removeSuggestion(s.id)} aria-label="Delete suggestion" title="Delete suggestion"><Trash size={13} /></button>
+            </div>
+            <div style={{ fontSize: 14, lineHeight: 1.6, marginTop: 10, whiteSpace: "pre-wrap" }}>{s.message}</div>
+            <div style={{ display: "flex", gap: 8, alignItems: "center", marginTop: 10 }}>
+              <span className="pp-sub" style={{ fontSize: 12 }}>Status</span>
+              <select className="pp-select" style={{ padding: "5px 8px", fontSize: 12.5 }} value={s.status || "new"} onChange={(e) => setSuggestionStatus(s.id, e.target.value)}>
+                {SUGGESTION_STATUS_OPTIONS.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+              </select>
+            </div>
+          </div>
+        ))}
+      </div>
+    );
+  }
+
+  return (
+    <div>
+      <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 14, flexWrap: "wrap", marginBottom: 16 }}>
+        <div>
+          <div className="pp-eyebrow">Admin only</div>
+          <div className="pp-h" style={{ fontSize: 24, marginTop: 4 }}>Survey Inbox</div>
+          <div className="pp-sub" style={{ marginTop: 4, maxWidth: 560 }}>Anonymous survey answers and free-text suggestions from students.</div>
+        </div>
+        <button className="pp-btn pp-btn-primary" style={{ padding: "9px 16px" }} onClick={copyReport}>Copy report</button>
+      </div>
+
+      <div className="pp-strip">
+        <StatTile label="Responses" foot="Anonymous student replies"><div style={big}>{filtered.length}</div></StatTile>
+        <StatTile label="Usefulness" foot={`Ease ${filtered.length ? avgEase.toFixed(1) : "—"} / 5`}><div style={big}>{filtered.length ? avgUsefulness.toFixed(1) : "—"}<span style={unit}>/ 5</span></div></StatTile>
+        <StatTile label="Suggestions" foot={`${allSuggestions.filter((s) => (s.status || "new") !== "done").length} still open`}><div style={big}>{allSuggestions.length}</div></StatTile>
+      </div>
+
+      {view !== "suggestions" && (
+        <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", marginBottom: 16 }}>
+          <div style={{ width: 180 }}><GradeSelect value={gradeFilter} onChange={setGradeFilter} includeAll label="Filter by grade" /></div>
+          <span className="pp-sub" style={{ fontSize: 12 }}>{filtered.length} of {allResponses.length} response{allResponses.length === 1 ? "" : "s"}</span>
+        </div>
+      )}
+
+      <div className="pp-seg" role="tablist" aria-label="Survey inbox sections" style={{ marginBottom: 20 }}>
+        {[["overview", "Overview"], ["responses", "Responses"], ["suggestions", "Suggestions"]].map(([id, label]) => (
+          <button key={id} role="tab" aria-selected={view === id} onClick={() => setView(id)}>{label}</button>
+        ))}
+      </div>
+
+      {view === "overview" && renderOverview()}
+      {view === "responses" && renderResponses()}
+      {view === "suggestions" && renderSuggestions()}
+    </div>
+  );
+}
+
 /* ---------------------------------------------------------------------- */
 /* Global search — one search box that looks across Notes, Videos, Past   */
 /* Papers, and the Checklist at once.                                     */
@@ -3538,7 +4138,9 @@ const TABS = [
   { id: "flashcards", label: "Study Hub", icon: Star },
   { id: "tools", label: "Tracker", icon: Clock },
   { id: "saved", label: "Saved", icon: Bookmark },
-  { id: "contact", label: "Contact", icon: Mail }
+  { id: "survey", label: "Survey", icon: ListChecks },
+  { id: "contact", label: "Contact", icon: Mail },
+  { id: "survey-inbox", label: "Survey Inbox", icon: MessageSquare, adminOnly: true }
 ];
 
 function MainApp({ user, onChangeGrade, onSwitchRole, theme, setTheme }) {
@@ -3551,6 +4153,8 @@ function MainApp({ user, onChangeGrade, onSwitchRole, theme, setTheme }) {
   const [libraryFiles, libraryFilesReady] = useCollection("libraryFiles", undefined, wanted.has("files"));
   const [feedbackList] = useCollection("feedback", undefined, wanted.has("feedback"));
   const [flashDecks, flashDecksReady] = useCollection("flashDecks", undefined, wanted.has("flashcards"));
+  const [surveyResponses, surveyResponsesReady] = useCollection("surveyResponses", { orderBy: "updatedAt" }, wanted.has("surveyResponses"));
+  const [surveySuggestions, surveySuggestionsReady] = useCollection("suggestions", { orderBy: "createdAt" }, wanted.has("suggestions"));
 
   // Each tab gets a browser history entry, so the phone's Back gesture returns to the previous tab instead of leaving the site.
   const [tab, setTabRaw] = useState(() => (window.history.state && window.history.state.ppTab) || "notes");
@@ -3572,7 +4176,7 @@ function MainApp({ user, onChangeGrade, onSwitchRole, theme, setTheme }) {
   const notesShown = useMemo(() => (user.grade ? notes.filter((n) => n.grade === user.grade) : notes), [notes, user.grade]);
   const videosShown = useMemo(() => (user.grade ? videos.filter((v) => v.grade === user.grade) : videos), [videos, user.grade]);
   const filesShown = useMemo(() => (user.grade ? libraryFiles.filter((f) => !f.grade || f.grade === user.grade || f.grade === ALL_GRADES) : libraryFiles), [libraryFiles, user.grade]);
-  const TAB_NEEDS = { notes: ["notes"], videos: ["videos"], files: ["files"], papers: [], saved: ["notes", "videos", "files"], tools: [], flashcards: ["flashcards"], contact: [] };
+  const TAB_NEEDS = { notes: ["notes"], videos: ["videos"], files: ["files"], papers: [], saved: ["notes", "videos", "files"], tools: [], flashcards: ["flashcards"], survey: [], contact: [], "survey-inbox": ["surveyResponses", "suggestions"] };
   useEffect(() => { want(...(TAB_NEEDS[tab] || [])); if (tab === "contact" && user.role === "admin") want("feedback"); }, [tab, want]);
   useEffect(() => { if (showSearch) want("notes", "videos", "files"); }, [showSearch, want]);
   const [toast, setToast] = useState(null);
@@ -3797,8 +4401,9 @@ function MainApp({ user, onChangeGrade, onSwitchRole, theme, setTheme }) {
   const deleteNote = (n) => deleteWithUndo("notes", [n], `"${n.title}"`, noteFileIds(n));
   const deleteVideo = (v) => deleteWithUndo("videos", [v], `"${v.title}"`);
 
-  const READY = { notes: notesReady, videos: videosReady, files: libraryFilesReady, flashcards: flashDecksReady };
+  const READY = { notes: notesReady, videos: videosReady, files: libraryFilesReady, flashcards: flashDecksReady, surveyResponses: surveyResponsesReady, suggestions: surveySuggestionsReady };
   const dataReady = (TAB_NEEDS[tab] || []).every((n) => READY[n]);
+  const visibleTabs = TABS.filter((t) => !t.adminOnly || user.role === "admin");
 
   return (
     <ToastContext.Provider value={notify}>
@@ -3817,8 +4422,8 @@ function MainApp({ user, onChangeGrade, onSwitchRole, theme, setTheme }) {
               <LogOut size={13} style={{ color: "var(--muted)" }} />
             </button>
           </div>
-          <nav className="pp-scrollbar" style={{ maxWidth: 1040, margin: "0 auto", padding: "0 20px 12px", display: "flex", gap: 20, overflowX: "auto" }}>
-            {TABS.map((t) => (
+          <nav className="pp-scrollbar" style={{ maxWidth: 1040, margin: "0 auto", padding: `0 ${user.role === "admin" ? 12 : 20}px 12px`, display: "flex", gap: user.role === "admin" ? 3 : 12, overflowX: "auto" }}>
+            {visibleTabs.map((t) => (
               <div key={t.id} className={`pp-tab ${tab === t.id ? "active" : ""}`} style={{ padding: "10px 2px", fontSize: 14, display: "flex", alignItems: "center", gap: 6 }} onClick={() => setTab(t.id)}>
                 <t.icon size={14} /> {t.label}
               </div>
@@ -3835,6 +4440,8 @@ function MainApp({ user, onChangeGrade, onSwitchRole, theme, setTheme }) {
               {tab === "papers" && <PastPapersView />}
               {tab === "tools" && <ToolsView />}
               {tab === "flashcards" && <StudyHub sharedDecks={flashDecks} user={user} notify={notify} onGo={setTab} />}
+              {tab === "survey" && <SurveyView user={user} />}
+              {tab === "survey-inbox" && user.role === "admin" && <SurveyInboxView responses={surveyResponses} suggestions={surveySuggestions} />}
               {tab === "contact" && <ContactView isAdmin={user.role === "admin"} feedback={feedbackList} />}
               {tab === "saved" && <SavedView notes={notes} videos={videos} files={libraryFiles}
                 lastNoteId={lastNoteId} lastVideoId={lastVideoId} lastFileId={lastFileId}

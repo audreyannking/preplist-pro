@@ -5,7 +5,8 @@ rules_version = '2';
 // Everyone can READ the study material. Only ADMINS can change it. An admin is a
 // real email+password login whose username is in adminList() below.
 // Students (silent anonymous sign-in) may only create/manage their own flashcard
-// decks and send feedback, with size limits.
+// decks, send feedback, submit their own survey response, and send suggestions,
+// with size limits.
 service cloud.firestore {
   match /databases/{database}/documents {
 
@@ -60,6 +61,63 @@ service cloud.firestore {
         && request.resource.data.rating is int && request.resource.data.rating >= 1 && request.resource.data.rating <= 5
         && request.resource.data.comment is string && request.resource.data.comment.size() <= 300;
       allow read, delete: if isAdmin();
+    }
+
+    function validSurveyResponse(d) {
+      return d.keys().hasOnly([
+          'authorUid', 'role', 'grade', 'surveyVersion', 'frequency', 'featuresUsed',
+          'mostUseful', 'improveFirst', 'ease', 'usefulness', 'recommend',
+          'biggestIssue', 'subjectNeed', 'createdAt', 'updatedAt'
+        ])
+        && d.keys().hasAll([
+          'authorUid', 'role', 'grade', 'surveyVersion', 'frequency', 'featuresUsed',
+          'mostUseful', 'improveFirst', 'ease', 'usefulness', 'recommend',
+          'biggestIssue', 'subjectNeed', 'createdAt', 'updatedAt'
+        ])
+        && d.authorUid is string
+        && d.role in ['student', 'admin']
+        && d.grade is string && d.grade.size() <= 20
+        && d.surveyVersion == 1
+        && d.frequency in ['first', 'rarely', 'monthly', 'weekly', 'most']
+        && d.featuresUsed is list && d.featuresUsed.size() > 0 && d.featuresUsed.size() <= 8
+        && d.featuresUsed.hasOnly(['notes', 'videos', 'files', 'papers', 'study', 'tracker', 'saved', 'none'])
+        && d.mostUseful in ['notes', 'videos', 'files', 'papers', 'study', 'tracker', 'saved', 'unsure']
+        && d.improveFirst in ['notes', 'videos', 'files', 'papers', 'search', 'tools', 'speed', 'other']
+        && d.ease is int && d.ease >= 1 && d.ease <= 5
+        && d.usefulness is int && d.usefulness >= 1 && d.usefulness <= 5
+        && d.recommend is int && d.recommend >= 0 && d.recommend <= 10
+        && d.biggestIssue is string && d.biggestIssue.size() <= 400
+        && d.subjectNeed is string && d.subjectNeed.size() <= 120
+        && d.createdAt is int && d.updatedAt is int;
+    }
+    match /surveyResponses/{id} {
+      allow read, delete: if isAdmin();
+      allow create, update: if signedIn()
+        && request.auth.uid == id
+        && request.resource.data.authorUid == request.auth.uid
+        && validSurveyResponse(request.resource.data);
+    }
+
+    function validSuggestion(d) {
+      return d.keys().hasOnly(['authorUid', 'role', 'grade', 'message', 'status', 'surveyVersion', 'createdAt', 'updatedAt'])
+        && d.keys().hasAll(['authorUid', 'role', 'grade', 'message', 'status', 'surveyVersion', 'createdAt', 'updatedAt'])
+        && d.authorUid is string
+        && d.role in ['student', 'admin']
+        && d.grade is string && d.grade.size() <= 20
+        && d.message is string && d.message.size() > 0 && d.message.size() <= 500
+        && d.status == 'new'
+        && d.surveyVersion == 1
+        && d.createdAt is int && d.updatedAt is int;
+    }
+    match /suggestions/{id} {
+      allow read, delete: if isAdmin();
+      allow create: if signedIn()
+        && request.resource.data.authorUid == request.auth.uid
+        && validSuggestion(request.resource.data);
+      allow update: if isAdmin()
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'updatedAt'])
+        && request.resource.data.status in ['new', 'reviewed', 'planned', 'done']
+        && request.resource.data.updatedAt is int;
     }
 
     // Anything else is closed.
