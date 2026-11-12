@@ -588,6 +588,23 @@ function GlobalStyle() {
       @keyframes pp-spin { to { transform: rotate(360deg); } }
       @media (prefers-reduced-motion: reduce) { .pp-stamp, .pp-pop, .pp-btn { animation: none !important; transition: none !important; } }
 
+      .pp-seg { display: inline-flex; padding: 4px; gap: 2px; background: color-mix(in srgb, var(--text) 7%, transparent); border-radius: 12px; }
+      .pp-seg button { border: none; background: transparent; color: var(--muted); font: inherit; font-weight: 600; font-size: 13.5px; padding: 7px 18px; border-radius: 9px; cursor: pointer; transition: background 0.15s ease, color 0.15s ease; }
+      .pp-seg button[aria-selected='true'] { background: var(--surface); color: var(--text); box-shadow: 0 1px 3px rgba(13,27,42,0.14); }
+      .pp-sec { padding: 20px; }
+      .pp-eyebrow { font-size: 11.5px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); }
+      .pp-h { font-size: 18px; font-weight: 700; letter-spacing: -0.02em; }
+      .pp-sub { font-size: 13px; color: var(--muted); line-height: 1.5; }
+      .pp-field { padding: 9px 12px; font-size: 14px; }
+      .pp-bar { height: 8px; border-radius: 99px; background: color-mix(in srgb, var(--text) 8%, transparent); position: relative; overflow: hidden; }
+      .pp-bar > i { position: absolute; left: 0; top: 0; bottom: 0; border-radius: 99px; background: var(--accent); transition: width 0.3s ease; }
+      .pp-deck { appearance: none; -webkit-appearance: none; text-align: left; font: inherit; color: inherit; padding: 0; overflow: hidden; cursor: pointer; display: flex; flex-direction: column; width: 100%; }
+      .pp-deck:hover { transform: translateY(-2px); box-shadow: 0 2px 4px rgba(13,27,42,0.06), 0 10px 24px rgba(13,27,42,0.08); border-color: color-mix(in srgb, var(--accent) 35%, var(--border)); }
+      .pp-strip { display: grid; gap: 14px; margin-bottom: 16px; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .pp-strip > :nth-child(3) { grid-column: 1 / -1; }
+      @media (min-width: 700px) { .pp-strip { grid-template-columns: repeat(3, minmax(0, 1fr)); } .pp-strip > :nth-child(3) { grid-column: auto; order: 2; } .pp-strip > :nth-child(2) { order: 3; } }
+      .pp-grid-tools { display: grid; gap: 16px; grid-template-columns: minmax(0, 1fr); align-items: start; }
+      @media (min-width: 900px) { .pp-grid-tools { grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr); } }
       .pp-twoup { display: flex; gap: 10px; }
       .pp-split { display: flex; gap: 10px; }
       .katex { font-size: 1.05em; }
@@ -2543,34 +2560,42 @@ function TechniquesView({ onGo, onSwitchToCards }) {
   const [open, setOpen] = useState(null);
   return (
     <div>
-      <div className="pp-card" style={{ borderRadius: 16, padding: 16, marginBottom: 16, fontSize: 13.5, lineHeight: 1.55 }}>
-        <div className="pp-serif" style={{ fontSize: 16, fontWeight: 700, marginBottom: 4 }}>Study smarter, not longer</div>
-        Research on how students learn consistently finds that <b>testing yourself</b>, <b>spacing out your revision</b> and <b>mixing topics</b> work much better than rereading or highlighting. The first three methods below are the strongest. Tap a method to see how to do it.
+      <div className="pp-sub" style={{ maxWidth: 640, marginBottom: 18 }}>
+        Testing yourself, spacing out your revision and mixing topics all beat rereading and highlighting. The first three methods are the strongest. Tap a method to see the steps.
       </div>
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))", gap: 14 }}>
-        {STUDY_TECHNIQUES.map((t) => {
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(290px, 1fr))", gap: 14 }}>
+        {STUDY_TECHNIQUES.map((t, i) => {
           const c = subjectColor(t.color);
           const on = open === t.name;
           return (
-            <div key={t.name} className="pp-card" style={{ borderRadius: 16, padding: 0, overflow: "hidden", display: "flex", flexDirection: "column" }}>
-              <div style={{ background: c.bg, color: c.fg, padding: "12px 14px", display: "flex", alignItems: "center", gap: 8 }}>
-                <span style={{ fontSize: 15, fontWeight: 700, flex: 1 }}>{t.name}</span>
-                <span style={{ background: "rgba(255,255,255,0.6)", padding: "2px 9px", borderRadius: 999, fontSize: 11.5, fontWeight: 700 }}>{t.tag}</span>
+            <div key={t.name} className="pp-card" style={{ padding: 18, display: "flex", flexDirection: "column", gap: 10 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                <span style={{ width: 30, height: 30, borderRadius: 10, background: c.bg, color: c.fg, display: "inline-flex", alignItems: "center", justifyContent: "center", fontSize: 13, fontWeight: 700, flexShrink: 0 }}>{i + 1}</span>
+                <span style={{ fontSize: 15.5, fontWeight: 700, letterSpacing: "-0.01em", flex: 1 }}>{t.name}</span>
+                <span style={{ background: c.bg, color: c.fg, padding: "2px 9px", borderRadius: 999, fontSize: 11.5, fontWeight: 700, whiteSpace: "nowrap" }}>{t.tag}</span>
               </div>
-              <div style={{ padding: "12px 14px 14px", display: "flex", flexDirection: "column", gap: 8, flex: 1 }}>
-                <div style={{ fontSize: 13.5, lineHeight: 1.5 }}>{t.blurb}</div>
-                <div style={{ fontSize: 12, color: "var(--muted)" }}>{t.time} · Best for: {t.best}</div>
-                {on && <ol style={{ margin: "2px 0 0", paddingLeft: 20, fontSize: 13.5, lineHeight: 1.6 }}>{t.steps.map((st) => <li key={st}>{st}</li>)}</ol>}
-                <div style={{ display: "flex", gap: 8, marginTop: "auto", paddingTop: 4, flexWrap: "wrap" }}>
-                  <button className="pp-btn pp-btn-ghost" style={{ padding: "6px 12px", fontSize: 12.5 }} onClick={() => setOpen(on ? null : t.name)}>{on ? "Hide steps" : "How to do it"}</button>
-                  {t.go && <button className="pp-btn pp-btn-primary" style={{ padding: "6px 12px", fontSize: 12.5 }} onClick={() => (t.go[0] === "flashcards" ? onSwitchToCards() : onGo(t.go[0]))}>{t.go[1]}</button>}
+              <div style={{ fontSize: 13.5, lineHeight: 1.55 }}>{t.blurb}</div>
+              <div className="pp-sub" style={{ display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap", fontSize: 12.5 }}>
+                <Clock size={13} /> {t.time} <span style={{ opacity: 0.5 }}>·</span> {t.best}
+              </div>
+              {on && (
+                <div style={{ display: "flex", flexDirection: "column", gap: 8, paddingTop: 4 }}>
+                  {t.steps.map((st, k) => (
+                    <div key={st} style={{ display: "flex", gap: 10, fontSize: 13.5, lineHeight: 1.5 }}>
+                      <span style={{ flexShrink: 0, width: 20, height: 20, borderRadius: 99, border: "1.5px solid var(--border)", fontSize: 11, fontWeight: 700, display: "inline-flex", alignItems: "center", justifyContent: "center", color: "var(--muted)" }}>{k + 1}</span>
+                      <span>{st}</span>
+                    </div>
+                  ))}
                 </div>
+              )}
+              <div style={{ display: "flex", gap: 8, marginTop: "auto", paddingTop: 4, flexWrap: "wrap" }}>
+                <button className="pp-btn pp-btn-ghost" style={{ padding: "7px 13px", fontSize: 12.5 }} onClick={() => setOpen(on ? null : t.name)}>{on ? "Hide steps" : "How to do it"}</button>
+                {t.go && <button className="pp-btn pp-btn-primary" style={{ padding: "7px 13px", fontSize: 12.5 }} onClick={() => (t.go[0] === "flashcards" ? onSwitchToCards() : onGo(t.go[0]))}>{t.go[1]}</button>}
               </div>
             </div>
           );
         })}
       </div>
-      <div style={{ fontSize: 12.5, color: "var(--muted)", marginTop: 16 }}>Rereading and highlighting on their own are usually the weakest ways to study. They feel productive but don't build memory much. Use them to get started, then switch to testing yourself.</div>
     </div>
   );
 }
@@ -2579,9 +2604,9 @@ function StudyHub({ sharedDecks, user, notify, onGo }) {
   const [sub, setSub] = useLocalState("preplist:studySub", "cards");
   return (
     <div>
-      <div style={{ display: "flex", gap: 8, marginBottom: 16 }} role="tablist" aria-label="Study hub sections">
+      <div className="pp-seg" role="tablist" aria-label="Study hub sections" style={{ marginBottom: 20 }}>
         {[["cards", "Flashcards"], ["techniques", "Study techniques"]].map(([id, label]) => (
-          <button key={id} role="tab" aria-selected={sub === id} className={`pp-btn ${sub === id ? "pp-btn-primary" : "pp-btn-ghost"}`} style={{ padding: "7px 16px", fontSize: 13.5 }} onClick={() => setSub(id)}>{label}</button>
+          <button key={id} role="tab" aria-selected={sub === id} onClick={() => setSub(id)}>{label}</button>
         ))}
       </div>
       {sub === "techniques" ? <TechniquesView onGo={onGo} onSwitchToCards={() => setSub("cards")} /> : <FlashcardsView sharedDecks={sharedDecks} user={user} notify={notify} />}
@@ -2619,6 +2644,7 @@ function FlashcardsView({ sharedDecks, user, notify }) {
   const [ocrBusy, setOcrBusy] = useState(false);
   const [proposals, setProposals] = useState(null);
   const [rawText, setRawText] = useState("");
+  const [showNew, setShowNew] = useState(false);
 
   async function readPhoto(e) {
     const file = e.target.files && e.target.files[0];
@@ -2656,11 +2682,11 @@ function FlashcardsView({ sharedDecks, user, notify }) {
       ref.set({ name: newDeck.trim(), subject: newSubject, grade: newGrade, cards: [], authorUid: auth.currentUser ? auth.currentUser.uid : null, authorRole: user.role, createdAt: Date.now() })
         .then(() => notify({ kind: "ok", text: "Deck is live for your grade." }))
         .catch((e) => notify({ kind: "error", text: friendlyDbError(e) }));
-      setDeckId(`s:${ref.id}`); setNewDeck("");
+      setDeckId(`s:${ref.id}`); setNewDeck(""); setShowNew(false);
       return;
     }
     const d = { id: uid(), name: newDeck.trim(), cards: [] };
-    setDecks((prev) => [...(prev || []), d]); setDeckId(d.id); setNewDeck("");
+    setDecks((prev) => [...(prev || []), d]); setDeckId(d.id); setNewDeck(""); setShowNew(false);
   }
   async function addCards(list) {
     if (deck && deck.shared) {
@@ -2707,109 +2733,191 @@ function FlashcardsView({ sharedDecks, user, notify }) {
     setCard(pickCard(others));
   }
 
+  useEffect(() => {
+    if (!(studying && deck && card)) return;
+    const onKey = (e) => {
+      if (e.target && /INPUT|TEXTAREA|SELECT/.test(e.target.tagName)) return;
+      if (!flipped && (e.key === " " || e.key === "Enter")) { e.preventDefault(); setFlipped(true); }
+      else if (flipped && (e.key === "1" || e.key === "ArrowLeft")) grade(false);
+      else if (flipped && (e.key === "2" || e.key === "ArrowRight")) grade(true);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  });
+
+  const mastered = deck ? deck.cards.filter((c) => c.box >= 3).length : 0;
+  const pctOf = (d) => (d.cards.length ? (d.cards.filter((c) => c.box >= 3).length / d.cards.length) * 100 : 0);
+  const canCreate = newDeck.trim() && (!shareIt || (newSubject && newGrade));
+
   if (studying && deck && card) {
     return (
-      <div>
-        <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 12 }}>
-          <div style={{ fontSize: 13, fontWeight: 700, flex: 1 }}>{deck.name} · {done} reviewed</div>
-          <button className="pp-btn pp-btn-ghost" style={{ padding: "6px 12px", fontSize: 12.5 }} onClick={() => setStudying(false)}>Finish</button>
-        </div>
-        <div className="pp-card" onClick={() => setFlipped(true)} style={{ borderRadius: 12, padding: 28, minHeight: 200, display: "flex", flexDirection: "column", justifyContent: "center", textAlign: "center", cursor: flipped ? "default" : "pointer" }}>
-          <div style={{ fontSize: 11.5, color: "var(--muted)", marginBottom: 8 }}>{flipped ? "Answer" : "Question — tap to reveal"}</div>
-          <div className="pp-serif" style={{ fontSize: 20, fontWeight: 600, lineHeight: 1.45 }}><MathText text={flipped ? card.back : card.front} /></div>
-        </div>
-        {flipped && (
-          <div style={{ display: "flex", gap: 10, justifyContent: "center", marginTop: 14 }}>
-            <button className="pp-btn pp-btn-ghost" style={{ padding: "10px 22px" }} onClick={() => grade(false)}>Again</button>
-            <button className="pp-btn pp-btn-primary" style={{ padding: "10px 22px" }} onClick={() => grade(true)}>Got it</button>
+      <div style={{ maxWidth: 640, margin: "0 auto" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 12 }}>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ fontSize: 14, fontWeight: 700, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{deck.name}</div>
+            <div className="pp-sub" style={{ fontSize: 12.5 }}>{done} reviewed · {mastered} of {deck.cards.length} mastered</div>
           </div>
-        )}
+          <button className="pp-btn pp-btn-ghost" style={{ padding: "7px 14px", fontSize: 13 }} onClick={() => setStudying(false)}>Finish</button>
+        </div>
+        <div className="pp-bar" style={{ marginBottom: 18 }}><i style={{ width: `${pctOf(deck)}%` }} /></div>
+        <div className="pp-card" onClick={() => setFlipped(true)} style={{ padding: "36px 28px", minHeight: 270, display: "flex", flexDirection: "column", justifyContent: "center", textAlign: "center", cursor: flipped ? "default" : "pointer", background: flipped ? "color-mix(in srgb, var(--accent) 7%, var(--surface))" : "var(--surface)" }}>
+          <div className="pp-eyebrow" style={{ marginBottom: 14 }}>{flipped ? "Answer" : "Question"}</div>
+          <div style={{ fontSize: 22, fontWeight: 600, lineHeight: 1.45, letterSpacing: "-0.01em" }}><MathText text={flipped ? card.back : card.front} /></div>
+          {!flipped && <div className="pp-sub" style={{ marginTop: 18, fontSize: 12.5 }}>Tap the card to reveal</div>}
+        </div>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginTop: 14, minHeight: 50 }}>
+          {flipped && <>
+            <button className="pp-btn pp-btn-ghost" style={{ padding: "13px 0", fontSize: 15 }} onClick={() => grade(false)}>Again</button>
+            <button className="pp-btn pp-btn-primary" style={{ padding: "13px 0", fontSize: 15 }} onClick={() => grade(true)}>Got it</button>
+          </>}
+        </div>
       </div>
     );
   }
 
+  const deckTiles = (list) => (
+    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(230px, 1fr))", gap: 14 }}>
+      {list.map((d) => {
+        const c = subjectColor(d.shared ? d.subject : "");
+        return (
+          <button key={d.id} className="pp-card pp-deck" onClick={() => setDeckId(d.id)}>
+            <div style={{ background: c.bg, color: c.fg, padding: "9px 14px", fontSize: 12, fontWeight: 700, display: "flex", justifyContent: "space-between", gap: 8 }}>
+              <span>{d.shared ? d.subject : "Private"}</span><span>{d.shared ? d.grade : "This device"}</span>
+            </div>
+            <div style={{ padding: "14px 14px 16px", display: "flex", flexDirection: "column", gap: 8, flex: 1 }}>
+              <div style={{ fontSize: 15, fontWeight: 700, lineHeight: 1.3, letterSpacing: "-0.01em" }}>{d.name}</div>
+              <div className="pp-sub" style={{ fontSize: 12.5 }}>{d.cards.length} card{d.cards.length === 1 ? "" : "s"}</div>
+              <div className="pp-bar" style={{ marginTop: "auto" }}><i style={{ width: `${pctOf(d)}%` }} /></div>
+            </div>
+          </button>
+        );
+      })}
+    </div>
+  );
+
   return (
     <div>
-      <div className="pp-card" style={{ borderRadius: 10, padding: 14, marginBottom: 16, fontSize: 13, lineHeight: 1.55 }}>
-        <div className="pp-serif" style={{ fontSize: 15.5, fontWeight: 700, marginBottom: 4 }}>Flashcards</div>
-        Study decks other students made for your grade and subject, or make your own and share it with everyone. Cards you get right show up less; cards you miss come back sooner. Use $...$ for maths. Your progress is saved on this device.
-      </div>
-      <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 10 }}>
-        <div style={{ width: 168 }}><SubjectSelect value={fSubject} onChange={setFSubject} includeAll /></div>
-        {!user.grade && <div style={{ width: 150 }}><GradeSelect value={fGrade} onChange={setFGrade} includeAll /></div>}
-        <select className="pp-select" aria-label="Deck" style={{ padding: "8px 10px", fontSize: 14, flex: 1, minWidth: 190 }} value={deckId} onChange={(e) => setDeckId(e.target.value)}>
-          <option value="">{shared.length ? "Choose a deck…" : "No shared decks yet — make one below"}</option>
-          {shared.length > 0 && <optgroup label={user.grade ? `Shared · ${gradeLabel(user.grade)}` : "Shared decks"}>
-            {shared.map((d) => <option key={d.id} value={d.id}>{d.subject}{user.grade ? "" : ` · ${d.grade}`} — {d.name} ({d.cards.length})</option>)}
-          </optgroup>}
-          {(localDecks || []).length > 0 && <optgroup label="Private (this device only)">
-            {localDecks.map((d) => <option key={d.id} value={d.id}>{d.name} ({d.cards.length})</option>)}
-          </optgroup>}
-        </select>
-      </div>
-      <div className="pp-card" style={{ borderRadius: 10, padding: 12, marginBottom: 14 }}>
-        <div style={{ fontSize: 13.5, fontWeight: 700, marginBottom: 8 }}>Make a new deck</div>
-        <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
-          <input className="pp-input" style={{ flex: 2, minWidth: 150, padding: "8px 10px", fontSize: 14 }} placeholder="Deck name, e.g. Cells and organelles" value={newDeck} onChange={(e) => setNewDeck(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") addDeck(); }} />
-          {shareIt && <div style={{ width: 160 }}><SubjectSelect value={newSubject} onChange={setNewSubject} /></div>}
-          {shareIt && <div style={{ width: 150 }}><select className="pp-select" aria-label="Grade" style={{ padding: "9px 10px", fontSize: 14, width: "100%" }} value={newGrade} onChange={(e) => setNewGrade(e.target.value)}>
-            <option value="" disabled>Grade…</option>
-            <option value={ALL_GRADES}>All grades</option>
-            {GRADES.map((g) => <option key={g} value={g}>{g}</option>)}
-          </select></div>}
-          <button className="pp-btn pp-btn-primary" style={{ padding: "8px 16px", opacity: newDeck.trim() ? 1 : 0.5 }} disabled={!newDeck.trim()} onClick={addDeck}>Create deck</button>
-        </div>
-        <label style={{ display: "flex", gap: 6, alignItems: "center", fontSize: 12.5, color: "var(--muted)", marginTop: 8 }}>
-          <input type="checkbox" checked={shareIt} onChange={(e) => setShareIt(e.target.checked)} style={{ accentColor: "var(--accent)" }} /> Share with everyone in that grade and subject
-        </label>
-      </div>
-      {deck && (
+      {!deck ? (
+        <>
+          <div style={{ display: "flex", alignItems: "flex-end", gap: 12, flexWrap: "wrap", marginBottom: 16 }}>
+            <div style={{ flex: 1, minWidth: 220 }}>
+              <div className="pp-h">Flashcards</div>
+              <div className="pp-sub" style={{ marginTop: 2 }}>Decks from other students for your grade. Cards you miss come back sooner. Use $...$ for maths.</div>
+            </div>
+            <button className="pp-btn pp-btn-primary" style={{ padding: "9px 16px", fontSize: 14, display: "inline-flex", alignItems: "center", gap: 6 }} onClick={() => setShowNew(true)}><Plus size={15} /> New deck</button>
+          </div>
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 18 }}>
+            <div style={{ width: 168 }}><SubjectSelect value={fSubject} onChange={setFSubject} includeAll /></div>
+            {!user.grade && <div style={{ width: 150 }}><GradeSelect value={fGrade} onChange={setFGrade} includeAll /></div>}
+          </div>
+          {shared.length === 0 && (localDecks || []).length === 0 && (
+            <EmptyState icon={Star} title="No decks yet" body="Make the first one and everyone in your grade can study it." />
+          )}
+          {shared.length > 0 && <div style={{ marginBottom: 22 }}>
+            <div className="pp-eyebrow" style={{ marginBottom: 10 }}>{user.grade ? `Shared · ${gradeLabel(user.grade)}` : "Shared decks"}</div>
+            {deckTiles(shared)}
+          </div>}
+          {(localDecks || []).length > 0 && <div>
+            <div className="pp-eyebrow" style={{ marginBottom: 10 }}>Private · this device only</div>
+            {deckTiles(localDecks)}
+          </div>}
+        </>
+      ) : (
         <div>
-          <div style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 12, flexWrap: "wrap" }}>
-            <button className="pp-btn pp-btn-primary" style={{ padding: "9px 20px", opacity: deck.cards.length ? 1 : 0.5 }} disabled={!deck.cards.length} onClick={startStudy}>Study this deck</button>
-            {canEdit(deck) && <button className="pp-btn pp-btn-ghost" style={{ padding: "9px 14px", fontSize: 13 }} onClick={removeDeck}>Delete deck</button>}
-            {deck.shared && <span style={{ fontSize: 12, color: "var(--muted)" }}>Shared deck · {deck.subject} · {deck.grade}</span>}
+          <button className="pp-btn pp-btn-ghost" style={{ padding: "6px 12px", fontSize: 13, marginBottom: 14 }} onClick={() => setDeckId("")}>← All decks</button>
+          <div className="pp-card pp-sec" style={{ marginBottom: 16 }}>
+            <div style={{ display: "flex", gap: 12, alignItems: "flex-start", flexWrap: "wrap" }}>
+              <div style={{ flex: 1, minWidth: 200 }}>
+                <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 8 }}>
+                  {deck.shared && <Tag text={deck.subject} />}
+                  <GradeTag text={deck.shared ? deck.grade : "Private · this device"} />
+                </div>
+                <div style={{ fontSize: 21, fontWeight: 700, letterSpacing: "-0.02em", lineHeight: 1.25 }}>{deck.name}</div>
+                <div className="pp-sub" style={{ marginTop: 4 }}>{deck.cards.length} card{deck.cards.length === 1 ? "" : "s"} · {mastered} mastered</div>
+              </div>
+              <div style={{ display: "flex", gap: 8 }}>
+                {canEdit(deck) && <button className="pp-btn pp-btn-ghost" style={{ padding: "9px 11px" }} onClick={removeDeck} aria-label="Delete deck"><Trash size={15} /></button>}
+                <button className="pp-btn pp-btn-primary" style={{ padding: "9px 22px", opacity: deck.cards.length ? 1 : 0.5 }} disabled={!deck.cards.length} onClick={startStudy}>Study deck</button>
+              </div>
+            </div>
+            <div className="pp-bar" style={{ marginTop: 16 }}><i style={{ width: `${pctOf(deck)}%` }} /></div>
           </div>
-          {canEdit(deck) && <><div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 14 }}>
-            <input className="pp-input" style={{ flex: 1, minWidth: 160, padding: "8px 10px", fontSize: 14 }} placeholder="Front (question / term)" value={front} onChange={(e) => setFront(e.target.value)} />
-            <input className="pp-input" style={{ flex: 1, minWidth: 160, padding: "8px 10px", fontSize: 14 }} placeholder="Back (answer)" value={back} onChange={(e) => setBack(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") addCard(); }} />
-            <button className="pp-btn pp-btn-primary" style={{ padding: "8px 16px", opacity: front.trim() && back.trim() ? 1 : 0.5 }} disabled={!(front.trim() && back.trim())} onClick={addCard}>Add card</button>
-          </div>
-          <div className="pp-card" style={{ borderRadius: 10, padding: 12, marginBottom: 14 }}>
-            <div style={{ fontSize: 13.5, fontWeight: 700, marginBottom: 4 }}>Make cards from a photo</div>
-            <div style={{ fontSize: 12.5, color: "var(--muted)", marginBottom: 8 }}>Take or upload a photo of your notes or textbook page. The site reads the text on your device and suggests cards from lines like "Term: definition", questions followed by answers, and "X is Y" sentences. You check them before they're added. Works best on clear, printed text.</div>
-            <input type="file" accept="image/*" onChange={readPhoto} disabled={ocrBusy} className="pp-file-input" aria-label="Photo of notes" />
-            {ocrMsg && <div style={{ fontSize: 12.5, marginTop: 8 }}>{ocrMsg}</div>}
-            {proposals && (
-              <div style={{ marginTop: 10 }}>
-                {proposals.cards.length === 0 ? (
-                  <div style={{ fontSize: 13 }}>I couldn't spot any term/definition pairs in that photo. Try lines written like "Osmosis: movement of water across a membrane", then check the text I read below.</div>
-                ) : (
-                  <>
-                    <div style={{ fontSize: 12.5, fontWeight: 700, marginBottom: 6 }}>{proposals.cards.length} suggested card{proposals.cards.length === 1 ? "" : "s"} — fix anything that's wrong, untick what you don't want</div>
-                    {proposals.cards.map((c, i) => (
-                      <div key={i} style={{ display: "flex", gap: 6, alignItems: "center", marginBottom: 6, flexWrap: "wrap" }}>
-                        <input type="checkbox" checked={c.on} onChange={() => setProposals((p) => ({ ...p, cards: p.cards.map((x, k) => (k === i ? { ...x, on: !x.on } : x)) }))} aria-label={`Include card ${i + 1}`} style={{ accentColor: "var(--accent)" }} />
-                        <input className="pp-input" style={{ flex: 1, minWidth: 130, padding: "6px 8px", fontSize: 13 }} value={c.front} onChange={(e) => setProposals((p) => ({ ...p, cards: p.cards.map((x, k) => (k === i ? { ...x, front: e.target.value } : x)) }))} />
-                        <input className="pp-input" style={{ flex: 1, minWidth: 130, padding: "6px 8px", fontSize: 13 }} value={c.back} onChange={(e) => setProposals((p) => ({ ...p, cards: p.cards.map((x, k) => (k === i ? { ...x, back: e.target.value } : x)) }))} />
-                      </div>
-                    ))}
-                    <button className="pp-btn pp-btn-primary" style={{ padding: "8px 16px", marginTop: 4 }} onClick={addProposals}>Add {proposals.cards.filter((c) => c.on).length} card{proposals.cards.filter((c) => c.on).length === 1 ? "" : "s"} to this deck</button>
-                  </>
+          {canEdit(deck) && (
+            <div className="pp-card pp-sec" style={{ marginBottom: 16 }}>
+              <div className="pp-eyebrow" style={{ marginBottom: 10 }}>Add a card</div>
+              <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                <input className="pp-input pp-field" style={{ flex: 1, minWidth: 160 }} placeholder="Front (question or term)" value={front} onChange={(e) => setFront(e.target.value)} />
+                <input className="pp-input pp-field" style={{ flex: 1, minWidth: 160 }} placeholder="Back (answer)" value={back} onChange={(e) => setBack(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") addCard(); }} />
+                <button className="pp-btn pp-btn-primary" style={{ padding: "9px 18px", opacity: front.trim() && back.trim() ? 1 : 0.5 }} disabled={!(front.trim() && back.trim())} onClick={addCard}>Add</button>
+              </div>
+              <details style={{ marginTop: 14 }}>
+                <summary style={{ fontSize: 13, fontWeight: 600, cursor: "pointer", color: "var(--accent-ink)" }}>Make cards from a photo of your notes</summary>
+                <div className="pp-sub" style={{ margin: "8px 0 10px", fontSize: 12.5 }}>The text is read on your device and turned into suggested cards from lines like "Term: definition". You check them before they're added. Works best on clear, printed text.</div>
+                <input type="file" accept="image/*" onChange={readPhoto} disabled={ocrBusy} className="pp-file-input" aria-label="Photo of notes" />
+                {ocrMsg && <div style={{ fontSize: 12.5, marginTop: 8 }}>{ocrMsg}</div>}
+                {proposals && (
+                  <div style={{ marginTop: 10 }}>
+                    {proposals.cards.length === 0 ? (
+                      <div style={{ fontSize: 13 }}>I couldn't spot any term and definition pairs in that photo. Try lines written like "Osmosis: movement of water across a membrane", then check the text I read below.</div>
+                    ) : (
+                      <>
+                        <div style={{ fontSize: 12.5, fontWeight: 700, marginBottom: 6 }}>{proposals.cards.length} suggested card{proposals.cards.length === 1 ? "" : "s"}. Fix anything wrong and untick what you don't want.</div>
+                        {proposals.cards.map((c, i) => (
+                          <div key={i} style={{ display: "flex", gap: 6, alignItems: "center", marginBottom: 6, flexWrap: "wrap" }}>
+                            <input type="checkbox" checked={c.on} onChange={() => setProposals((p) => ({ ...p, cards: p.cards.map((x, k) => (k === i ? { ...x, on: !x.on } : x)) }))} aria-label={`Include card ${i + 1}`} style={{ accentColor: "var(--accent)" }} />
+                            <input className="pp-input" style={{ flex: 1, minWidth: 130, padding: "6px 8px", fontSize: 13 }} value={c.front} onChange={(e) => setProposals((p) => ({ ...p, cards: p.cards.map((x, k) => (k === i ? { ...x, front: e.target.value } : x)) }))} />
+                            <input className="pp-input" style={{ flex: 1, minWidth: 130, padding: "6px 8px", fontSize: 13 }} value={c.back} onChange={(e) => setProposals((p) => ({ ...p, cards: p.cards.map((x, k) => (k === i ? { ...x, back: e.target.value } : x)) }))} />
+                          </div>
+                        ))}
+                        <button className="pp-btn pp-btn-primary" style={{ padding: "8px 16px", marginTop: 4 }} onClick={addProposals}>Add {proposals.cards.filter((c) => c.on).length} card{proposals.cards.filter((c) => c.on).length === 1 ? "" : "s"}</button>
+                      </>
+                    )}
+                    <details style={{ marginTop: 8 }}><summary style={{ fontSize: 12, color: "var(--muted)", cursor: "pointer" }}>Text I read from the photo</summary><pre style={{ whiteSpace: "pre-wrap", fontSize: 12, margin: "6px 0 0" }}>{rawText || "(nothing)"}</pre></details>
+                  </div>
                 )}
-                <details style={{ marginTop: 8 }}><summary style={{ fontSize: 12, color: "var(--muted)", cursor: "pointer" }}>Text I read from the photo</summary><pre style={{ whiteSpace: "pre-wrap", fontSize: 12, margin: "6px 0 0" }}>{rawText || "(nothing)"}</pre></details>
+              </details>
+            </div>
+          )}
+          {deck.cards.length === 0 ? (
+            <div className="pp-sub" style={{ textAlign: "center", padding: "24px 0" }}>No cards yet. Add your first one above.</div>
+          ) : (
+            <div className="pp-card" style={{ padding: "4px 18px" }}>
+              {deck.cards.map((c, i) => (
+                <div key={c.id} style={{ display: "flex", alignItems: "center", gap: 12, padding: "12px 0", borderTop: i ? "1px solid var(--border)" : "none" }}>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontSize: 14, fontWeight: 600, lineHeight: 1.4 }}><MathText text={c.front} /></div>
+                    <div className="pp-sub" style={{ fontSize: 13 }}><MathText text={c.back} /></div>
+                  </div>
+                  <GradeTag text={`Box ${c.box + 1}`} />
+                  {canEdit(deck) && <button className="pp-btn pp-btn-ghost" style={{ padding: 5, borderRadius: 999 }} onClick={() => removeCard(c)} aria-label="Delete card"><X size={12} /></button>}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+      {showNew && (
+        <Modal title="New deck" onClose={() => setShowNew(false)}>
+          <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+            <label className="pp-sub" style={{ display: "block" }}>Deck name
+              <input className="pp-input pp-field" style={{ width: "100%", marginTop: 4, color: "var(--text)" }} placeholder="e.g. Cells and organelles" value={newDeck} onChange={(e) => setNewDeck(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter" && canCreate) addDeck(); }} autoFocus />
+            </label>
+            <label style={{ display: "flex", gap: 8, alignItems: "center", fontSize: 13.5 }}>
+              <input type="checkbox" checked={shareIt} onChange={(e) => setShareIt(e.target.checked)} style={{ accentColor: "var(--accent)" }} /> Share with everyone in that grade and subject
+            </label>
+            {shareIt && (
+              <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+                <div style={{ flex: 1, minWidth: 150 }}><SubjectSelect value={newSubject} onChange={setNewSubject} /></div>
+                <div style={{ flex: 1, minWidth: 150 }}><select className="pp-select" aria-label="Grade" style={{ padding: "9px 10px", fontSize: 14, width: "100%" }} value={newGrade} onChange={(e) => setNewGrade(e.target.value)}>
+                  <option value="" disabled>Grade…</option>
+                  <option value={ALL_GRADES}>All grades</option>
+                  {GRADES.map((g) => <option key={g} value={g}>{g}</option>)}
+                </select></div>
               </div>
             )}
+            <button className="pp-btn pp-btn-primary" style={{ padding: "11px 0", fontSize: 14.5, opacity: canCreate ? 1 : 0.5 }} disabled={!canCreate} onClick={addDeck}>Create deck</button>
           </div>
-          </>}
-          {deck.cards.map((c) => (
-            <div key={c.id} style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 0", borderTop: "1px solid var(--border)", fontSize: 13 }}>
-              <span style={{ flex: 1, minWidth: 0 }}><b><MathText text={c.front} /></b> — <MathText text={c.back} /></span>
-              <GradeTag text={`Box ${c.box + 1}`} />
-              {canEdit(deck) && <button className="pp-btn pp-btn-ghost" style={{ padding: 4, borderRadius: 999 }} onClick={() => removeCard(c)} aria-label="Delete card"><X size={12} /></button>}
-            </div>
-          ))}
-        </div>
+        </Modal>
       )}
     </div>
   );
@@ -2842,26 +2950,56 @@ function computeStreak(days) {
   return n;
 }
 
-function StreakCard() {
+const dayKey = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+const fmtDate = (s) => new Date(`${s}T00:00:00`).toLocaleDateString(undefined, { weekday: "short", day: "numeric", month: "short", year: "numeric" });
+
+function StatTile({ label, foot, children }) {
+  return (
+    <div className="pp-card" style={{ padding: "16px 18px", display: "flex", flexDirection: "column", gap: 6, minWidth: 0 }}>
+      <div className="pp-eyebrow">{label}</div>
+      {children}
+      {foot && <div className="pp-sub" style={{ fontSize: 12.5, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{foot}</div>}
+    </div>
+  );
+}
+
+function TodayStrip({ exams }) {
   const [days, setDays] = useState(() => readLocal("preplist:studyDays", []));
   useEffect(() => {
     const h = () => setDays(readLocal("preplist:studyDays", []));
     window.addEventListener("pp-studied", h);
     return () => window.removeEventListener("pp-studied", h);
   }, []);
+  const set = new Set(days);
+  const week = Array.from({ length: 7 }, (_, i) => { const d = new Date(); d.setDate(d.getDate() - (6 - i)); return { k: dayKey(d), l: "SMTWTFS"[d.getDay()], on: set.has(dayKey(d)) }; });
   const streak = computeStreak(days);
-  const week = days.filter((k) => (Date.now() - new Date(`${k}T00:00:00`).getTime()) / 86400000 < 7).length;
+  const next = [...exams].filter((e) => daysUntil(e.date) >= 0).sort((a, b) => a.date.localeCompare(b.date))[0];
+  const nd = next ? daysUntil(next.date) : null;
+  const big = { fontSize: 34, fontWeight: 700, lineHeight: 1.05, letterSpacing: "-0.03em" };
+  const unit = { fontSize: 15, fontWeight: 600, color: "var(--muted)", marginLeft: 6, letterSpacing: 0 };
   return (
-    <div className="pp-card" style={{ borderRadius: 10, padding: 16, marginBottom: 16, display: "flex", gap: 24, alignItems: "center", flexWrap: "wrap" }}>
-      <div><div className="pp-serif" style={{ fontSize: 30, fontWeight: 700, lineHeight: 1 }}>{streak}</div><div style={{ fontSize: 12.5, color: "var(--muted)" }}>day study streak</div></div>
-      <div><div className="pp-serif" style={{ fontSize: 30, fontWeight: 700, lineHeight: 1 }}>{week}/7</div><div style={{ fontSize: 12.5, color: "var(--muted)" }}>days studied this week</div></div>
-      <div style={{ fontSize: 12.5, color: "var(--muted)", flex: 1, minWidth: 180 }}>A day counts when you finish a flashcard round or a focus block. Stored on this device.</div>
+    <div className="pp-strip">
+      <StatTile label="Study streak" foot="Study daily to keep it">
+        <div style={big}>{streak}<span style={unit}>day{streak === 1 ? "" : "s"}</span></div>
+      </StatTile>
+      <StatTile label="Next exam" foot={next ? next.name : "Add one below"}>
+        <div style={big}>{nd === null ? "–" : nd === 0 ? "Today" : nd}{nd > 0 && <span style={unit}>day{nd === 1 ? "" : "s"}</span>}</div>
+      </StatTile>
+      <StatTile label="This week" foot={`${week.filter((w) => w.on).length} of 7 days studied`}>
+        <div style={{ display: "flex", gap: 6, marginTop: 2 }}>
+          {week.map((w) => (
+            <div key={w.k} style={{ flex: 1, textAlign: "center" }}>
+              <div style={{ height: 24, borderRadius: 8, background: w.on ? "var(--accent)" : "color-mix(in srgb, var(--text) 7%, transparent)" }} />
+              <div className="pp-sub" style={{ fontSize: 10.5, marginTop: 4 }}>{w.l}</div>
+            </div>
+          ))}
+        </div>
+      </StatTile>
     </div>
   );
 }
 
-function CountdownCard() {
-  const [items, setItems] = useLocalState("preplist:countdowns", []);
+function CountdownCard({ items, setItems }) {
   const [name, setName] = useState("");
   const [date, setDate] = useState("");
   const sorted = [...items].sort((a, b) => a.date.localeCompare(b.date));
@@ -2870,24 +3008,28 @@ function CountdownCard() {
     setItems((prev) => [...(prev || []), { id: uid(), name: name.trim(), date }]);
     setName(""); setDate("");
   }
+  const tone = (d) => (d < 0 ? { bg: "var(--bg)", fg: "var(--muted)" } : d <= 7 ? { bg: "#F6DEDE", fg: "#8A3434" } : d <= 30 ? { bg: "#FDE7D6", fg: "#8A4A16" } : { bg: "#D9E8F5", fg: "#2A5578" });
   return (
-    <div className="pp-card" style={{ borderRadius: 10, padding: 16, marginBottom: 16 }}>
-      <div className="pp-serif" style={{ fontSize: 16, fontWeight: 700, marginBottom: 4 }}>Exam countdown</div>
-      <div style={{ fontSize: 12.5, color: "var(--muted)", marginBottom: 10 }}>Add your own exam or test dates (check them with your school or the exam board).</div>
-      <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 10 }}>
-        <input className="pp-input" style={{ flex: 1, minWidth: 150, padding: "8px 10px", fontSize: 14 }} placeholder="e.g. IGCSE Physics Paper 4, SAT" value={name} onChange={(e) => setName(e.target.value)} />
-        <input className="pp-input" type="date" aria-label="Exam date" style={{ padding: "8px 10px", fontSize: 14 }} value={date} onChange={(e) => setDate(e.target.value)} />
-        <button className="pp-btn pp-btn-primary" style={{ padding: "8px 16px", opacity: name.trim() && date ? 1 : 0.5 }} disabled={!(name.trim() && date)} onClick={add}>Add</button>
+    <div className="pp-card pp-sec">
+      <div className="pp-eyebrow">Exam countdown</div>
+      <div style={{ display: "flex", gap: 8, flexWrap: "wrap", margin: "12px 0 6px" }}>
+        <input className="pp-input pp-field" style={{ flex: "1 1 100%" }} placeholder="Exam, e.g. Physics Paper 4" value={name} onChange={(e) => setName(e.target.value)} />
+        <input className="pp-input pp-field" type="date" aria-label="Exam date" style={{ flex: 1, minWidth: 130 }} value={date} onChange={(e) => setDate(e.target.value)} />
+        <button className="pp-btn pp-btn-primary" style={{ padding: "9px 16px", opacity: name.trim() && date ? 1 : 0.5 }} disabled={!(name.trim() && date)} onClick={add}>Add</button>
       </div>
-      {sorted.length === 0 ? <div style={{ fontSize: 13, color: "var(--muted)" }}>No exams added yet.</div> : sorted.map((it) => {
+      {sorted.length === 0 ? <div className="pp-sub" style={{ padding: "6px 0 2px" }}>Add your exam dates and they'll count down here. Check them with your school or the exam board.</div> : sorted.map((it, i) => {
         const d = daysUntil(it.date);
+        const t = tone(d);
         return (
-          <div key={it.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "7px 0", borderTop: "1px solid var(--border)" }}>
-            <div style={{ flex: 1, minWidth: 0 }}>
-              <div style={{ fontSize: 14, fontWeight: 600 }}>{it.name}</div>
-              <div style={{ fontSize: 12, color: "var(--muted)" }}>{it.date}</div>
+          <div key={it.id} style={{ display: "flex", alignItems: "center", gap: 12, padding: "10px 0", borderTop: i ? "1px solid var(--border)" : "none", marginTop: i ? 0 : 6 }}>
+            <div style={{ width: 54, height: 54, borderRadius: 14, background: t.bg, color: t.fg, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+              <div style={{ fontSize: d > 0 ? 19 : 12.5, fontWeight: 700, lineHeight: 1 }}>{d < 0 ? "Done" : d === 0 ? "Today" : d}</div>
+              {d > 0 && <div style={{ fontSize: 10, fontWeight: 600, opacity: 0.8 }}>day{d === 1 ? "" : "s"}</div>}
             </div>
-            <div className="pp-serif" style={{ fontSize: 17, fontWeight: 700, color: d < 0 ? "var(--muted)" : "var(--text)" }}>{d < 0 ? "Passed" : d === 0 ? "Today" : `${d} day${d === 1 ? "" : "s"}`}</div>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontSize: 14, fontWeight: 600, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{it.name}</div>
+              <div className="pp-sub" style={{ fontSize: 12.5 }}>{fmtDate(it.date)}</div>
+            </div>
             <button className="pp-btn pp-btn-ghost" style={{ padding: 5, borderRadius: 999 }} onClick={() => setItems((prev) => prev.filter((x) => x.id !== it.id))} aria-label="Remove exam"><X size={13} /></button>
           </div>
         );
@@ -2931,23 +3073,43 @@ function StudyTimerCard() {
     setRunning(true);
   }
   function reset() { setRunning(false); setMode("focus"); setSecondsLeft(focusMin * 60); }
+  function preset(f, b) { setFocusMin(f); setBreakMin(b); if (!running) { setMode("focus"); setSecondsLeft(f * 60); } }
   function changeFocus(v) { const n = Math.max(1, Math.min(120, Number(v) || 25)); setFocusMin(n); if (!running && mode === "focus") setSecondsLeft(n * 60); }
   function changeBreak(v) { const n = Math.max(1, Math.min(60, Number(v) || 5)); setBreakMin(n); if (!running && mode === "break") setSecondsLeft(n * 60); }
 
+  const total = (mode === "focus" ? focusMin : breakMin) * 60;
+  const R = 66, C = 2 * Math.PI * R;
+  const frac = Math.max(0, Math.min(1, secondsLeft / total));
   return (
-    <div className="pp-card" style={{ borderRadius: 10, padding: 16, marginBottom: 16 }}>
-      <div className="pp-serif" style={{ fontSize: 16, fontWeight: 700, marginBottom: 4 }}>Study timer</div>
-      <div style={{ fontSize: 12.5, color: "var(--muted)", marginBottom: 10 }}>Focus in short blocks with breaks in between. When a block ends it pauses so you choose when to carry on.</div>
-      <div style={{ display: "flex", alignItems: "center", gap: 14, flexWrap: "wrap" }}>
-        <div style={{ textAlign: "center" }}>
-          <div className="pp-serif" style={{ fontSize: 40, fontWeight: 700, lineHeight: 1 }}>{fmtClock(secondsLeft)}</div>
-          <div style={{ fontSize: 12, color: "var(--muted)" }}>{mode === "focus" ? "Focus" : "Break"} · {sessions} block{sessions === 1 ? "" : "s"} done</div>
+    <div className="pp-card pp-sec" style={{ textAlign: "center" }}>
+      <div className="pp-eyebrow" style={{ textAlign: "left" }}>Focus timer</div>
+      <div style={{ position: "relative", width: 168, height: 168, margin: "12px auto 14px" }}>
+        <svg width="168" height="168" viewBox="0 0 168 168" style={{ transform: "rotate(-90deg)" }}>
+          <circle cx="84" cy="84" r={R} fill="none" strokeWidth="9" style={{ stroke: "color-mix(in srgb, var(--text) 8%, transparent)" }} />
+          <circle cx="84" cy="84" r={R} fill="none" strokeWidth="9" strokeLinecap="round" strokeDasharray={C} strokeDashoffset={C * (1 - frac)} style={{ stroke: mode === "focus" ? "var(--accent)" : "var(--sage)", transition: "stroke-dashoffset 0.5s linear" }} />
+        </svg>
+        <div style={{ position: "absolute", inset: 0, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center" }}>
+          <div style={{ fontSize: 38, fontWeight: 700, letterSpacing: "-0.03em", fontVariantNumeric: "tabular-nums", lineHeight: 1 }}>{fmtClock(secondsLeft)}</div>
+          <div className="pp-sub" style={{ fontSize: 12.5, marginTop: 4 }}>{mode === "focus" ? "Focus" : "Break"}</div>
         </div>
-        <button className="pp-btn pp-btn-primary" style={{ padding: "9px 20px" }} onClick={toggle}>{running ? "Pause" : "Start"}</button>
-        <button className="pp-btn pp-btn-ghost" style={{ padding: "9px 14px" }} onClick={reset}>Reset</button>
-        <label style={{ fontSize: 12.5 }}>Focus min <input className="pp-input" type="number" min="1" max="120" value={focusMin} onChange={(e) => changeFocus(e.target.value)} style={{ width: 60, padding: "6px 8px", fontSize: 13 }} /></label>
-        <label style={{ fontSize: 12.5 }}>Break min <input className="pp-input" type="number" min="1" max="60" value={breakMin} onChange={(e) => changeBreak(e.target.value)} style={{ width: 60, padding: "6px 8px", fontSize: 13 }} /></label>
       </div>
+      <div style={{ display: "flex", gap: 8, justifyContent: "center", marginBottom: 14 }}>
+        <button className="pp-btn pp-btn-primary" style={{ padding: "10px 0", width: 120, fontSize: 14.5 }} onClick={toggle}>{running ? "Pause" : "Start"}</button>
+        <button className="pp-btn pp-btn-ghost" style={{ padding: "10px 16px" }} onClick={reset}>Reset</button>
+      </div>
+      <div style={{ display: "flex", gap: 6, justifyContent: "center", flexWrap: "wrap" }}>
+        {[[25, 5], [50, 10], [15, 3]].map(([f, b]) => (
+          <button key={f} className={`pp-chip${focusMin === f && breakMin === b ? " selected" : ""}`} onClick={() => preset(f, b)}>{f} / {b} min</button>
+        ))}
+      </div>
+      <div className="pp-sub" style={{ fontSize: 12.5, marginTop: 12 }}>{sessions} block{sessions === 1 ? "" : "s"} done today</div>
+      <details style={{ marginTop: 8, textAlign: "left" }}>
+        <summary className="pp-sub" style={{ fontSize: 12.5, cursor: "pointer", textAlign: "center" }}>Custom lengths</summary>
+        <div style={{ display: "flex", gap: 12, justifyContent: "center", marginTop: 8, fontSize: 12.5 }}>
+          <label>Focus min <input className="pp-input" type="number" min="1" max="120" value={focusMin} onChange={(e) => changeFocus(e.target.value)} style={{ width: 60, padding: "6px 8px", fontSize: 13 }} /></label>
+          <label>Break min <input className="pp-input" type="number" min="1" max="60" value={breakMin} onChange={(e) => changeBreak(e.target.value)} style={{ width: 60, padding: "6px 8px", fontSize: 13 }} /></label>
+        </div>
+      </details>
     </div>
   );
 }
@@ -2984,53 +3146,77 @@ function planResult(plan, s) {
   };
 }
 
+const clampPct = (n) => Math.max(0, Math.min(100, Number(n) || 0));
+const VERDICT_TONE = { ok: { bg: "#DCEFD9", fg: "#33662F" }, warn: { bg: "#F5EBC2", fg: "#7A611A" }, bad: { bg: "#F6DEDE", fg: "#8A3434" } };
+
 function GradeTrackerCard() {
   const [plans, setPlans] = useLocalState("preplist:gradePlans", []);
   const [setupRaw, setSetupRaw] = useLocalState("preplist:gradeSetup", DEFAULT_GRADE_SETUP);
   const [subject, setSubject] = useState("");
   const [target, setTarget] = useState("90");
   const [avg, setAvg] = useState("");
+  const [showAdd, setShowAdd] = useState(false);
+  const [showSet, setShowSet] = useState(false);
   const s = gradeSetup(setupRaw);
   const fmt = (n) => (Math.round(n * 100) / 100).toString();
   const canAdd = subject.trim() && avg !== "" && Number(avg) >= 0 && Number(avg) <= 100 && target !== "" && Number(target) > 0;
   function addPlan() {
     if (!canAdd) return;
     setPlans((prev) => [...(prev || []), { id: uid(), subject: subject.trim(), target: Number(target), avg: Number(avg), marks: [] }]);
-    setSubject(""); setAvg("");
+    setSubject(""); setAvg(""); setShowAdd(false);
   }
   const setField = (key) => (e) => setSetupRaw({ ...setupRaw, [key]: e.target.value === "" ? "" : Number(e.target.value) });
-  const numBox = { width: 62, padding: "6px 8px", fontSize: 13 };
+  const lab = { fontSize: 12, color: "var(--muted)", display: "block" };
+  const num = { width: "100%", marginTop: 4, color: "var(--text)" };
   return (
-    <div className="pp-card" style={{ borderRadius: 10, padding: 16, marginBottom: 16 }}>
-      <div className="pp-serif" style={{ fontSize: 16, fontWeight: 700, marginBottom: 4 }}>Grade target planner</div>
-      <div style={{ fontSize: 12.5, color: "var(--muted)", marginBottom: 6, lineHeight: 1.5 }}>
-        Put in your target and your term average right now, then add each mark as it comes back. Every mark only counts for its share: the final is <b>{fmt(s.final)}%</b>, CAs <b>{fmt(markWorth("ca", s) * s.nCA)}%</b> (so <b>{fmt(markWorth("ca", s))}%</b> each), periodics <b>{fmt(markWorth("periodic", s) * s.nP)}%</b> (<b>{fmt(markWorth("periodic", s))}%</b> each). This is your own estimate, not an official grade.
-      </div>
-      <details style={{ marginBottom: 10 }}>
-        <summary style={{ fontSize: 12.5, cursor: "pointer", color: "var(--muted)" }}>Change the weights and how many marks there are</summary>
-        <div style={{ display: "flex", gap: 12, flexWrap: "wrap", marginTop: 6, fontSize: 13, alignItems: "center" }}>
-          <label>Final % <input className="pp-input" type="number" min="0" max="100" value={setupRaw.final} onChange={setField("final")} style={numBox} /></label>
-          <label>CAs % of term exams <input className="pp-input" type="number" min="0" max="100" value={setupRaw.ca} onChange={setField("ca")} style={numBox} /></label>
-          <label>CAs in the term <input className="pp-input" type="number" min="1" max="20" value={setupRaw.nCA} onChange={setField("nCA")} style={numBox} /></label>
-          <label>Periodics in the term <input className="pp-input" type="number" min="1" max="20" value={setupRaw.nP} onChange={setField("nP")} style={numBox} /></label>
-          <button className="pp-btn pp-btn-ghost" style={{ padding: "5px 10px", fontSize: 12.5 }} onClick={() => setSetupRaw(DEFAULT_GRADE_SETUP)}>Reset</button>
+    <div className="pp-card pp-sec">
+      <div style={{ display: "flex", alignItems: "flex-start", gap: 12, flexWrap: "wrap" }}>
+        <div style={{ flex: 1, minWidth: 200 }}>
+          <div className="pp-eyebrow">Grade planner</div>
+          <div className="pp-h" style={{ marginTop: 2 }}>What do I need on the final?</div>
         </div>
-        <div style={{ fontSize: 12, color: "var(--muted)", marginTop: 6 }}>Set these to match your school: if you have 5 periodics a term, put 5 so each one is worth less.</div>
-      </details>
-      <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 12, alignItems: "flex-end" }}>
-        <label style={{ fontSize: 11.5, color: "var(--muted)" }}>Subject<br />
-          <input className="pp-input" list="pp-grade-subjects" style={{ width: 130, padding: "8px 10px", fontSize: 14 }} placeholder="e.g. Math" value={subject} onChange={(e) => setSubject(e.target.value)} />
-        </label>
-        <datalist id="pp-grade-subjects">{PAPER_SUBJECTS.map((x) => <option key={x} value={x} />)}</datalist>
-        <label style={{ fontSize: 11.5, color: "var(--muted)" }}>Target grade %<br />
-          <input className="pp-input" type="number" style={{ width: 90, padding: "8px 10px", fontSize: 14 }} value={target} onChange={(e) => setTarget(e.target.value)} />
-        </label>
-        <label style={{ fontSize: 11.5, color: "var(--muted)" }}>Term average now %<br />
-          <input className="pp-input" type="number" style={{ width: 110, padding: "8px 10px", fontSize: 14 }} placeholder="e.g. 78" value={avg} onChange={(e) => setAvg(e.target.value)} />
-        </label>
-        <button className="pp-btn pp-btn-primary" style={{ padding: "8px 16px", opacity: canAdd ? 1 : 0.5 }} disabled={!canAdd} onClick={addPlan}>Add subject</button>
+        <button className="pp-btn pp-btn-primary" style={{ padding: "8px 14px", fontSize: 13.5, display: "inline-flex", alignItems: "center", gap: 6 }} onClick={() => setShowAdd((v) => !v)}>{showAdd ? <><X size={14} /> Close</> : <><Plus size={14} /> Subject</>}</button>
       </div>
-      {plans.length === 0 ? <div style={{ fontSize: 13, color: "var(--muted)" }}>No subjects yet. Add one above.</div> : plans.map((pl) => <PlanCard key={pl.id} plan={pl} setup={s} fmt={fmt} onPatch={(fn) => setPlans((prev) => prev.map((p) => (p.id === pl.id ? fn(p) : p)))} onRemove={() => setPlans((prev) => prev.filter((p) => p.id !== pl.id))} />)}
+      <div style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center", marginTop: 12 }}>
+        <GradeTag text={`Final ${fmt(s.final)}%`} />
+        <GradeTag text={`CAs ${fmt(markWorth("ca", s))}% each`} />
+        <GradeTag text={`Periodics ${fmt(markWorth("periodic", s))}% each`} />
+        <button className="pp-chip" style={{ padding: "3px 11px", fontSize: 12 }} onClick={() => setShowSet((v) => !v)}>{showSet ? "Done" : "Edit weights"}</button>
+      </div>
+      {showSet && (
+        <div style={{ marginTop: 12, padding: 14, borderRadius: 14, background: "var(--bg)", border: "1px solid var(--border)" }}>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(120px, 1fr))", gap: 10 }}>
+            <label style={lab}>Final %<input className="pp-input pp-field" type="number" min="0" max="100" value={setupRaw.final} onChange={setField("final")} style={num} /></label>
+            <label style={lab}>CAs % of term<input className="pp-input pp-field" type="number" min="0" max="100" value={setupRaw.ca} onChange={setField("ca")} style={num} /></label>
+            <label style={lab}>CAs in the term<input className="pp-input pp-field" type="number" min="1" max="20" value={setupRaw.nCA} onChange={setField("nCA")} style={num} /></label>
+            <label style={lab}>Periodics in the term<input className="pp-input pp-field" type="number" min="1" max="20" value={setupRaw.nP} onChange={setField("nP")} style={num} /></label>
+          </div>
+          <div style={{ display: "flex", alignItems: "center", gap: 10, marginTop: 10, flexWrap: "wrap" }}>
+            <span className="pp-sub" style={{ fontSize: 12, flex: 1, minWidth: 180 }}>Match these to your school. This is your own estimate, not an official grade.</span>
+            <button className="pp-btn pp-btn-ghost" style={{ padding: "5px 12px", fontSize: 12.5 }} onClick={() => setSetupRaw(DEFAULT_GRADE_SETUP)}>Reset</button>
+          </div>
+        </div>
+      )}
+      {showAdd && (
+        <div style={{ marginTop: 12, padding: 14, borderRadius: 14, background: "var(--bg)", border: "1px solid var(--border)" }}>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(130px, 1fr))", gap: 10, alignItems: "end" }}>
+            <label style={lab}>Subject
+              <input className="pp-input pp-field" list="pp-grade-subjects" style={num} placeholder="e.g. Math" value={subject} onChange={(e) => setSubject(e.target.value)} />
+            </label>
+            <datalist id="pp-grade-subjects">{PAPER_SUBJECTS.map((x) => <option key={x} value={x} />)}</datalist>
+            <label style={lab}>Target %
+              <input className="pp-input pp-field" type="number" style={num} value={target} onChange={(e) => setTarget(e.target.value)} />
+            </label>
+            <label style={lab}>Term average now %
+              <input className="pp-input pp-field" type="number" style={num} placeholder="e.g. 78" value={avg} onChange={(e) => setAvg(e.target.value)} />
+            </label>
+            <button className="pp-btn pp-btn-primary" style={{ padding: "10px 16px", opacity: canAdd ? 1 : 0.5 }} disabled={!canAdd} onClick={addPlan}>Add subject</button>
+          </div>
+        </div>
+      )}
+      {plans.length === 0
+        ? <div className="pp-sub" style={{ marginTop: 16 }}>Add a subject with your target and your term average, then enter each mark as it comes back. The planner shows what you still need on the final.</div>
+        : plans.map((pl) => <PlanCard key={pl.id} plan={pl} setup={s} fmt={fmt} onPatch={(fn) => setPlans((prev) => prev.map((p) => (p.id === pl.id ? fn(p) : p)))} onRemove={() => setPlans((prev) => prev.filter((p) => p.id !== pl.id))} />)}
     </div>
   );
 }
@@ -3040,71 +3226,109 @@ function PlanCard({ plan, setup, fmt, onPatch, onRemove }) {
   const [type, setType] = useState("periodic");
   const [score, setScore] = useState("");
   const [max, setMax] = useState("100");
+  const [showMark, setShowMark] = useState(false);
   const r = planResult(plan, setup);
   const canAdd = name.trim() && score !== "" && Number(max) > 0;
   function addMark() {
     if (!canAdd) return;
     onPatch((p) => ({ ...p, marks: [...(p.marks || []), { id: uid(), name: name.trim(), type, score: Number(score), max: Number(max) }] }));
-    setName(""); setScore("");
+    setName(""); setScore(""); setShowMark(false);
   }
   const r1 = (n) => Math.round(n * 10) / 10;
   let verdict, tone;
   if (r.need === null) { verdict = r.term >= plan.target ? "Your term average is already at your target." : "With no final, your target isn't reachable."; tone = r.term >= plan.target ? "ok" : "bad"; }
-  else if (r.need <= 0) { verdict = `You've already secured ${plan.target}%. Even a 0% final would keep you there.`; tone = "ok"; }
-  else if (r.need > 100) { verdict = `Out of reach. Even a perfect final gives you about ${r1(r.best)}%.`; tone = "bad"; }
-  else if (r.need >= 90) { verdict = `Possible, but tough: you'd need about ${Math.ceil(r.need)}% on the final.`; tone = "warn"; }
-  else { verdict = `Possible: you'd need about ${Math.ceil(r.need)}% on the final.`; tone = "ok"; }
-  const color = tone === "ok" ? "var(--sage-ink)" : tone === "warn" ? "#8A6A12" : "#8A3434";
+  else if (r.need <= 0) { verdict = `You've already secured ${plan.target}%. Even a 0% final keeps you there.`; tone = "ok"; }
+  else if (r.need > 100) { verdict = `Out of reach. Even a perfect final gives about ${r1(r.best)}%.`; tone = "bad"; }
+  else if (r.need >= 90) { verdict = `Tough but possible: you need about ${Math.ceil(r.need)}% on the final.`; tone = "warn"; }
+  else { verdict = `You need about ${Math.ceil(r.need)}% on the final.`; tone = "ok"; }
+  const vc = VERDICT_TONE[tone];
+  const sc = subjectColor(plan.subject);
   const count = (ty) => r.marks.filter((m) => m.type === ty).length;
   const tooMany = count("periodic") > setup.nP ? "periodics" : count("ca") > setup.nCA ? "CAs" : null;
   return (
-    <div style={{ borderTop: "1px solid var(--border)", padding: "12px 0" }}>
-      <div style={{ display: "flex", alignItems: "baseline", gap: 10, flexWrap: "wrap" }}>
-        <b style={{ fontSize: 15 }}>{plan.subject}</b>
-        <span style={{ fontSize: 12.5, color: "var(--muted)" }}>Target {plan.target}% · started at {plan.avg}% · term average now</span>
-        <span className="pp-serif" style={{ fontSize: 20, fontWeight: 700 }}>{r1(r.term)}%</span>
-        <button className="pp-btn pp-btn-ghost" style={{ padding: 4, borderRadius: 999, marginLeft: "auto" }} onClick={() => { if (window.confirm(`Remove ${plan.subject}?`)) onRemove(); }} aria-label={`Remove ${plan.subject}`}><X size={13} /></button>
+    <div style={{ border: "1px solid var(--border)", borderRadius: 16, padding: 16, marginTop: 14, background: "var(--bg)" }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+        <span style={{ width: 10, height: 10, borderRadius: 99, background: sc.fg, flexShrink: 0 }} />
+        <b style={{ fontSize: 15.5, flex: 1, minWidth: 0 }}>{plan.subject}</b>
+        <button className="pp-btn pp-btn-ghost" style={{ padding: 5, borderRadius: 999 }} onClick={() => { if (window.confirm(`Remove ${plan.subject}?`)) onRemove(); }} aria-label={`Remove ${plan.subject}`}><X size={13} /></button>
       </div>
-      <div style={{ fontSize: 13.5, fontWeight: 600, color, margin: "6px 0" }}>{verdict}</div>
-      {r.need !== null && r.need > 0 && r.need <= 100 && <div style={{ fontSize: 12, color: "var(--muted)", marginBottom: 6 }}>Best case with a 100% final: {r1(r.best)}% · worst case with a 0% final: {r1(r.worst)}%.</div>}
-      {tooMany && <div style={{ fontSize: 12, color: "#8A6A12", marginBottom: 6 }}>You've added more {tooMany} than the term has. Check the numbers under "Change the weights".</div>}
-      {r.marks.map((m) => {
-        const effect = (m.worth * (m.pct - Number(plan.avg))) / 100;
-        return (
-          <div key={m.id} style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12.5, padding: "2px 0", flexWrap: "wrap" }}>
-            <span style={{ flex: 1, minWidth: 120 }}>{m.name} <span style={{ color: "var(--muted)" }}>· {m.type === "ca" ? "CA" : "Periodic"}, worth {fmt(m.worth)}% of your grade</span></span>
-            <span>{m.score}/{m.max} ({Math.round(m.pct)}%)</span>
-            <span style={{ color: effect >= 0 ? "#2F6B3F" : "#8A3434", minWidth: 52, textAlign: "right" }}>{effect >= 0 ? "+" : ""}{fmt(effect)}%</span>
-            <button className="pp-btn pp-btn-ghost" style={{ padding: 4, borderRadius: 999 }} onClick={() => onPatch((p) => ({ ...p, marks: p.marks.filter((x) => x.id !== m.id) }))} aria-label="Remove mark"><X size={12} /></button>
-          </div>
-        );
-      })}
-      <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 8 }}>
-        <select className="pp-select" aria-label="Type of mark" style={{ padding: "7px 10px", fontSize: 13.5 }} value={type} onChange={(e) => setType(e.target.value)}>
-          {MARK_TYPES.map((x) => <option key={x.id} value={x.id}>{x.label}</option>)}
-        </select>
-        <input className="pp-input" style={{ flex: 1, minWidth: 120, padding: "7px 10px", fontSize: 13.5 }} placeholder="New mark, e.g. Periodic 3" value={name} onChange={(e) => setName(e.target.value)} />
-        <input className="pp-input" type="number" aria-label="Score" style={{ width: 70, padding: "7px 10px", fontSize: 13.5 }} placeholder="Score" value={score} onChange={(e) => setScore(e.target.value)} />
-        <input className="pp-input" type="number" aria-label="Out of" style={{ width: 70, padding: "7px 10px", fontSize: 13.5 }} placeholder="Out of" value={max} onChange={(e) => setMax(e.target.value)} />
-        <button className="pp-btn pp-btn-ghost" style={{ padding: "7px 14px", fontSize: 13, opacity: canAdd ? 1 : 0.5 }} disabled={!canAdd} onClick={addMark}>Add mark</button>
+      <div style={{ display: "flex", alignItems: "baseline", gap: 8, marginTop: 10, flexWrap: "wrap" }}>
+        <span style={{ fontSize: 32, fontWeight: 700, letterSpacing: "-0.03em", lineHeight: 1 }}>{r1(r.term)}%</span>
+        <span className="pp-sub" style={{ fontSize: 13 }}>term average · target {plan.target}%</span>
       </div>
+      <div className="pp-bar" style={{ marginTop: 14, overflow: "visible" }}>
+        <i style={{ width: `${clampPct(r.term)}%` }} />
+        <span title={`Target ${plan.target}%`} style={{ position: "absolute", left: `${clampPct(plan.target)}%`, top: -4, bottom: -4, width: 3, marginLeft: -1.5, borderRadius: 3, background: "var(--text)" }} />
+      </div>
+      <div style={{ display: "inline-block", marginTop: 14, padding: "7px 12px", borderRadius: 10, background: vc.bg, color: vc.fg, fontSize: 13.5, fontWeight: 600, lineHeight: 1.4 }}>{verdict}</div>
+      {r.need !== null && r.need > 0 && r.need <= 100 && <div className="pp-sub" style={{ fontSize: 12.5, marginTop: 8 }}>Best case {r1(r.best)}% · worst case {r1(r.worst)}%</div>}
+      {tooMany && <div style={{ fontSize: 12, color: "#8A6A12", marginTop: 8 }}>You've added more {tooMany} than the term has. Check "Edit weights".</div>}
+      {r.marks.length > 0 && (
+        <div style={{ marginTop: 14, borderTop: "1px solid var(--border)" }}>
+          {r.marks.map((m) => {
+            const effect = (m.worth * (m.pct - Number(plan.avg))) / 100;
+            return (
+              <div key={m.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "9px 0", borderBottom: "1px solid var(--border)", flexWrap: "wrap" }}>
+                <div style={{ flex: 1, minWidth: 130 }}>
+                  <div style={{ fontSize: 13.5, fontWeight: 600 }}>{m.name}</div>
+                  <div className="pp-sub" style={{ fontSize: 12 }}>{m.type === "ca" ? "CA" : "Periodic"} · worth {fmt(m.worth)}% of grade</div>
+                </div>
+                <span style={{ fontSize: 13.5, fontWeight: 600 }}>{m.score}/{m.max} <span className="pp-sub" style={{ fontWeight: 500 }}>({Math.round(m.pct)}%)</span></span>
+                <span style={{ fontSize: 13, fontWeight: 600, color: effect >= 0 ? "#2F6B3F" : "#8A3434", minWidth: 52, textAlign: "right" }}>{effect >= 0 ? "+" : ""}{fmt(effect)}%</span>
+                <button className="pp-btn pp-btn-ghost" style={{ padding: 4, borderRadius: 999 }} onClick={() => onPatch((p) => ({ ...p, marks: p.marks.filter((x) => x.id !== m.id) }))} aria-label="Remove mark"><X size={12} /></button>
+              </div>
+            );
+          })}
+        </div>
+      )}
+      {showMark ? (
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 12 }}>
+          <select className="pp-select pp-field" aria-label="Type of mark" value={type} onChange={(e) => setType(e.target.value)}>
+            {MARK_TYPES.map((x) => <option key={x.id} value={x.id}>{x.label}</option>)}
+          </select>
+          <input className="pp-input pp-field" style={{ flex: 1, minWidth: 120 }} placeholder="Name, e.g. Periodic 3" value={name} onChange={(e) => setName(e.target.value)} />
+          <input className="pp-input pp-field" type="number" aria-label="Score" style={{ width: 76 }} placeholder="Score" value={score} onChange={(e) => setScore(e.target.value)} />
+          <input className="pp-input pp-field" type="number" aria-label="Out of" style={{ width: 76 }} placeholder="Out of" value={max} onChange={(e) => setMax(e.target.value)} />
+          <button className="pp-btn pp-btn-primary" style={{ padding: "9px 16px", opacity: canAdd ? 1 : 0.5 }} disabled={!canAdd} onClick={addMark}>Add</button>
+        </div>
+      ) : (
+        <button className="pp-btn pp-btn-ghost" style={{ padding: "7px 13px", fontSize: 13, marginTop: 12, display: "inline-flex", alignItems: "center", gap: 6 }} onClick={() => setShowMark(true)}><Plus size={13} /> Add a mark</button>
+      )}
+    </div>
+  );
+}
+
+function SatPacingCard() {
+  const tile = (title, big, foot) => (
+    <div style={{ padding: 14, borderRadius: 14, background: "var(--bg)", border: "1px solid var(--border)" }}>
+      <div style={{ fontSize: 12.5, fontWeight: 600 }}>{title}</div>
+      <div style={{ fontSize: 26, fontWeight: 700, letterSpacing: "-0.03em", margin: "4px 0 2px", lineHeight: 1.1 }}>{big}</div>
+      <div className="pp-sub" style={{ fontSize: 12 }}>per question · {foot}</div>
+    </div>
+  );
+  return (
+    <div className="pp-card pp-sec">
+      <div className="pp-eyebrow">Digital SAT pacing</div>
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginTop: 12 }}>
+        {tile("Reading and Writing", "71 s", "54 questions, 64 min")}
+        {tile("Math", "95 s", "44 questions, 70 min")}
+      </div>
+      <div className="pp-sub" style={{ fontSize: 12, marginTop: 12 }}>Check College Board for the latest format and test dates.</div>
     </div>
   );
 }
 
 function ToolsView() {
+  const [exams, setExams] = useLocalState("preplist:countdowns", []);
   return (
     <div>
-      <StreakCard />
-      <GradeTrackerCard />
-      <CountdownCard />
-      <StudyTimerCard />
-      <div className="pp-card" style={{ borderRadius: 10, padding: 16 }}>
-        <div className="pp-serif" style={{ fontSize: 16, fontWeight: 700, marginBottom: 4 }}>Digital SAT pacing</div>
-        <div style={{ fontSize: 13, lineHeight: 1.6 }}>
-          <b>Reading and Writing:</b> 2 modules, 54 questions, 64 minutes — about 71 seconds a question.<br />
-          <b>Math:</b> 2 modules, 44 questions, 70 minutes — about 95 seconds a question.<br />
-          Always check College Board for the latest format and test dates.
+      <TodayStrip exams={exams} />
+      <div className="pp-grid-tools">
+        <GradeTrackerCard />
+        <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+          <StudyTimerCard />
+          <CountdownCard items={exams} setItems={setExams} />
+          <SatPacingCard />
         </div>
       </div>
     </div>
