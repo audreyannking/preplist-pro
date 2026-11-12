@@ -3,31 +3,24 @@ rules_version = '2';
 // PrepList Pro - Firestore security rules.
 //
 // Everyone can READ the study material. Only ADMINS can change it. An admin is a
-// real email+password login whose username is in adminList() below.
+// real login whose user ID has a document in "siteAdmins".
 // Students (silent anonymous sign-in) may only create/manage their own flashcard
 // decks and send feedback, with size limits.
 service cloud.firestore {
   match /databases/{database}/documents {
 
     function signedIn() { return request.auth != null; }
-    // ADMINS: one login per admin. Add or remove a username here, then Publish. Each entry is the
-    // username followed by @admins.preplist.app, written in lowercase, matching the user made in
-    // Firebase > Authentication > Users. Only email+password logins count.
-    function adminList() {
-      return [
-        'ADD_USERNAME_HERE@admins.preplist.app'
-      ];
-    }
+    // An admin is any login (Google or username+password) whose user ID (UID) has a document in
+    // the "siteAdmins" collection. Add or remove admins there in the Firebase console.
     function isAdmin() {
       return signedIn()
-        && request.auth.token.firebase.sign_in_provider == 'password'
-        && request.auth.token.email in adminList();
+        && exists(/databases/$(database)/documents/siteAdmins/$(request.auth.uid));
     }
 
-    // The site reads this one document to find out whether the signed-in person is an admin.
-    match /adminCheck/{id} {
-      allow read: if isAdmin();
-      allow write: if false;
+    // A signed-in user may only look up their own entry; nobody can list or edit the list from the app.
+    match /siteAdmins/{uid} {
+      allow get: if signedIn() && request.auth.uid == uid;
+      allow list, write: if false;
     }
 
     // Study material: public to read, admin-only to change.
