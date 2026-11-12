@@ -3,7 +3,7 @@ rules_version = '2';
 // PrepList Pro - Firestore security rules.
 //
 // Everyone can READ the study material. Only ADMINS can change it. An admin is a
-// real Google account whose (verified) email has a document in the "admins"
+// real login (email+password or Google) whose user ID (UID) has a document in the "admins"
 // collection - add or remove admins in the Firebase console, no code change.
 // Students (silent anonymous sign-in) may only create/manage their own flashcard
 // decks and send feedback, with size limits.
@@ -13,14 +13,12 @@ service cloud.firestore {
     function signedIn() { return request.auth != null; }
     function isAdmin() {
       return signedIn()
-        && request.auth.token.email_verified == true
-        && request.auth.token.email != null
-        && exists(/databases/$(database)/documents/admins/$(request.auth.token.email.lower()));
+        && exists(/databases/$(database)/documents/admins/$(request.auth.uid));
     }
 
-    // Admin list. A signed-in user may only look up their own email; nobody can list or edit it from the app.
-    match /admins/{email} {
-      allow get: if signedIn() && request.auth.token.email != null && request.auth.token.email.lower() == email;
+    // Admin list. A signed-in user may only look up their own ID; nobody can list or edit it from the app.
+    match /admins/{uid} {
+      allow get: if signedIn() && request.auth.uid == uid;
       allow list, write: if false;
     }
 

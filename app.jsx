@@ -202,15 +202,14 @@ function subjectsFor(board, examType) {
 }
 
 // Admins are real Google accounts. The list of allowed admin emails lives in Firestore
-// (collection "admins", one document per email) and is enforced by firestore.rules, so
+// (collection "admins", one document per user ID) and is enforced by firestore.rules, so
 // nothing in this file can be used to become an admin.
 // Looks the signed-in Google account up on the admin list. Refreshes the sign-in token first and retries, because the
 // database can briefly still be using the previous (anonymous) sign-in right after a new one.
 async function adminStatus() {
   const u = auth && auth.currentUser;
-  if (!u || u.isAnonymous || !u.email) return { ok: false, email: u && u.email, why: "none" };
-  if (!u.emailVerified) return { ok: false, email: u.email, why: "unverified" };
-  const id = u.email.toLowerCase();
+  if (!u || u.isAnonymous) return { ok: false, why: "none" };
+  const id = u.uid;
   for (let i = 0; i < 3; i++) {
     try {
       await u.getIdToken(true);
@@ -224,8 +223,9 @@ async function adminStatus() {
   return { ok: false, email: u.email, id, why: "error" };
 }
 async function checkAdmin() { return (await adminStatus()).ok; }
-async function signInAsAdmin() {
-  await auth.signInWithPopup(new firebase.auth.GoogleAuthProvider());
+async function signInAsAdmin(email, password) {
+  if (email) await auth.signInWithEmailAndPassword(email.trim(), password);
+  else await auth.signInWithPopup(new firebase.auth.GoogleAuthProvider());
   const st = await adminStatus();
   if (st.ok) return { ok: true };
   await auth.signOut();
@@ -778,23 +778,28 @@ function RoleGate({ onSelectRole, theme, setTheme }) {
   const [needId, setNeedId] = useState("");
   const [copied, setCopied] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
 
   function pick(role) {
     if (role === "student") { onSelectRole(role); return; }
     setPendingRole(role);
     setError("");
   }
-  async function googleSignIn() {
+  async function doSignIn(withPassword) {
+    if (withPassword && (!email.trim() || !password)) { setError("Enter your admin email and password."); return; }
     setBusy(true); setError(""); setNeedId(""); setCopied(false);
     try {
-      const r = await signInAsAdmin();
+      const r = withPassword ? await signInAsAdmin(email, password) : await signInAsAdmin();
       if (r.ok) onSelectRole(pendingRole);
-      else if (r.why === "unverified") setError(`Google says ${r.email} isn't a verified email, so it can't be an admin.`);
       else if (r.why === "error") setError("Couldn't check the admin list just now (the database refused or timed out). Try again in a moment.");
-      else { setNeedId(r.id || ""); setError(`You signed in as ${r.email}, but the admins list has no entry with this exact name. In Firebase, add a document to "admins" whose Document ID is the text below (tap Copy, then paste it into the Document ID box).`); }
+      else { setNeedId(r.id || ""); setError("Your login works, but this account isn't on the admin list yet. In Firebase, add a document to \"admins\" whose Document ID is the code below (tap Copy, then paste it into the Document ID box)."); }
     } catch (e) {
       const c = e && e.code;
-      if (c === "auth/popup-closed-by-user" || c === "auth/cancelled-popup-request") setError("Sign-in was cancelled.");
+      if (c === "auth/wrong-password" || c === "auth/user-not-found" || c === "auth/invalid-credential" || c === "auth/invalid-login-credentials" || c === "auth/invalid-email") setError("Wrong email or password.");
+      else if (c === "auth/too-many-requests") setError("Too many tries. Wait a few minutes and try again.");
+      else if (c === "auth/operation-not-allowed") setError("Email and password sign-in isn't switched on in Firebase yet.");
+      else if (c === "auth/popup-closed-by-user" || c === "auth/cancelled-popup-request") setError("Sign-in was cancelled.");
       else if (c === "auth/popup-blocked") setError("Your browser blocked the sign-in window. Allow pop-ups for this site and try again.");
       else if (c === "auth/unauthorized-domain") setError("This website address hasn't been approved for sign-in yet (Firebase, Authentication, Authorized domains).");
       else setError("Couldn't sign in. Check your connection and try again.");
@@ -839,7 +844,7 @@ function RoleGate({ onSelectRole, theme, setTheme }) {
               <span style={{ fontWeight: 700, fontSize: 15 }}>{ROLE_INFO[pendingRole].label} access</span>
             </div>
             <div style={{ fontSize: 13, color: "var(--muted)", marginBottom: 14, lineHeight: 1.5 }}>
-              Admins sign in with their own Google account. Only accounts on the admin list get in, and turning on Google's 2-Step Verification for it adds a second check.
+              Each admin has their own login. Only accounts on the admin list get in.
             </div>
             {error && <div style={{ fontSize: 12.5, color: "#8A3434", marginBottom: 10, lineHeight: 1.45 }}>{error}</div>}
             {needId && (
@@ -848,7 +853,12 @@ function RoleGate({ onSelectRole, theme, setTheme }) {
                 <button className="pp-btn pp-btn-ghost" style={{ padding: "5px 10px", fontSize: 12.5, flexShrink: 0 }} onClick={() => { try { navigator.clipboard.writeText(needId); setCopied(true); } catch { /* user can select the text instead */ } }}>{copied ? "Copied" : "Copy"}</button>
               </div>
             )}
-            <button className="pp-btn pp-btn-primary" style={{ width: "100%", padding: "10px 0", opacity: busy ? 0.6 : 1 }} disabled={busy} onClick={googleSignIn}>{busy ? "Signing in…" : "Continue with Google"}</button>
+            <form onSubmit={(e) => { e.preventDefault(); doSignIn(true); }} style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+              <input className="pp-input" type="email" autoComplete="username" placeholder="Admin email" value={email} onChange={(e) => setEmail(e.target.value)} />
+              <input className="pp-input" type="password" autoComplete="current-password" placeholder="Password" value={password} onChange={(e) => setPassword(e.target.value)} />
+              <button type="submit" className="pp-btn pp-btn-primary" style={{ width: "100%", padding: "10px 0", opacity: busy ? 0.6 : 1 }} disabled={busy}>{busy ? "Signing in…" : "Sign in"}</button>
+            </form>
+            <button className="pp-btn pp-btn-ghost" style={{ width: "100%", padding: "9px 0", marginTop: 10, fontSize: 13 }} disabled={busy} onClick={() => doSignIn(false)}>Use Google instead</button>
           </>
         )}
       </div>
