@@ -2123,10 +2123,19 @@ function EmbedSplitViewer({ items, startUrl, startRight, onClose }) {
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [onClose]);
+  // Phone Back / browser Back closes the viewer instead of leaving the site.
+  useEffect(() => {
+    try { window.history.pushState({ ppSplit: true }, ""); } catch { /* optional */ }
+    let popped = false;
+    const onPop = () => { popped = true; onClose(); };
+    window.addEventListener("popstate", onPop);
+    return () => { window.removeEventListener("popstate", onPop); if (!popped) { try { window.history.back(); } catch { /* optional */ } } };
+  }, []);
   const find = (u) => items.find((i) => i.url === u) || null;
   return (
     <div style={{ position: "fixed", inset: 0, zIndex: 80, background: "var(--bg)", display: "flex", flexDirection: "column" }}>
       <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 14px", borderBottom: "1px solid var(--border)", flexWrap: "wrap" }}>
+        <button className="pp-btn pp-btn-primary" style={{ padding: "7px 14px", fontSize: 13, display: "inline-flex", alignItems: "center", gap: 6 }} onClick={onClose}>← Back</button>
         <div style={{ flex: 1, minWidth: 160 }}>
           <div className="pp-serif" style={{ fontSize: 16, fontWeight: 700 }}>Split view</div>
           <div style={{ fontSize: 11.5, color: "var(--muted)" }}>Two documents side by side. Use the picker on each side to switch, for example from a question paper to its mark scheme. If a side stays blank, use New tab.</div>
@@ -3543,7 +3552,21 @@ function MainApp({ user, onChangeGrade, onSwitchRole, theme, setTheme }) {
   const [feedbackList] = useCollection("feedback", undefined, wanted.has("feedback"));
   const [flashDecks, flashDecksReady] = useCollection("flashDecks", undefined, wanted.has("flashcards"));
 
-  const [tab, setTab] = useState("notes");
+  // Each tab gets a browser history entry, so the phone's Back gesture returns to the previous tab instead of leaving the site.
+  const [tab, setTabRaw] = useState(() => (window.history.state && window.history.state.ppTab) || "notes");
+  const tabRef = useRef(tab);
+  const setTab = useCallback((t) => {
+    if (t === tabRef.current) return;
+    tabRef.current = t;
+    try { window.history.pushState({ ppTab: t }, ""); } catch { /* optional */ }
+    setTabRaw(t);
+  }, []);
+  useEffect(() => {
+    try { window.history.replaceState({ ppTab: tabRef.current }, ""); } catch { /* optional */ }
+    const onPop = (e) => { const t = (e.state && e.state.ppTab) || "notes"; tabRef.current = t; setTabRaw(t); };
+    window.addEventListener("popstate", onPop);
+    return () => window.removeEventListener("popstate", onPop);
+  }, []);
   const [showSearch, setShowSearch] = useState(false);
   const [showGrade, setShowGrade] = useState(false);
   const notesShown = useMemo(() => (user.grade ? notes.filter((n) => n.grade === user.grade) : notes), [notes, user.grade]);
