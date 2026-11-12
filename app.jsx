@@ -32,10 +32,12 @@ if (FIREBASE_READY) {
 
 // Resolves once the silent anonymous sign-in is done. Reading never waits on
 // it (the rules allow public reads), only writes do.
+let adminThisVisit = false;
 const sessionPromise = new Promise((resolve) => {
   if (!FIREBASE_READY) { resolve(); return; }
   auth.onAuthStateChanged((u) => {
-    if (u) resolve();
+    if (u && !u.isAnonymous && !adminThisVisit) auth.signOut(); // admins type their password every visit
+    else if (u) resolve();
     else auth.signInAnonymously().catch((e) => { console.error("[preplist] anonymous sign-in failed", e); resolve(); });
   });
 });
@@ -209,29 +211,31 @@ function subjectsFor(board, examType) {
 async function adminStatus() {
   const u = auth && auth.currentUser;
   if (!u || u.isAnonymous) return { ok: false, why: "none" };
-  const id = u.uid;
   for (let i = 0; i < 3; i++) {
     try {
       await u.getIdToken(true);
-      const d = await db.collection("admins").doc(id).get({ source: "server" });
-      return { ok: d.exists, email: u.email, id, why: d.exists ? "ok" : "missing" };
+      await db.collection("adminCheck").doc("ping").get({ source: "server" }); // readable only by admins (firestore.rules)
+      return { ok: true };
     } catch (e) {
-      if (i === 2) return { ok: false, email: u.email, id, why: "error" };
+      if (e && e.code === "permission-denied" && i === 2) return { ok: false, why: "denied" };
+      if (i === 2) return { ok: false, why: "error" };
       await new Promise((r) => setTimeout(r, 600));
     }
   }
-  return { ok: false, email: u.email, id, why: "error" };
+  return { ok: false, why: "error" };
 }
 async function checkAdmin() { return (await adminStatus()).ok; }
 // Admins type a plain username; Firebase wants an email-shaped id, so a username gets a private suffix.
 function adminLoginId(name) { const n = name.trim().toLowerCase(); return n.includes("@") ? n : n + "@admins.preplist.app"; }
-async function signInAsAdmin(email, password) {
-  if (email) await auth.signInWithEmailAndPassword(adminLoginId(email), password);
-  else await auth.signInWithPopup(new firebase.auth.GoogleAuthProvider());
+async function signInAsAdmin(username, password) {
+  adminThisVisit = true;
+  try { await auth.signInWithEmailAndPassword(adminLoginId(username), password); }
+  catch (e) { adminThisVisit = false; throw e; }
   const st = await adminStatus();
   if (st.ok) return { ok: true };
+  adminThisVisit = false;
   await auth.signOut();
-  return { ok: false, email: st.email, id: st.id, why: st.why };
+  return { ok: false, why: st.why };
 }
 
 /* ---------------------------------------------------------------------- */
@@ -777,10 +781,8 @@ function SetupNeededScreen() {
 function RoleGate({ onSelectRole, theme, setTheme }) {
   const [pendingRole, setPendingRole] = useState(null);
   const [error, setError] = useState("");
-  const [needId, setNeedId] = useState("");
-  const [copied, setCopied] = useState(false);
   const [busy, setBusy] = useState(false);
-  const [email, setEmail] = useState("");
+  const [email, setEmail] = useState(() => { try { return localStorage.getItem("preplist:adminUser") || ""; } catch { return ""; } });
   const [password, setPassword] = useState("");
 
   function pick(role) {
@@ -788,23 +790,20 @@ function RoleGate({ onSelectRole, theme, setTheme }) {
     setPendingRole(role);
     setError("");
   }
-  async function doSignIn(withPassword) {
-    if (withPassword && (!email.trim() || !password)) { setError("Enter your username and password."); return; }
-    setBusy(true); setError(""); setNeedId(""); setCopied(false);
+  async function doSignIn() {
+    if (!email.trim() || !password) { setError("Enter your username and password."); return; }
+    setBusy(true); setError("");
     try {
-      const r = withPassword ? await signInAsAdmin(email, password) : await signInAsAdmin();
-      if (r.ok) onSelectRole(pendingRole);
-      else if (r.why === "error") setError("Couldn't check the admin list just now (the database refused or timed out). Try again in a moment.");
-      else { setNeedId(r.id || ""); setError("Your login works, but this account isn't on the admin list yet. In Firebase, add a document to \"admins\" whose Document ID is the code below (tap Copy, then paste it into the Document ID box)."); }
+      const r = await signInAsAdmin(email, password);
+      if (r.ok) { try { localStorage.setItem("preplist:adminUser", email.trim()); } catch { /* optional */ } setPassword(""); onSelectRole(pendingRole); }
+      else if (r.why === "error") setError("Couldn't check your access just now. Try again in a moment.");
+      else setError("That login works, but it isn't on the admin list.");
     } catch (e) {
       const c = e && e.code;
-      if (c === "auth/wrong-password" || c === "auth/user-not-found" || c === "auth/invalid-credential" || c === "auth/invalid-login-credentials" || c === "auth/invalid-email") setError("Wrong username or password.");
-      else if (c === "auth/too-many-requests") setError("Too many tries. Wait a few minutes and try again.");
-      else if (c === "auth/operation-not-allowed") setError("Email and password sign-in isn't switched on in Firebase yet.");
-      else if (c === "auth/popup-closed-by-user" || c === "auth/cancelled-popup-request") setError("Sign-in was cancelled.");
-      else if (c === "auth/popup-blocked") setError("Your browser blocked the sign-in window. Allow pop-ups for this site and try again.");
-      else if (c === "auth/unauthorized-domain") setError("This website address hasn't been approved for sign-in yet (Firebase, Authentication, Authorized domains).");
-      else setError("Couldn't sign in. Check your connection and try again.");
+      if (c === "auth/too-many-requests") setError("Too many tries. Wait a few minutes and try again.");
+      else if (c === "auth/operation-not-allowed") setError("Password sign-in isn't switched on in Firebase yet.");
+      else if (c === "auth/network-request-failed") setError("Couldn't sign in. Check your connection and try again.");
+      else setError("Wrong username or password.");
     }
     setBusy(false);
   }
@@ -846,21 +845,14 @@ function RoleGate({ onSelectRole, theme, setTheme }) {
               <span style={{ fontWeight: 700, fontSize: 15 }}>{ROLE_INFO[pendingRole].label} access</span>
             </div>
             <div style={{ fontSize: 13, color: "var(--muted)", marginBottom: 14, lineHeight: 1.5 }}>
-              Each admin has their own login. Only accounts on the admin list get in.
+              Each admin has their own username and password. Your username is remembered on this device, your password never is.
             </div>
             {error && <div style={{ fontSize: 12.5, color: "#8A3434", marginBottom: 10, lineHeight: 1.45 }}>{error}</div>}
-            {needId && (
-              <div style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 12, padding: "8px 10px", border: "1px solid var(--border)", borderRadius: 10, background: "var(--bg)" }}>
-                <code style={{ flex: 1, fontSize: 13, wordBreak: "break-all", userSelect: "all" }}>{needId}</code>
-                <button className="pp-btn pp-btn-ghost" style={{ padding: "5px 10px", fontSize: 12.5, flexShrink: 0 }} onClick={() => { try { navigator.clipboard.writeText(needId); setCopied(true); } catch { /* user can select the text instead */ } }}>{copied ? "Copied" : "Copy"}</button>
-              </div>
-            )}
-            <form onSubmit={(e) => { e.preventDefault(); doSignIn(true); }} style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+            <form onSubmit={(e) => { e.preventDefault(); doSignIn(); }} style={{ display: "flex", flexDirection: "column", gap: 10 }}>
               <input className="pp-input" type="text" autoCapitalize="none" autoCorrect="off" autoComplete="username" placeholder="Username" value={email} onChange={(e) => setEmail(e.target.value)} />
-              <input className="pp-input" type="password" autoComplete="current-password" placeholder="Password" value={password} onChange={(e) => setPassword(e.target.value)} />
+              <input className="pp-input" type="password" autoComplete="off" placeholder="Password" value={password} onChange={(e) => setPassword(e.target.value)} />
               <button type="submit" className="pp-btn pp-btn-primary" style={{ width: "100%", padding: "10px 0", opacity: busy ? 0.6 : 1 }} disabled={busy}>{busy ? "Signing in…" : "Sign in"}</button>
             </form>
-            <button className="pp-btn pp-btn-ghost" style={{ width: "100%", padding: "9px 0", marginTop: 10, fontSize: 13 }} disabled={busy} onClick={() => doSignIn(false)}>Use Google instead</button>
           </>
         )}
       </div>
