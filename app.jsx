@@ -603,6 +603,8 @@ function GlobalStyle() {
       .pp-strip { display: grid; gap: 14px; margin-bottom: 16px; grid-template-columns: repeat(2, minmax(0, 1fr)); }
       .pp-strip > :nth-child(3) { grid-column: 1 / -1; }
       @media (min-width: 700px) { .pp-strip { grid-template-columns: repeat(3, minmax(0, 1fr)); } .pp-strip > :nth-child(3) { grid-column: auto; order: 2; } .pp-strip > :nth-child(2) { order: 3; } }
+      .pp-two { display: grid; gap: 16px; grid-template-columns: minmax(0, 1fr); align-items: start; }
+      @media (min-width: 800px) { .pp-two { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
       .pp-grid-tools { display: grid; gap: 16px; grid-template-columns: minmax(0, 1fr); align-items: start; }
       @media (min-width: 900px) { .pp-grid-tools { grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr); } }
       .pp-twoup { display: flex; gap: 10px; }
@@ -2999,6 +3001,16 @@ function TodayStrip({ exams }) {
   );
 }
 
+const examTone = (d) => (d < 0 ? { bg: "var(--bg)", fg: "var(--muted)" } : d <= 7 ? { bg: "#F6DEDE", fg: "#8A3434" } : d <= 30 ? { bg: "#FDE7D6", fg: "#8A4A16" } : { bg: "#D9E8F5", fg: "#2A5578" });
+function DayBadge({ d }) {
+  const t = examTone(d);
+  return (
+    <div style={{ width: 54, height: 54, borderRadius: 14, background: t.bg, color: t.fg, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+      <div style={{ fontSize: d > 0 ? 19 : 12.5, fontWeight: 700, lineHeight: 1 }}>{d < 0 ? "Done" : d === 0 ? "Today" : d}</div>
+      {d > 0 && <div style={{ fontSize: 10, fontWeight: 600, opacity: 0.8 }}>day{d === 1 ? "" : "s"}</div>}
+    </div>
+  );
+}
 function CountdownCard({ items, setItems }) {
   const [name, setName] = useState("");
   const [date, setDate] = useState("");
@@ -3008,7 +3020,6 @@ function CountdownCard({ items, setItems }) {
     setItems((prev) => [...(prev || []), { id: uid(), name: name.trim(), date }]);
     setName(""); setDate("");
   }
-  const tone = (d) => (d < 0 ? { bg: "var(--bg)", fg: "var(--muted)" } : d <= 7 ? { bg: "#F6DEDE", fg: "#8A3434" } : d <= 30 ? { bg: "#FDE7D6", fg: "#8A4A16" } : { bg: "#D9E8F5", fg: "#2A5578" });
   return (
     <div className="pp-card pp-sec">
       <div className="pp-eyebrow">Exam countdown</div>
@@ -3019,13 +3030,9 @@ function CountdownCard({ items, setItems }) {
       </div>
       {sorted.length === 0 ? <div className="pp-sub" style={{ padding: "6px 0 2px" }}>Add your exam dates and they'll count down here. Check them with your school or the exam board.</div> : sorted.map((it, i) => {
         const d = daysUntil(it.date);
-        const t = tone(d);
         return (
           <div key={it.id} style={{ display: "flex", alignItems: "center", gap: 12, padding: "10px 0", borderTop: i ? "1px solid var(--border)" : "none", marginTop: i ? 0 : 6 }}>
-            <div style={{ width: 54, height: 54, borderRadius: 14, background: t.bg, color: t.fg, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-              <div style={{ fontSize: d > 0 ? 19 : 12.5, fontWeight: 700, lineHeight: 1 }}>{d < 0 ? "Done" : d === 0 ? "Today" : d}</div>
-              {d > 0 && <div style={{ fontSize: 10, fontWeight: 600, opacity: 0.8 }}>day{d === 1 ? "" : "s"}</div>}
-            </div>
+            <DayBadge d={d} />
             <div style={{ flex: 1, minWidth: 0 }}>
               <div style={{ fontSize: 14, fontWeight: 600, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{it.name}</div>
               <div className="pp-sub" style={{ fontSize: 12.5 }}>{fmtDate(it.date)}</div>
@@ -3034,6 +3041,27 @@ function CountdownCard({ items, setItems }) {
           </div>
         );
       })}
+    </div>
+  );
+}
+
+function UpcomingCard({ exams, onManage }) {
+  const list = [...exams].filter((e) => daysUntil(e.date) >= 0).sort((a, b) => a.date.localeCompare(b.date)).slice(0, 3);
+  return (
+    <div className="pp-card pp-sec">
+      <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+        <div className="pp-eyebrow" style={{ flex: 1 }}>Coming up</div>
+        <button className="pp-btn pp-btn-ghost" style={{ padding: "5px 12px", fontSize: 12.5 }} onClick={onManage}>{exams.length ? "Manage" : "Add exam"}</button>
+      </div>
+      {list.length === 0 ? <div className="pp-sub" style={{ marginTop: 12 }}>No upcoming exams. Add your dates and they'll show here.</div> : list.map((it, i) => (
+        <div key={it.id} style={{ display: "flex", alignItems: "center", gap: 12, padding: "10px 0", borderTop: i ? "1px solid var(--border)" : "none", marginTop: i ? 0 : 6 }}>
+          <DayBadge d={daysUntil(it.date)} />
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ fontSize: 14, fontWeight: 600, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{it.name}</div>
+            <div className="pp-sub" style={{ fontSize: 12.5 }}>{fmtDate(it.date)}</div>
+          </div>
+        </div>
+      ))}
     </div>
   );
 }
@@ -3216,7 +3244,7 @@ function GradeTrackerCard() {
       )}
       {plans.length === 0
         ? <div className="pp-sub" style={{ marginTop: 16 }}>Add a subject with your target and your term average, then enter each mark as it comes back. The planner shows what you still need on the final.</div>
-        : plans.map((pl) => <PlanCard key={pl.id} plan={pl} setup={s} fmt={fmt} onPatch={(fn) => setPlans((prev) => prev.map((p) => (p.id === pl.id ? fn(p) : p)))} onRemove={() => setPlans((prev) => prev.filter((p) => p.id !== pl.id))} />)}
+        : <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(310px, 1fr))", gap: 14, marginTop: 14, alignItems: "start" }}>{plans.map((pl) => <PlanCard key={pl.id} plan={pl} setup={s} fmt={fmt} onPatch={(fn) => setPlans((prev) => prev.map((p) => (p.id === pl.id ? fn(p) : p)))} onRemove={() => setPlans((prev) => prev.filter((p) => p.id !== pl.id))} />)}</div>}
     </div>
   );
 }
@@ -3246,7 +3274,7 @@ function PlanCard({ plan, setup, fmt, onPatch, onRemove }) {
   const count = (ty) => r.marks.filter((m) => m.type === ty).length;
   const tooMany = count("periodic") > setup.nP ? "periodics" : count("ca") > setup.nCA ? "CAs" : null;
   return (
-    <div style={{ border: "1px solid var(--border)", borderRadius: 16, padding: 16, marginTop: 14, background: "var(--bg)" }}>
+    <div style={{ border: "1px solid var(--border)", borderRadius: 16, padding: 16, background: "var(--bg)" }}>
       <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
         <span style={{ width: 10, height: 10, borderRadius: 99, background: sc.fg, flexShrink: 0 }} />
         <b style={{ fontSize: 15.5, flex: 1, minWidth: 0 }}>{plan.subject}</b>
@@ -3320,17 +3348,29 @@ function SatPacingCard() {
 
 function ToolsView() {
   const [exams, setExams] = useLocalState("preplist:countdowns", []);
+  const [sub, setSub] = useLocalState("preplist:trackerSub", "today");
+  const SECTIONS = [["today", "Today"], ["grades", "Grades"], ["exams", "Exams"]];
   return (
     <div>
-      <TodayStrip exams={exams} />
-      <div className="pp-grid-tools">
-        <GradeTrackerCard />
-        <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-          <StudyTimerCard />
+      <div className="pp-seg" role="tablist" aria-label="Tracker sections" style={{ marginBottom: 20 }}>
+        {SECTIONS.map(([id, label]) => <button key={id} role="tab" aria-selected={sub === id} onClick={() => setSub(id)}>{label}</button>)}
+      </div>
+      {sub === "grades" && <GradeTrackerCard />}
+      {sub === "exams" && (
+        <div className="pp-two">
           <CountdownCard items={exams} setItems={setExams} />
           <SatPacingCard />
         </div>
-      </div>
+      )}
+      {(sub === "today" || !SECTIONS.some(([id]) => id === sub)) && (
+        <div>
+          <TodayStrip exams={exams} />
+          <div className="pp-two">
+            <StudyTimerCard />
+            <UpcomingCard exams={exams} onManage={() => setSub("exams")} />
+          </div>
+        </div>
+      )}
     </div>
   );
 }
