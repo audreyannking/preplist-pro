@@ -211,33 +211,31 @@ function subjectsFor(board, examType) {
 async function adminStatus() {
   const u = auth && auth.currentUser;
   if (!u || u.isAnonymous) return { ok: false, why: "none" };
-  const id = u.uid;
   for (let i = 0; i < 3; i++) {
     try {
       await u.getIdToken(true);
-      const d = await db.collection("siteAdmins").doc(id).get({ source: "server" });
-      return { ok: d.exists, id, email: u.email, why: d.exists ? "ok" : "missing" };
+      await db.collection("adminCheck").doc("ping").get({ source: "server" }); // readable only by admins (firestore.rules)
+      return { ok: true };
     } catch (e) {
-      if (i === 2) return { ok: false, id, email: u.email, why: "error" };
+      if (e && e.code === "permission-denied" && i === 2) return { ok: false, why: "denied" };
+      if (i === 2) return { ok: false, why: "error" };
       await new Promise((r) => setTimeout(r, 600));
     }
   }
-  return { ok: false, id, why: "error" };
+  return { ok: false, why: "error" };
 }
 async function checkAdmin() { return (await adminStatus()).ok; }
 // Admins type a plain username; Firebase wants an email-shaped id, so a username gets a private suffix.
 function adminLoginId(name) { const n = name.trim().toLowerCase(); return n.includes("@") ? n : n + "@admins.preplist.app"; }
 async function signInAsAdmin(username, password) {
   adminThisVisit = true;
-  try {
-    if (username) await auth.signInWithEmailAndPassword(adminLoginId(username), password);
-    else await auth.signInWithPopup(new firebase.auth.GoogleAuthProvider());
-  } catch (e) { adminThisVisit = false; throw e; }
+  try { await auth.signInWithEmailAndPassword(adminLoginId(username), password); }
+  catch (e) { adminThisVisit = false; throw e; }
   const st = await adminStatus();
   if (st.ok) return { ok: true };
   adminThisVisit = false;
   await auth.signOut();
-  return { ok: false, why: st.why, id: st.id, email: st.email };
+  return { ok: false, why: st.why };
 }
 
 /* ---------------------------------------------------------------------- */
@@ -784,8 +782,6 @@ function RoleGate({ onSelectRole, theme, setTheme }) {
   const [pendingRole, setPendingRole] = useState(null);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
-  const [needId, setNeedId] = useState("");
-  const [copied, setCopied] = useState(false);
   const [email, setEmail] = useState(() => { try { return localStorage.getItem("preplist:adminUser") || ""; } catch { return ""; } });
   const [password, setPassword] = useState("");
 
@@ -794,23 +790,20 @@ function RoleGate({ onSelectRole, theme, setTheme }) {
     setPendingRole(role);
     setError("");
   }
-  async function doSignIn(google) {
-    if (!google && (!email.trim() || !password)) { setError("Enter your username and password."); return; }
-    setBusy(true); setError(""); setNeedId(""); setCopied(false);
+  async function doSignIn() {
+    if (!email.trim() || !password) { setError("Enter your username and password."); return; }
+    setBusy(true); setError("");
     try {
-      const r = google ? await signInAsAdmin() : await signInAsAdmin(email, password);
-      if (r.ok) { if (!google) { try { localStorage.setItem("preplist:adminUser", email.trim()); } catch { /* optional */ } } setPassword(""); onSelectRole(pendingRole); }
+      const r = await signInAsAdmin(email, password);
+      if (r.ok) { try { localStorage.setItem("preplist:adminUser", email.trim()); } catch { /* optional */ } setPassword(""); onSelectRole(pendingRole); }
       else if (r.why === "error") setError("Couldn't check your access just now. Try again in a moment.");
-      else { setNeedId(r.id || ""); setError("Your login works, but it isn't on the admin list yet. In Firebase, open the siteAdmins collection and add a document whose Document ID is the code below (tap Copy, then paste it into the Document ID box)."); }
+      else setError("That login works, but it isn't on the admin list.");
     } catch (e) {
       const c = e && e.code;
       if (c === "auth/too-many-requests") setError("Too many tries. Wait a few minutes and try again.");
-      else if (c === "auth/operation-not-allowed") setError("That sign-in method isn't switched on in Firebase yet.");
+      else if (c === "auth/operation-not-allowed") setError("Password sign-in isn't switched on in Firebase yet.");
       else if (c === "auth/network-request-failed") setError("Couldn't sign in. Check your connection and try again.");
-      else if (c === "auth/popup-closed-by-user" || c === "auth/cancelled-popup-request") setError("Sign-in was cancelled.");
-      else if (c === "auth/popup-blocked") setError("Your browser blocked the sign-in window. Allow pop-ups for this site and try again.");
-      else if (c === "auth/unauthorized-domain") setError("This website address hasn't been approved for sign-in yet (Firebase, Authentication, Authorized domains).");
-      else setError(google ? "Couldn't sign in with Google." : "Wrong username or password.");
+      else setError("Wrong username or password.");
     }
     setBusy(false);
   }
@@ -852,18 +845,10 @@ function RoleGate({ onSelectRole, theme, setTheme }) {
               <span style={{ fontWeight: 700, fontSize: 15 }}>{ROLE_INFO[pendingRole].label} access</span>
             </div>
             <div style={{ fontSize: 13, color: "var(--muted)", marginBottom: 14, lineHeight: 1.5 }}>
-              Each admin has their own login. You sign in again every visit; a username is remembered on this device, a password never is.
+              Each admin has their own username and password. Your username is remembered on this device, your password never is.
             </div>
             {error && <div style={{ fontSize: 12.5, color: "#8A3434", marginBottom: 10, lineHeight: 1.45 }}>{error}</div>}
-            {needId && (
-              <div style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 12, padding: "8px 10px", border: "1px solid var(--border)", borderRadius: 10, background: "var(--bg)" }}>
-                <code style={{ flex: 1, fontSize: 13, wordBreak: "break-all", userSelect: "all" }}>{needId}</code>
-                <button className="pp-btn pp-btn-ghost" style={{ padding: "5px 10px", fontSize: 12.5, flexShrink: 0 }} onClick={() => { try { navigator.clipboard.writeText(needId); setCopied(true); } catch { /* user can select the text instead */ } }}>{copied ? "Copied" : "Copy"}</button>
-              </div>
-            )}
-            <button className="pp-btn pp-btn-primary" style={{ width: "100%", padding: "10px 0", opacity: busy ? 0.6 : 1 }} disabled={busy} onClick={() => doSignIn(true)}>{busy ? "Signing in…" : "Continue with Google"}</button>
-            <div style={{ textAlign: "center", fontSize: 12, color: "var(--muted)", margin: "12px 0" }}>or use a username</div>
-            <form onSubmit={(e) => { e.preventDefault(); doSignIn(false); }} style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+            <form onSubmit={(e) => { e.preventDefault(); doSignIn(); }} style={{ display: "flex", flexDirection: "column", gap: 10 }}>
               <input className="pp-input" type="text" autoCapitalize="none" autoCorrect="off" autoComplete="username" placeholder="Username" value={email} onChange={(e) => setEmail(e.target.value)} />
               <input className="pp-input" type="password" autoComplete="off" placeholder="Password" value={password} onChange={(e) => setPassword(e.target.value)} />
               <button type="submit" className="pp-btn pp-btn-primary" style={{ width: "100%", padding: "10px 0", opacity: busy ? 0.6 : 1 }} disabled={busy}>{busy ? "Signing in…" : "Sign in"}</button>
