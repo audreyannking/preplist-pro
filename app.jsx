@@ -204,18 +204,32 @@ function subjectsFor(board, examType) {
 // Admins are real Google accounts. The list of allowed admin emails lives in Firestore
 // (collection "admins", one document per email) and is enforced by firestore.rules, so
 // nothing in this file can be used to become an admin.
-async function checkAdmin() {
+// Looks the signed-in Google account up on the admin list. Refreshes the sign-in token first and retries, because the
+// database can briefly still be using the previous (anonymous) sign-in right after a new one.
+async function adminStatus() {
   const u = auth && auth.currentUser;
-  if (!u || u.isAnonymous || !u.email || !u.emailVerified) return false;
-  try { const d = await db.collection("admins").doc(u.email.toLowerCase()).get(); return d.exists; }
-  catch { return false; }
+  if (!u || u.isAnonymous || !u.email) return { ok: false, email: u && u.email, why: "none" };
+  if (!u.emailVerified) return { ok: false, email: u.email, why: "unverified" };
+  const id = u.email.toLowerCase();
+  for (let i = 0; i < 3; i++) {
+    try {
+      await u.getIdToken(true);
+      const d = await db.collection("admins").doc(id).get({ source: "server" });
+      return { ok: d.exists, email: u.email, id, why: d.exists ? "ok" : "missing" };
+    } catch (e) {
+      if (i === 2) return { ok: false, email: u.email, id, why: "error" };
+      await new Promise((r) => setTimeout(r, 600));
+    }
+  }
+  return { ok: false, email: u.email, id, why: "error" };
 }
+async function checkAdmin() { return (await adminStatus()).ok; }
 async function signInAsAdmin() {
-  const res = await auth.signInWithPopup(new firebase.auth.GoogleAuthProvider());
-  if (await checkAdmin()) return { ok: true };
-  const email = res.user && res.user.email;
+  await auth.signInWithPopup(new firebase.auth.GoogleAuthProvider());
+  const st = await adminStatus();
+  if (st.ok) return { ok: true };
   await auth.signOut();
-  return { ok: false, email };
+  return { ok: false, email: st.email, id: st.id, why: st.why };
 }
 
 /* ---------------------------------------------------------------------- */
@@ -773,7 +787,9 @@ function RoleGate({ onSelectRole, theme, setTheme }) {
     try {
       const r = await signInAsAdmin();
       if (r.ok) onSelectRole(pendingRole);
-      else setError(`${r.email || "That account"} isn't on the admin list. Ask an existing admin to add it.`);
+      else if (r.why === "unverified") setError(`Google says ${r.email} isn't a verified email, so it can't be an admin.`);
+      else if (r.why === "error") setError("Couldn't check the admin list just now (the database refused or timed out). Try again in a moment.");
+      else setError(`You signed in as ${r.email}, but there's no admin entry named "${r.id}". In Firebase, the admins document ID must be exactly that, in lowercase, with no spaces.`);
     } catch (e) {
       const c = e && e.code;
       if (c === "auth/popup-closed-by-user" || c === "auth/cancelled-popup-request") setError("Sign-in was cancelled.");
