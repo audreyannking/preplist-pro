@@ -1205,8 +1205,8 @@ function NotesView({ notes, user, onAddNote, onDeleteNote, onEditNote, lastNoteI
             const isSaved = savedNoteIds.includes(n.id);
             return (
               <div key={n.id} id={`note-${n.id}`} className="pp-card" role="button" tabIndex={0}
-                onClick={() => { setLastNoteId(n.id); setOpenId(n.id); }}
-                onKeyDown={(e) => { if (e.key === "Enter") { setLastNoteId(n.id); setOpenId(n.id); } }}
+                onClick={() => { setLastNoteId(n.id); markStudiedToday(); setOpenId(n.id); }}
+                onKeyDown={(e) => { if (e.key === "Enter") { setLastNoteId(n.id); markStudiedToday(); setOpenId(n.id); } }}
                 style={{ borderRadius: 16, padding: 0, overflow: "hidden", cursor: "pointer", display: "flex", flexDirection: "column", outline: n.id === lastNoteId ? "2px solid var(--accent)" : "none", outlineOffset: 2 }}>
                 <NoteCover subject={n.subject} grade={n.grade} pages={n.type === "image" ? noteFileIds(n).length : 0}>
                   {canUpload && <button className="pp-cover-btn" onClick={(e) => { e.stopPropagation(); setEditId(n.id); }} aria-label="Edit" title="Edit"><Pencil size={14} /></button>}
@@ -1278,6 +1278,12 @@ function AddNoteModal({ onClose, onSubmit }) {
 /* ---------------------------------------------------------------------- */
 
 function VideosView({ videos, user, onAddVideo, onDeleteVideo, onEditVideo, lastVideoId, setLastVideoId, savedVideoIds, onToggleSavedVideo }) {
+  useEffect(() => {
+    // A click inside the YouTube player doesn't bubble, but it does move focus into the frame.
+    const h = () => setTimeout(() => { const f = document.activeElement; if (f && f.tagName === "IFRAME" && f.closest(".pp-card")) markStudiedToday(); }, 0);
+    window.addEventListener("blur", h);
+    return () => window.removeEventListener("blur", h);
+  }, []);
   const [showForm, setShowForm] = useState(false);
   const [query, setQuery] = useState("");
   const [subject, setSubject] = useState("");
@@ -1634,7 +1640,7 @@ function FilesView({ files, user, onAddFile, onDeleteFile, onEditFile, onDownloa
             const isSaved = savedFileIds.includes(f.id);
             const KindIcon = fileKindIcon(f);
             const c = subjectColor(f.subject || "x");
-            const open = () => { setLastFileId(f.id); setOpenId(f.id); };
+            const open = () => { setLastFileId(f.id); markStudiedToday(); setOpenId(f.id); };
             return (
               <div key={f.id} id={`file-${f.id}`} className="pp-card" role="button" tabIndex={0}
                 onClick={open} onKeyDown={(e) => { if (e.key === "Enter") open(); }}
@@ -2419,9 +2425,10 @@ function PastPapersView() {
   const [preset, setPreset] = useState(null);
   const [split, setSplit] = useState(null);
   const embedItems = RESOURCE_GROUPS.flatMap((g) => g.links.filter((l) => l.embed).map((l) => ({ ...l, group: g.title })));
-  const half = (url, side) => { if (!openHalfScreen(url, side)) notify({ kind: "error", text: "Your browser blocked the pop-up. Allow pop-ups for this site, then try again." }); };
+  const openSplit = (v) => { markStudiedToday(); setSplit(v); };
+  const half = (url, side) => { if (openHalfScreen(url, side)) markStudiedToday(); else notify({ kind: "error", text: "Your browser blocked the pop-up. Allow pop-ups for this site, then try again." }); };
   return (
-    <div>
+    <div onClickCapture={(e) => { if (e.target.closest && e.target.closest('a[target="_blank"]')) markStudiedToday(); }}>
       <div className="pp-card" style={{ borderRadius: 10, padding: 14, marginBottom: 18, fontSize: 13, lineHeight: 1.55 }}>
         <div className="pp-serif" style={{ fontSize: 15.5, fontWeight: 700, marginBottom: 6 }}>Past papers — pick your exam board</div>
         Past papers belong to the exam boards, and Cambridge doesn't allow them to be republished on other websites — so this page links to the official sources instead of copying them.
@@ -2432,8 +2439,8 @@ function PastPapersView() {
           <button key={p.id} role="tab" aria-selected={source === p.id} className={`pp-btn ${source === p.id ? "pp-btn-primary" : "pp-btn-ghost"}`} style={{ padding: "7px 16px", fontSize: 13.5 }} onClick={() => setSource(p.id)}>{p.label}</button>
         ))}
       </div>
-      {source === "cambridge" && <CambridgePapers preset={preset} onHalf={half} onOpen={(items, left, right) => setSplit({ items, left, right })} />}
-      {(source === "ap" || source === "sat" || source === "edexcel") && <ExtraPapers source={source} onHalf={half} onOpen={(items, left, right) => setSplit({ items, left, right })} />}
+      {source === "cambridge" && <CambridgePapers preset={preset} onHalf={half} onOpen={(items, left, right) => openSplit({ items, left, right })} />}
+      {(source === "ap" || source === "sat" || source === "edexcel") && <ExtraPapers source={source} onHalf={half} onOpen={(items, left, right) => openSplit({ items, left, right })} />}
       {RESOURCE_GROUPS.filter((g) => g.source === source && !["ap", "sat", "edexcel", "cambridge"].includes(source)).map((g) => (
         <div key={g.title} style={{ marginBottom: 22 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
@@ -2449,7 +2456,7 @@ function PastPapersView() {
                 {l.pick ? (
                   <button className="pp-btn pp-btn-primary" onClick={() => setPreset({ ...l.pick, n: Date.now() })} style={{ padding: "5px 10px", fontSize: 12, flexShrink: 0 }} title="Choose a paper and mark scheme and open them side by side">Pick papers</button>
                 ) : l.embed ? (
-                  <button className="pp-btn pp-btn-primary" onClick={() => setSplit({ items: embedItems, left: l.url, right: null })} style={{ padding: "5px 10px", fontSize: 12, flexShrink: 0 }} title="Show this beside another page, inside this site">Split view</button>
+                  <button className="pp-btn pp-btn-primary" onClick={() => openSplit({ items: embedItems, left: l.url, right: null })} style={{ padding: "5px 10px", fontSize: 12, flexShrink: 0 }} title="Show this beside another page, inside this site">Split view</button>
                 ) : (
                   <>
                     <button className="pp-btn pp-btn-ghost" onClick={() => half(l.url, "left")} style={{ padding: "5px 8px", fontSize: 12, flexShrink: 0 }} title="This site can't be shown inside other pages, so this tries a window on the left half of your screen">Left half</button>
