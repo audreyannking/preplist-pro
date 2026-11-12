@@ -1618,7 +1618,7 @@ function FilesView({ files, user, onAddFile, onDeleteFile, onEditFile, onDownloa
 
   return (
     <div>
-      <FilterBar hideSubject query={query} setQuery={setQuery} subject={subject} setSubject={setSubject} grade={grade} setGrade={setGrade} placeholder="Search files…"
+      <FilterBar hideSubject hideGrade={!!user.grade} query={query} setQuery={setQuery} subject={subject} setSubject={setSubject} grade={grade} setGrade={setGrade} placeholder="Search files…"
         extra={canUpload && <button className="pp-btn pp-btn-primary" style={{ padding: "9px 14px", fontSize: 13.5, display: "flex", alignItems: "center", gap: 6 }} onClick={() => setShowForm(true)}><Plus size={15} /> Upload file</button>} />
       <SubjectChips items={files} value={subject} onChange={setSubject} />
       {lastFile && (
@@ -3501,6 +3501,7 @@ function MainApp({ user, onChangeGrade, onSwitchRole, theme, setTheme }) {
   const [showGrade, setShowGrade] = useState(false);
   const notesShown = useMemo(() => (user.grade ? notes.filter((n) => n.grade === user.grade) : notes), [notes, user.grade]);
   const videosShown = useMemo(() => (user.grade ? videos.filter((v) => v.grade === user.grade) : videos), [videos, user.grade]);
+  const filesShown = useMemo(() => (user.grade ? libraryFiles.filter((f) => !f.grade || f.grade === user.grade || f.grade === ALL_GRADES) : libraryFiles), [libraryFiles, user.grade]);
   const TAB_NEEDS = { notes: ["notes"], videos: ["videos"], files: ["files"], papers: [], saved: ["notes", "videos", "files"], tools: [], flashcards: ["flashcards"], contact: [] };
   useEffect(() => { want(...(TAB_NEEDS[tab] || [])); if (tab === "contact" && user.role === "admin") want("feedback"); }, [tab, want]);
   useEffect(() => { if (showSearch) want("notes", "videos", "files"); }, [showSearch, want]);
@@ -3760,7 +3761,7 @@ function MainApp({ user, onChangeGrade, onSwitchRole, theme, setTheme }) {
             <>
               {tab === "notes" && <NotesView notes={notesShown} user={user} onAddNote={addNote} onDeleteNote={deleteNote} onEditNote={editNote} lastNoteId={lastNoteId} setLastNoteId={setLastNoteId} savedNoteIds={savedNoteIds} onToggleSavedNote={onToggleSavedNote} />}
               {tab === "videos" && <VideosView videos={videosShown} user={user} onAddVideo={addVideo} onDeleteVideo={deleteVideo} onEditVideo={(v, patch) => updateItem("videos", v.id, patch)} lastVideoId={lastVideoId} setLastVideoId={setLastVideoId} savedVideoIds={savedVideoIds} onToggleSavedVideo={onToggleSavedVideo} />}
-              {tab === "files" && <FilesView files={libraryFiles} user={user} onAddFile={addLibraryFile} onDeleteFile={deleteLibraryFile} onEditFile={(f, patch) => updateItem("libraryFiles", f.id, patch)} onDownloadFile={downloadLibraryFile} lastFileId={lastFileId} setLastFileId={setLastFileId} savedFileIds={savedFileIds} onToggleSavedFile={onToggleSavedFile} />}
+              {tab === "files" && <FilesView files={filesShown} user={user} onAddFile={addLibraryFile} onDeleteFile={deleteLibraryFile} onEditFile={(f, patch) => updateItem("libraryFiles", f.id, patch)} onDownloadFile={downloadLibraryFile} lastFileId={lastFileId} setLastFileId={setLastFileId} savedFileIds={savedFileIds} onToggleSavedFile={onToggleSavedFile} />}
               {tab === "papers" && <PastPapersView />}
               {tab === "tools" && <ToolsView />}
               {tab === "flashcards" && <StudyHub sharedDecks={flashDecks} user={user} notify={notify} onGo={setTab} />}
@@ -3778,7 +3779,7 @@ function MainApp({ user, onChangeGrade, onSwitchRole, theme, setTheme }) {
           <div style={{ fontSize: 13, color: "var(--muted)", marginBottom: 14 }}>Notes and videos will switch to the grade you pick. This is saved on this device.</div>
           <GradeButtons value={user.grade} onPick={(g) => { onChangeGrade(g); setShowGrade(false); }} />
         </Modal>}
-        {showSearch && <GlobalSearchModal notes={notesShown} videos={videosShown} files={libraryFiles} onClose={() => setShowSearch(false)} onJump={jumpTo} />}
+        {showSearch && <GlobalSearchModal notes={notesShown} videos={videosShown} files={filesShown} onClose={() => setShowSearch(false)} onJump={jumpTo} />}
         {window.__ppVersion && <div style={{ textAlign: "center", fontSize: 11, color: "var(--muted)", padding: "0 0 18px" }}>PrepList Pro · updated {window.__ppVersion}</div>}
         <Toast toast={toast} onClose={() => setToast(null)} />
       </div>
