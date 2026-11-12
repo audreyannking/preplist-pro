@@ -225,8 +225,8 @@ async function adminStatus() {
   return { ok: false, why: "error" };
 }
 async function checkAdmin() { return (await adminStatus()).ok; }
-// Admins type a plain username; Firebase wants an email-shaped id, so a username gets a private suffix.
-function adminLoginId(name) { const n = name.trim().toLowerCase(); return n.includes("@") ? n : n + "@admins.preplist.app"; }
+// Admins type a plain username; Firebase wants an email-shaped id, so a username keeps only its letters and numbers and gets a private suffix.
+function adminLoginId(name) { const n = name.trim().toLowerCase(); return n.includes("@") ? n : n.replace(/[^a-z0-9]/g, "") + "@admins.preplist.app"; }
 async function signInAsAdmin(username, password) {
   adminThisVisit = true;
   try { await auth.signInWithEmailAndPassword(adminLoginId(username), password); }
