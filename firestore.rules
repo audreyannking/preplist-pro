@@ -2,22 +2,61 @@ rules_version = '2';
 
 // PrepList Pro - Firestore security rules.
 //
-// Everything on this site is public study material, so READING is open to
-// everyone, signed in or not. That matters for scale: a whole school on one
-// network can't all be blocked by Firebase's limit on new anonymous sign-ins
-// per IP address, because students only reading never need to sign in.
-//
-// WRITING still requires the silent anonymous session the app creates (no
-// fields, nothing on screen). That's a speed bump, not real security: anyone
-// who loads the site gets a session, so a determined visitor could still
-// write directly. The Teacher/Admin password in the app is a separate, lighter
-// deterrent that isn't enforced here. Real protection would need real
-// accounts (Firebase Authentication with credentials).
+// Everyone can READ the study material. Only ADMINS can change it. An admin is a
+// real Google account whose (verified) email has a document in the "admins"
+// collection - add or remove admins in the Firebase console, no code change.
+// Students (silent anonymous sign-in) may only create/manage their own flashcard
+// decks and send feedback, with size limits.
 service cloud.firestore {
   match /databases/{database}/documents {
-    match /{document=**} {
-      allow read: if true;
-      allow write: if request.auth != null;
+
+    function signedIn() { return request.auth != null; }
+    function isAdmin() {
+      return signedIn()
+        && request.auth.token.email_verified == true
+        && request.auth.token.email != null
+        && exists(/databases/$(database)/documents/admins/$(request.auth.token.email.lower()));
     }
+
+    // Admin list. A signed-in user may only look up their own email; nobody can list or edit it from the app.
+    match /admins/{email} {
+      allow get: if signedIn() && request.auth.token.email != null && request.auth.token.email.lower() == email;
+      allow list, write: if false;
+    }
+
+    // Study material: public to read, admin-only to change.
+    match /notes/{id}              { allow read: if true; allow write: if isAdmin(); }
+    match /videos/{id}             { allow read: if true; allow write: if isAdmin(); }
+    match /files/{id}              { allow read: if true; allow write: if isAdmin(); }
+    match /libraryFiles/{id}       { allow read: if true; allow write: if isAdmin(); }
+    match /libraryFileChunks/{id}  { allow read: if true; allow write: if isAdmin(); }
+    match /quizQuestions/{id}      { allow read: if true; allow write: if isAdmin(); }
+
+    // Shared flashcard decks: anyone can read; students manage only their own.
+    function validDeck(d) {
+      return d.name is string && d.name.size() > 0 && d.name.size() <= 100
+        && d.subject is string && d.subject.size() <= 40
+        && d.grade is string && d.grade.size() <= 20
+        && d.cards is list && d.cards.size() <= 300;
+    }
+    match /flashDecks/{id} {
+      allow read: if true;
+      allow create: if signedIn() && request.resource.data.authorUid == request.auth.uid && validDeck(request.resource.data);
+      allow update: if (isAdmin() || (signedIn() && resource.data.authorUid == request.auth.uid))
+        && request.resource.data.authorUid == resource.data.authorUid && validDeck(request.resource.data);
+      allow delete: if isAdmin() || (signedIn() && resource.data.authorUid == request.auth.uid);
+    }
+
+    // Feedback: students can send a rating and short comment; only admins can read or remove it.
+    match /feedback/{id} {
+      allow create, update: if signedIn()
+        && request.resource.data.keys().hasOnly(['rating', 'comment', 'updatedAt'])
+        && request.resource.data.rating is int && request.resource.data.rating >= 1 && request.resource.data.rating <= 5
+        && request.resource.data.comment is string && request.resource.data.comment.size() <= 300;
+      allow read, delete: if isAdmin();
+    }
+
+    // Anything else is closed.
+    match /{document=**} { allow read, write: if false; }
   }
 }

@@ -201,7 +201,22 @@ function subjectsFor(board, examType) {
   return Array.from(new Set([...PAPER_SUBJECTS, ...SAT_SECTIONS, ...AP_COURSES, ...IB_SUBJECTS]));
 }
 
-const ACCESS_PASSWORD = "3069"; // gate for the Admin role — client-side only, not real security
+// Admins are real Google accounts. The list of allowed admin emails lives in Firestore
+// (collection "admins", one document per email) and is enforced by firestore.rules, so
+// nothing in this file can be used to become an admin.
+async function checkAdmin() {
+  const u = auth && auth.currentUser;
+  if (!u || u.isAnonymous || !u.email || !u.emailVerified) return false;
+  try { const d = await db.collection("admins").doc(u.email.toLowerCase()).get(); return d.exists; }
+  catch { return false; }
+}
+async function signInAsAdmin() {
+  const res = await auth.signInWithPopup(new firebase.auth.GoogleAuthProvider());
+  if (await checkAdmin()) return { ok: true };
+  const email = res.user && res.user.email;
+  await auth.signOut();
+  return { ok: false, email };
+}
 
 /* ---------------------------------------------------------------------- */
 /* Firestore + local-storage helpers                                      */
@@ -745,18 +760,28 @@ function SetupNeededScreen() {
 
 function RoleGate({ onSelectRole, theme, setTheme }) {
   const [pendingRole, setPendingRole] = useState(null);
-  const [passInput, setPassInput] = useState("");
   const [error, setError] = useState("");
+  const [busy, setBusy] = useState(false);
 
   function pick(role) {
     if (role === "student") { onSelectRole(role); return; }
     setPendingRole(role);
-    setPassInput("");
     setError("");
   }
-  function submitPassword() {
-    if (passInput === ACCESS_PASSWORD) onSelectRole(pendingRole);
-    else setError("That's not the right access password.");
+  async function googleSignIn() {
+    setBusy(true); setError("");
+    try {
+      const r = await signInAsAdmin();
+      if (r.ok) onSelectRole(pendingRole);
+      else setError(`${r.email || "That account"} isn't on the admin list. Ask an existing admin to add it.`);
+    } catch (e) {
+      const c = e && e.code;
+      if (c === "auth/popup-closed-by-user" || c === "auth/cancelled-popup-request") setError("Sign-in was cancelled.");
+      else if (c === "auth/popup-blocked") setError("Your browser blocked the sign-in window. Allow pop-ups for this site and try again.");
+      else if (c === "auth/unauthorized-domain") setError("This website address hasn't been approved for sign-in yet (Firebase, Authentication, Authorized domains).");
+      else setError("Couldn't sign in. Check your connection and try again.");
+    }
+    setBusy(false);
   }
 
   return (
@@ -796,13 +821,10 @@ function RoleGate({ onSelectRole, theme, setTheme }) {
               <span style={{ fontWeight: 700, fontSize: 15 }}>{ROLE_INFO[pendingRole].label} access</span>
             </div>
             <div style={{ fontSize: 13, color: "var(--muted)", marginBottom: 14, lineHeight: 1.5 }}>
-              Enter the access password to continue as {ROLE_INFO[pendingRole].label.toLowerCase()}.
+              Admins sign in with their own Google account. Only accounts on the admin list get in, and turning on Google's 2-Step Verification for it adds a second check.
             </div>
-            <Field label="Access password">
-              <input type="password" autoFocus className="pp-input" style={{ width: "100%", padding: "9px 12px", fontSize: 14.5 }} value={passInput} onChange={(e) => setPassInput(e.target.value)} onKeyDown={(e) => e.key === "Enter" && submitPassword()} placeholder="••••" />
-            </Field>
-            {error && <div style={{ fontSize: 12.5, color: "#8A3434", marginBottom: 10 }}>{error}</div>}
-            <button className="pp-btn pp-btn-primary" style={{ width: "100%", padding: "10px 0" }} onClick={submitPassword}>Continue</button>
+            {error && <div style={{ fontSize: 12.5, color: "#8A3434", marginBottom: 10, lineHeight: 1.45 }}>{error}</div>}
+            <button className="pp-btn pp-btn-primary" style={{ width: "100%", padding: "10px 0", opacity: busy ? 0.6 : 1 }} disabled={busy} onClick={googleSignIn}>{busy ? "Signing in…" : "Continue with Google"}</button>
           </>
         )}
       </div>
@@ -3518,13 +3540,21 @@ function PreplistProRoot() {
   const [role, setRole] = useLocalState("preplist:role2", null);
   const [myGrade, setMyGrade] = useLocalState("preplist:myGrade", null);
   const sessionReady = useAnonymousSession();
+  // An "admin" role stored on the device is only honoured while a real, allow-listed Google session exists.
+  const [adminOk, setAdminOk] = useState(null);
+  useEffect(() => {
+    if (!FIREBASE_READY) return;
+    return auth.onAuthStateChanged(async () => { setAdminOk(await checkAdmin()); });
+  }, []);
+  useEffect(() => { if (role === "admin" && adminOk === false && sessionReady) setRole(null); }, [role, adminOk, sessionReady]);
 
   if (!FIREBASE_READY) return <div className="pp-root" data-theme={theme} style={{ minHeight: "100dvh" }}><GlobalStyle /><SetupNeededScreen /></div>;
-  if (!role) return <div className="pp-root" data-theme={theme} style={{ minHeight: "100dvh" }}><GlobalStyle /><RoleGate onSelectRole={setRole} theme={theme} setTheme={setTheme} /></div>;
+  if (role === "admin" && adminOk === null) return <div className="pp-root" data-theme={theme} style={{ minHeight: "100dvh" }}><GlobalStyle /><Loading label="Checking your admin sign-in…" /></div>;
+  if (!role) return <div className="pp-root" data-theme={theme} style={{ minHeight: "100dvh" }}><GlobalStyle /><RoleGate onSelectRole={(r) => { if (r === "admin") setAdminOk(true); setRole(r); }} theme={theme} setTheme={setTheme} /></div>;
 
   if (role === "student" && !GRADE_CHOICES.some((g) => g.value === myGrade)) return <div className="pp-root" data-theme={theme} style={{ minHeight: "100dvh" }}><GlobalStyle /><GradeGate onPick={setMyGrade} onBack={() => setRole(null)} theme={theme} setTheme={setTheme} /></div>;
 
-  return <MainApp user={{ role, grade: role === "student" ? myGrade : null }} onChangeGrade={setMyGrade} onSwitchRole={() => setRole(null)} theme={theme} setTheme={setTheme} />;
+  return <MainApp user={{ role, grade: role === "student" ? myGrade : null }} onChangeGrade={setMyGrade} onSwitchRole={() => { if (role === "admin" && auth) auth.signOut(); setRole(null); }} theme={theme} setTheme={setTheme} />;
 }
 
 ReactDOM.createRoot(document.getElementById("root")).render(<PreplistProRoot />);
